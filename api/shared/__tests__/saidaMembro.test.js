@@ -60,14 +60,20 @@ describe("a situação na carta (r31-carta: Comunhão, Paz, Observação com o t
     expect(s.situacaoDaCarta({ situacaoMembro: "ARROLAMENTO" })).toEqual({ codigo: "ARROLAMENTO", membro: null, texto: null, frase: s.FRASE_ARROLAMENTO });
     expect(s.FRASE_ARROLAMENTO).toBe("O cadastro desta pessoa estava em atualização no sistema da igreja.");
   });
-  test("os casos que esperam a resposta dele ficam pendentes, sem texto inventado", () => {
+  test("o novo convertido (não batizado) sai como congregado: (X) Congregado, em Paz (resposta de 26/11)", () => {
+    expect(s.situacaoDaCarta({ situacaoMembro: "NOVO_CONVERTIDO" })).toEqual({ codigo: "PAZ", membro: false, texto: "em Paz" });
+  });
+  test("a situação que a carta não conhece: recusa com a mensagem clara, até a secretaria pôr uma das conhecidas (resposta de 26/11)", () => {
+    expect(s.situacaoDaCarta({ situacaoMembro: "SITUACAO_CRIADA_PELA_SECRETARIA" })).toEqual({ pendente: "SITUACAO_DESCONHECIDA" });
+    expect(s.situacaoDaCarta({ situacaoMembro: null })).toEqual({ pendente: "SITUACAO_DESCONHECIDA" });
+    expect(s.MENSAGENS_PENDENTES.SITUACAO_DESCONHECIDA).toMatch(/secretaria/);
+  });
+  test("os casos que esperam a resposta dele ficam pendentes, sem texto inventado, e cada um tem a mensagem num lugar só", () => {
     const pend = (e) => s.situacaoDaCarta(e).pendente;
     expect(pend({ situacaoMembro: "EM_COMUNHAO", disciplina: { julgado: true, inicio: "2026-01-10", ate: null } })).toBe("DISCIPLINA_SEM_PRAZO");
     expect(pend({ situacaoMembro: "EM_COMUNHAO", disciplina: { julgado: false, inicio: "2026-11-20", ate: null } })).toBe("DISCIPLINA_NAO_JULGADA");
     expect(pend({ situacaoMembro: "SEM_COMUNHAO", semComunhaoDesde: "2026-04-02" })).toBe("SEM_COMUNHAO");
-    expect(pend({ situacaoMembro: "NOVO_CONVERTIDO" })).toBe("SITUACAO_DESCONHECIDA");
-    expect(pend({ situacaoMembro: null })).toBe("SITUACAO_DESCONHECIDA");
-    expect(s.situacaoDaCarta({ situacaoMembro: "NOVO_CONVERTIDO" }).texto).toBeUndefined();
+    for (const k of ["DISCIPLINA_SEM_PRAZO", "DISCIPLINA_NAO_JULGADA", "SEM_COMUNHAO", "TRATAMENTO"]) expect(typeof s.MENSAGENS_PENDENTES[k]).toBe("string");
   });
 });
 
@@ -229,5 +235,80 @@ describe("os prazos: a carta vale 30 dias; o apagamento aos 30 dias e com 1 ano"
   test("data inválida: erro (o apagamento nunca roda com data errada)", () => {
     expect(() => s.etapaDevida("25/11/2026", "2026-12-26")).toThrow();
     expect(() => s.cartaVencida("2026-11-25", "")).toThrow();
+  });
+});
+
+describe("a fotografia da carta (o conteúdo guardado: o histórico inteiro para o QR e a seleção curta para o papel)", () => {
+  const fontes = (trocas = {}) => ({
+    membro: { membroId: 2317, nome: "Carlos Moreira", sexo: "M", nascimento: "1978-04-02", status: "ATIVO", situacaoMembro: "EM_COMUNHAO", congregacaoId: 7,
+      congregacao: "Vila Nova", area: "Área 2", formaAdmissao: "BATISMO", dataAdmissao: "2009-03-12", dataBatismo: "2009-03-12", estadoCivil: "CASADO", ...(trocas.membro || {}) },
+    localBatismo: "Congregação Vila Nova", espiritoSanto: { data: "2010-09-20", aproximada: false },
+    consagracoes: [{ nome: "Diácono", data: "2017-12-10" }, { nome: "Auxiliar", data: "2014-04-16" }],
+    cargos: [{ nome: "Tesoureiro (Vila Nova)", grau: 1, inicio: "2021-01-01", fim: null, ativo: true },
+      { nome: "Secretário da Mocidade", grau: 1, inicio: "2012-03-01", fim: "2015-12-31", ativo: false },
+      { nome: "Professor da turma Jovens (EBD, Vila Nova)", grau: 1, inicio: "2016-02-01", fim: null, ativo: true }],
+    disciplina: null, chegadaCongregacao: "Vila Nova", ...trocas.raiz
+  });
+  const opcoes = { dia: "2026-11-25", destino: "Marabá - PA", protocolo: "CARTA-2026-0318", codigo: "K7P4M2",
+    pedido: { como: "PROPRIO" }, junto: { filhos: [{ nome: "Lucas Moreira", matricula: 30640 }] }, assinaturas: { pastor: "Abel Nogueira", secretaria: "Débora Lima" } };
+
+  test("a carta do Carlos: os dados de hoje, o histórico inteiro e a seleção curta", () => {
+    const c = s.montarConteudoDaCarta(fontes(), opcoes);
+    expect(c.pendente).toBeUndefined();
+    expect(c).toMatchObject({ v: 1, documento: "CARTA_MUDANCA", protocolo: "CARTA-2026-0318", codigo: "K7P-4M2", emitidaEm: "2026-11-25",
+      pessoa: { nome: "Carlos Moreira", matricula: 2317, sexo: "M", menor: false }, tratamento: "o irmão",
+      situacao: { codigo: "COMUNHAO", membro: true, texto: "em Comunhão" }, congregacao: "Vila Nova", area: "Área 2", destino: "Marabá - PA" });
+    expect(c.historico.chegada).toEqual({ data: "2009-03-12", forma: "BATISMO", congregacao: "Vila Nova" });
+    expect(c.historico.batismoAguas).toEqual({ data: "2009-03-12", local: "Congregação Vila Nova" });
+    expect(c.historico.batismoEspirito).toEqual({ data: "2010-09-20", aproximada: false });
+    expect(c.historico.consagracoes.map((x) => x.nome)).toEqual(["Auxiliar", "Diácono"]);
+    // os cargos do mais antigo ao mais novo; os ativos terminam no dia da saída
+    expect(c.historico.cargos.map((x) => [x.nome, x.fim])).toEqual([["Secretário da Mocidade", "2015-12-31"],
+      ["Professor da turma Jovens (EBD, Vila Nova)", "2026-11-25"], ["Tesoureiro (Vila Nova)", "2026-11-25"]]);
+    expect(c.historico.estadoCivil).toBe("CASADO");
+    expect(c.historico.saida).toEqual({ dia: "2026-11-25" });
+    expect(c.curto.funcao).toEqual({ nome: "Diácono", data: "2017-12-10" });
+    expect(c.curto.cargos.map((x) => x.nome)).toEqual(["Tesoureiro (Vila Nova)"]);
+    expect(c.junto).toEqual(opcoes.junto);
+    expect(c.assinaturas).toEqual(opcoes.assinaturas);
+  });
+  test("a fotografia não guarda o que não é da carta (nascimento, e-mail, congregação por número)", () => {
+    const texto = JSON.stringify(s.montarConteudoDaCarta(fontes(), opcoes));
+    expect(texto).not.toMatch(/1978-04-02|nascimento|congregacaoId|ATIVO/);
+  });
+  test("o filho menor: o menor, em Paz, sem chegada inventada quando a ficha não tem", () => {
+    const c = s.montarConteudoDaCarta(fontes({ membro: { membroId: 30640, nome: "Lucas Moreira", nascimento: "2014-05-14", situacaoMembro: "CONGREGADO",
+      formaAdmissao: null, dataAdmissao: null, dataBatismo: null, estadoCivil: null }, raiz: { consagracoes: [], cargos: [], espiritoSanto: null, localBatismo: null } }),
+    { ...opcoes, junto: { responsavel: { nome: "Carlos Moreira", matricula: 2317, parentesco: "pai" } }, pedido: { como: "RESPONSAVEL" } });
+    expect(c.pessoa.menor).toBe(true);
+    expect(c.tratamento).toBe("o menor");
+    expect(c.situacao.codigo).toBe("PAZ");
+    expect(c.historico.chegada).toBeNull();
+    expect(c.historico.batismoAguas).toBeNull();
+    expect(c.historico.batismoEspirito).toBeNull();
+    expect(c.curto).toEqual({ funcao: null, cargos: [] });
+  });
+  test("o menor faz 18 no dia da saída: já não é menor", () => {
+    const c = s.montarConteudoDaCarta(fontes({ membro: { nascimento: "2008-11-25" } }), opcoes);
+    expect(c.pessoa.menor).toBe(false);
+    const d = s.montarConteudoDaCarta(fontes({ membro: { nascimento: "2008-11-26" } }), opcoes);
+    expect(d.pessoa.menor).toBe(true);
+  });
+  test("arrolamento (D1): sem a chegada do sistema pago, com a frase; só os dados que existem", () => {
+    const c = s.montarConteudoDaCarta(fontes({ membro: { situacaoMembro: "ARROLAMENTO" } }), opcoes);
+    // o adulto em arrolamento espera a regra do tratamento
+    expect(c.pendente).toBe("TRATAMENTO");
+    const m = s.montarConteudoDaCarta(fontes({ membro: { situacaoMembro: "ARROLAMENTO", nascimento: "2012-01-01" } }), opcoes);
+    expect(m.situacao).toEqual({ codigo: "ARROLAMENTO", membro: null, texto: null, frase: s.FRASE_ARROLAMENTO });
+    expect(m.historico.chegada).toBeNull();
+    expect(m.historico.batismoAguas).toEqual({ data: "2009-03-12", local: "Congregação Vila Nova" });
+  });
+  test("a situação sem regra: a fotografia não sai (pendente)", () => {
+    expect(s.montarConteudoDaCarta(fontes({ membro: { situacaoMembro: "SEM_COMUNHAO" } }), opcoes).pendente).toBe("SEM_COMUNHAO");
+    expect(s.montarConteudoDaCarta(fontes({ raiz: { disciplina: { julgado: false, inicio: null, ate: null } } }), opcoes).pendente).toBe("DISCIPLINA_NAO_JULGADA");
+  });
+  test("a mesma ficha dá sempre a mesma fotografia (e a mesma impressão)", () => {
+    const sal = "0f".repeat(16);
+    expect(s.impressaoDigital(s.montarConteudoDaCarta(fontes(), opcoes), sal)).toBe(s.impressaoDigital(s.montarConteudoDaCarta(fontes(), opcoes), sal));
   });
 });

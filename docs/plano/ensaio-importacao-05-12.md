@@ -223,10 +223,11 @@ corrigem antes de 16/12. A importação de verdade é feita direto na produção
 1. **A planilha do ensaio.** O plano fala de "a planilha do sistema pago para o ensaio de 05/12". A proposta deste roteiro:
    no ensaio, só a fictícia; a real só na conferência local (item 9).
 2. **O mesmo usuário do SQL** na produção e na homologação? É o que diz se a prova do ALTER vale para a produção (item 6).
-3. **A importação complementar de 29 e 30/12** (no plano) não tem caminho hoje. Depois de uma importação concluída, a
-   prévia recusa: "a importação do sistema pago já foi feita (é uma vez só)" (decisão de 22/11/2026). A importação "das
-   linhas que faltaram" só serve à importação que parou no meio. Quem foi cadastrado no sistema pago depois da importação
-   grande precisa de outra regra: uma decisão do responsável antes de 16/12.
+3. **Respondida (ele, 26/11/2026): "Novo vai direto no sistema novo".** Há só a importação grande, de 16 a 18/12; não existe
+   a importação complementar de 29 e 30/12. Depois da importação grande, cadastro novo só no sistema novo (as matrículas
+   novas se liberam sozinhas quando ela conclui). Continua como está: depois de uma importação concluída, a prévia recusa
+   ("a importação do sistema pago já foi feita (é uma vez só)", decisão de 22/11/2026), e a importação "das linhas que
+   faltaram" só serve à importação que parou no meio.
 4. **O limite de 45 s por chamada** é uma anotação, não uma medida. Com o orçamento de 10 s ele deixa de decidir, mas a prévia
    (uma chamada só) ainda depende dele.
 5. **O Basic durante o ensaio** (item 5, forma B): sim ou não.

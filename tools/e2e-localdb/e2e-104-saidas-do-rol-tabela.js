@@ -112,6 +112,24 @@ async function principal() {
   ok((await erroDe(() => q(`UPDATE SaidasDoRol SET EtapaApagamento = 2 WHERE SaidaId = ${idCarlos}`))) === 547, "a etapa 2 sem a data dela: o banco recusa (547)");
   ok((await erroDe(() => q(`UPDATE SaidasDoRol SET EtapaApagamento = 3, Etapa2Em = SYSUTCDATETIME() WHERE SaidaId = ${idCarlos}`))) === 547, "a etapa 3 não existe (547)");
 
+  // 10b. a leitura da ficha para a fotografia (shared/saidaRolDb.js), num pedido só, contra o esquema de verdade
+  await q(`UPDATE MembroReferencia SET Sexo = N'M', DataNascimento = '1978-04-02', DataAdmissao = '2009-03-12', FormaAdmissao = N'BATISMO', DataBatismo = '2009-03-12',
+             EstadoCivil = N'CASADO', CargoMinisterial = N'DIACONO' WHERE MembroId = ${MARIA}`);
+  const papel = await escalar(`SELECT TOP 1 PapelId FROM Papeis WHERE Nome = N'Dirigente de Congregação'`);
+  // (a Lideranca tem uma linha por pessoa; o histórico do cargo ministerial, um aberto por pessoa)
+  await q(`INSERT INTO Lideranca (MembroId, Tipo, Escopo, PapelId, EscopoTipo, EscopoId, AtivoAte) VALUES (${MARIA}, N'Dirigente', N'congregação', @p, N'CONGREGACAO', @c, NULL);
+           INSERT INTO CargosMinisteriaisHistorico (MembroId, Cargo, Desde, Ate, Origem) VALUES
+             (${MARIA}, N'AUXILIAR', '2014-04-16', '2017-12-09', N'CADASTRO'), (${MARIA}, N'DIACONO', '2017-12-10', NULL, N'CADASTRO')`,
+  { p: papel, c: c1.CongregacaoId });
+  const fontes = await require(L.path.join(L.API, "shared/saidaRolDb.js")).lerFontesDaCarta(await obterPool(), L.sql, MARIA, "2026-11-25");
+  ok(fontes && fontes.membro.nome === "Maria Balcão E2E104" && fontes.membro.sexo === "M" && fontes.membro.dataAdmissao === "2009-03-12", "a leitura traz a ficha", fontes && fontes.membro);
+  ok(fontes.cargos.length === 1 && fontes.cargos[0].ativo && fontes.cargos[0].grau === 1 && /^Dirigente de Congregação \(.+\)$/.test(fontes.cargos[0].nome),
+    "o cargo com o nome do papel, a congregação do escopo, o grau e vigente", fontes.cargos);
+  ok(fontes.consagracoes.map((x) => x.nome).join(",") === "Auxiliar,Diácono", "as consagrações com o rótulo", fontes.consagracoes);
+  ok(fontes.disciplina === null && fontes.espiritoSanto === null && fontes.localBatismo === null, "sem disciplina, sem marco e sem turma de batismo: nada inventado");
+  const conteudo = saida.montarConteudoDaCarta(fontes, { dia: "2026-11-25", destino: "Belém - PA", protocolo: "CARTA-2026-9999", codigo: "K7P4M2", pedido: { como: "PROPRIO" } });
+  ok(conteudo.curto.cargos.length === 1 && /^Dirigente/.test(conteudo.curto.cargos[0].nome) && conteudo.curto.funcao.nome === "Diácono", "a fotografia sai da leitura de verdade", conteudo.curto);
+
   // 10. a CartasTransito (o "processar" antigo) não vê nada disto (D2)
   ok((await escalar(`SELECT COUNT(*) FROM CartasTransito WHERE MembroId IN (${CARLOS}, ${LUCAS}, ${MARIA})`)) === 0, "nada vai para a CartasTransito (o processar antigo nunca vê)");
 }

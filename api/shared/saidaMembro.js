@@ -55,6 +55,20 @@ function destinoDaCarta(texto) {
   return { ok: true, destino: `${cidade} - ${uf}` };
 }
 
+// ---------- os textos que esperam a resposta dele (UM lugar só) ----------
+// Enquanto a regra não chega (perguntas 1 e 3 da missão B, 26/11: a Observação sem data de fim e o tratamento do adulto congregado ou em arrolamento), a
+// carta desses casos não sai e a rota responde com a mensagem daqui. Quando a resposta chegar, o texto entra em situacaoDaCarta/tratamentoDaCarta e a
+// chave sai desta lista. SITUACAO_DESCONHECIDA é regra (resposta de 26/11): a carta recusa até a secretaria pôr uma das situações conhecidas.
+const AINDA_SEM_TEXTO = "A carta desta situação ainda não pode sair pelo sistema. Procure a secretaria da sua congregação.";
+const MENSAGENS_PENDENTES = Object.freeze({
+  SITUACAO_DESCONHECIDA: "A situação desta pessoa na ficha não é uma das que a carta conhece. A secretaria precisa pôr Membro em comunhão, Congregado ou " +
+    "Membro sem comunhão antes de a carta sair.",
+  DISCIPLINA_SEM_PRAZO: AINDA_SEM_TEXTO,
+  DISCIPLINA_NAO_JULGADA: AINDA_SEM_TEXTO,
+  SEM_COMUNHAO: AINDA_SEM_TEXTO,
+  TRATAMENTO: AINDA_SEM_TEXTO
+});
+
 // ---------- a situação ----------
 // O prazo da disciplina por extenso: meses inteiros quando o dia bate (o fim do mês conta como mês inteiro), senão em dias.
 function duracaoPorExtenso(inicio, ate) {
@@ -71,7 +85,8 @@ function duracaoPorExtenso(inicio, ate) {
  * Devolve { codigo, membro, texto } (membro: a caixa marcada, true = Membro, false = Congregado, null = nenhuma) ou { pendente } enquanto a regra não chegou.
  */
 function situacaoDaCarta({ situacaoMembro, disciplina = null } = {}) {
-  if (situacaoMembro === "CONGREGADO") return { codigo: "PAZ", membro: false, texto: "em Paz" };
+  // o novo convertido (não batizado) sai como congregado (resposta de 26/11)
+  if (situacaoMembro === "CONGREGADO" || situacaoMembro === "NOVO_CONVERTIDO") return { codigo: "PAZ", membro: false, texto: "em Paz" };
   if (situacaoMembro === "ARROLAMENTO") return { codigo: "ARROLAMENTO", membro: null, texto: null, frase: FRASE_ARROLAMENTO };
   if (situacaoMembro !== "EM_COMUNHAO" && situacaoMembro !== "SEM_COMUNHAO") return { pendente: "SITUACAO_DESCONHECIDA" };
   if (disciplina) {
@@ -151,6 +166,52 @@ function conferirSelo(impressaoGuardada, selo) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+// ---------- a fotografia da carta ----------
+/** a idade completa no dia (texto AAAA-MM-DD); null sem a data */
+function idadeNoDia(nascimento, dia) {
+  if (!nascimento) return null;
+  const n = diaUtc(nascimento), d = diaUtc(dia);
+  let idade = d.getUTCFullYear() - n.getUTCFullYear();
+  if (d.getUTCMonth() < n.getUTCMonth() || (d.getUTCMonth() === n.getUTCMonth() && d.getUTCDate() < n.getUTCDate())) idade--;
+  return idade;
+}
+const porData = (campo) => (x, y) => (x[campo] ? (y[campo] ? x[campo].localeCompare(y[campo]) : -1) : (y[campo] ? 1 : 0)) || String(x.nome).localeCompare(String(y.nome), "pt-BR");
+
+/**
+ * O conteúdo guardado da carta (SaidasDoRol.Conteudo): os dados de hoje, o histórico inteiro (a página do QR) e a seleção curta (o papel), tirado ANTES da
+ * vacância. `fontes`: shared/saidaRolDb.js::lerFontesDaCarta. Devolve { pendente } quando a situação ou o tratamento ainda não têm regra.
+ * Só o que a carta mostra: nada de nascimento, contato ou número interno (o conteúdo se apaga aos 30 dias, mas até lá vai à página pública).
+ */
+function montarConteudoDaCarta(fontes, { dia, destino, protocolo, codigo, pedido, junto, assinaturas }) {
+  const m = fontes.membro;
+  const idade = idadeNoDia(m.nascimento, dia);
+  const menor = idade !== null && idade < 18;
+  const situacao = situacaoDaCarta({ situacaoMembro: m.situacaoMembro, disciplina: fontes.disciplina });
+  if (situacao.pendente) return { pendente: situacao.pendente };
+  const tratamento = tratamentoDaCarta({ sexo: m.sexo, menor, codigo: situacao.codigo });
+  if (!tratamento) return { pendente: "TRATAMENTO" };
+  const arrolamento = situacao.codigo === "ARROLAMENTO";
+  const cargos = (fontes.cargos || []).map((c) => ({ nome: c.nome, grau: Number(c.grau) || 0, inicio: c.inicio || null, fim: c.ativo ? dia : c.fim || null, ativo: !!c.ativo }));
+  const consagracoes = (fontes.consagracoes || []).map((c) => ({ nome: c.nome, data: c.data || null })).sort(porData("data"));
+  return {
+    v: 1, documento: "CARTA_MUDANCA", protocolo, codigo: formatarCodigoCurto(codigo), emitidaEm: dia,
+    pessoa: { nome: m.nome, matricula: m.membroId, sexo: m.sexo, menor },
+    tratamento, situacao, congregacao: m.congregacao, area: m.area, destino,
+    historico: {
+      // a data de entrada de quem está em arrolamento veio do sistema pago, com sentido desconhecido: não vai (D1, "sem inventar o que a ficha não tem")
+      chegada: !arrolamento && m.dataAdmissao ? { data: m.dataAdmissao, forma: m.formaAdmissao, congregacao: fontes.chegadaCongregacao } : null,
+      batismoAguas: m.dataBatismo ? { data: m.dataBatismo, local: fontes.localBatismo || null } : null,
+      batismoEspirito: fontes.espiritoSanto && fontes.espiritoSanto.data ? { data: fontes.espiritoSanto.data, aproximada: !!fontes.espiritoSanto.aproximada } : null,
+      consagracoes,
+      cargos: cargos.slice().sort(porData("inicio")),
+      estadoCivil: m.estadoCivil,
+      saida: { dia }
+    },
+    curto: { funcao: funcaoDaCartaCurta(consagracoes), cargos: cargosDaCartaCurta(cargos) },
+    junto: junto || null, pedido: pedido || null, assinaturas: assinaturas || null
+  };
+}
+
 // ---------- os prazos ----------
 /** o último dia em que a carta vale (e a página do QR mostra os dados): o 30º dia depois da saída */
 const ultimoDiaDaCarta = (diaSaida) => somarDias(diaSaida, DIAS_DA_CARTA);
@@ -167,8 +228,8 @@ function etapaDevida(diaSaida, hoje) {
 }
 
 module.exports = {
-  CIDADE_PADRAO, FRASE_ARROLAMENTO, DIAS_DA_CARTA, ALFABETO_CODIGO, TAMANHO_CODIGO,
-  destinoDaCarta, situacaoDaCarta, tratamentoDaCarta, cargosDaCartaCurta, funcaoDaCartaCurta,
+  CIDADE_PADRAO, FRASE_ARROLAMENTO, DIAS_DA_CARTA, ALFABETO_CODIGO, TAMANHO_CODIGO, MENSAGENS_PENDENTES,
+  destinoDaCarta, situacaoDaCarta, tratamentoDaCarta, cargosDaCartaCurta, funcaoDaCartaCurta, montarConteudoDaCarta, idadeNoDia,
   gerarCodigoCurto, normalizarCodigoCurto, codigoCurtoValido, formatarCodigoCurto,
   gerarSal, impressaoDigital, seloDoQr, conferirSelo, canonico,
   ultimoDiaDaCarta, cartaVencida, etapaDevida, dataBr

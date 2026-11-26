@@ -160,6 +160,13 @@ async function disparar(chamadas) {
   ok(r.status === 200 && r.body.mensagem === "Bloco 1.401 entregue a Vila Nova E2E. Está no livro.", "o bloco 1.401 entregue a Vila Nova (a confirmação da r30)", r.body);
   r = await POST(H, "entregar", geral, { primeiraFolha: 70051, congregacaoId: BETA, pessoa: { nome: "Outra pessoa" } });
   ok(r.status === 409 && r.body.mensagem === "Este bloco acabou de sair por outra pessoa. Confira o livro.", "o mesmo bloco não sai duas vezes (409, o texto da r30)", r.body);
+  // a saída de semanas atrás não é a corrida (portão da parte 2, M3): a recusa diz com quem o bloco está e desde quando (a data da entrega)
+  const registrouEm = await escalar(`SELECT TOP 1 RegistroId FROM FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = (SELECT BlocoId FROM FinBlocos WHERE Numero = 1401) ORDER BY RegistroId DESC`);
+  await q(`UPDATE FinLivroBlocos SET RegistradoEm = DATEADD(DAY, -21, RegistradoEm) WHERE RegistroId = ${registrouEm}`);
+  const entregue1401 = await escalar(`SELECT CONVERT(char(10), EntregueEm, 103) FROM FinBlocos WHERE Numero = 1401`);
+  r = await POST(H, "entregar", geral, { primeiraFolha: 70051, congregacaoId: BETA, pessoa: { nome: "Outra pessoa" } });
+  ok(r.status === 422 && r.body.mensagem === `O bloco 1.401 já saiu: está com Vila Nova E2E desde ${entregue1401}.`, "o bloco entregue há semanas: com quem está e desde quando (422, não a corrida)", r.body);
+  await q(`UPDATE FinLivroBlocos SET RegistradoEm = DATEADD(DAY, 21, RegistradoEm) WHERE RegistroId = ${registrouEm}`);
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70101, congregacaoId: VILA_NOVA, pessoa: { nome: "Rute (tesoureira)" }, levadoPelaArea: true })).status === 200, "o bloco 1.402 entregue a Vila Nova, levado pela área");
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70151, congregacaoId: BETA, pessoa: { nome: "Tesoureiro da Beta" } })).status === 200, "o bloco 1.403 entregue à Beta");
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: 999, pessoa: { nome: "x" } })).status === 422, "congregação que não existe é recusada");

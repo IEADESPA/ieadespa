@@ -1,6 +1,6 @@
 <!-- O histórico da folha (rodada 30, "r30-blocos-desfazer"): quem marcou, quem desfez, quando e por quê, na ordem; nada se apaga. A hora à
-     esquerda ("12/11 09h40"), o nome com o papel entre parênteses e o que a pessoa escreveu entre aspas. Embaixo do cartão da folha marcada e do
-     formulário da folha que já foi marcada e desfeita. -->
+     esquerda ("12/11 09h40"), o nome com o papel da hora entre parênteses (a linha antiga, sem o papel gravado, só o nome) e o que a pessoa
+     escreveu entre aspas. Embaixo do cartão da folha marcada e do formulário da folha que já foi marcada e desfeita. -->
 <script lang="ts">
   import { NOME_CURTO, horaDoHistorico, comPonto } from "../../blocos";
   import type { HistoricoFolha } from "../../tipos";
@@ -15,9 +15,9 @@
     <div class="item">
       <strong class="hora">{horaDoHistorico(x.quando)}</strong>
       {#if x.tipo === "marcou"}
-        <span>{x.nome} ({x.papel}) marcou como <strong>{NOME_CURTO[x.destino ?? "livre"]}</strong>: “{comPonto(x.texto)}”</span>
+        <span>{x.nome}{x.papel ? ` (${x.papel})` : ""} marcou como <strong>{NOME_CURTO[x.destino ?? "livre"]}</strong>: “{comPonto(x.texto)}”</span>
       {:else}
-        <span>{x.nome} ({x.papel}) desfez: “{comPonto(x.texto)}” Voltou a ficar livre.</span>
+        <span>{x.nome}{x.papel ? ` (${x.papel})` : ""} desfez: “{comPonto(x.texto)}” Voltou a ficar livre.</span>
       {/if}
     </div>
   {/each}

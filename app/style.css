@@ -2331,7 +2331,7 @@ html[data-tema="escuro"] #toastContainer.toast-embaixo .toast.toast-erro { backg
   body:has(.sidebar.recolhido) #toastContainer.toast-embaixo { left: calc(50% + 38px); max-width: calc(100vw - 124px); }
 }
 @media (max-width: 640px) {
-  #toastContainer.toast-embaixo { left: 30px; right: 30px; transform: none; width: auto; max-width: none; align-items: stretch; }
+  #toastContainer.toast-embaixo { left: 16px; right: 16px; transform: none; width: auto; max-width: none; align-items: stretch; }
   #toastContainer.toast-embaixo .toast { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -239,6 +239,13 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
   ok(r.status === 200 && r.body.folha === 70286 && r.body.bloco === 1405 && r.body.posicao === 36 && it && it.length === 1
     && it[0].tipo === "marcou" && it[0].nome === nomeTes && it[0].papel === `${String(papelVN).toLowerCase()} de Vila Nova E2E` && it[0].destino === "extraviada"
     && it[0].texto === "Não achei a folha no bloco." && HORA.test(it[0].quando), "o histórico da 70.286: a tesoureira de Vila Nova marcou como extraviada, com a observação", r.body);
+  // o papel é o da hora do ato, gravado com a marca (portão da parte 2, I2): a tesoureira passa para a Central e o histórico não muda
+  const PAPEL_VN = `${String(papelVN).toLowerCase()} de Vila Nova E2E`;
+  ok((await escalar(`SELECT PapelNaHora FROM FinFolhas WHERE Folha = 70286`)) === PAPEL_VN, "a marca grava o papel da hora (205)");
+  await q(`UPDATE Lideranca SET EscopoId = ${CENTRAL} WHERE MembroId = ${TESOUREIRA_LOCAL}`);
+  r = await GET(H, "historico", geral, { folha: 70286 });
+  ok(r.status === 200 && r.body.itens[0].papel === PAPEL_VN, "a tesoureira passou para a Central: o histórico continua com o papel da hora (de Vila Nova)", r.body.itens);
+  await q(`UPDATE Lideranca SET EscopoId = ${VILA_NOVA} WHERE MembroId = ${TESOUREIRA_LOCAL}`);
 
   console.log("-- desfazer, com o motivo --");
   r = await POST(H, "desfazer-folha", geral, { folha: 70286, motivo: "   " });
@@ -250,6 +257,16 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
   ok(r.status === 200 && it && it.length === 2 && it[0].tipo === "marcou" && it[1].tipo === "desfez" && it[1].nome === nomeGeral && it[1].papel === "Tesouraria Geral"
     && it[1].destino === null && it[1].texto === "A folha apareceu, estava com os recibos de outubro" && HORA.test(it[1].quando) && it[1].quando >= it[0].quando,
     "o histórico depois de desfazer: quem marcou e quem desfez (a Tesouraria Geral), com o motivo", r.body);
+  ok(it && it[0].papel === PAPEL_VN && it[0].nome === nomeTes, "depois de desfazer, quem marcou continua com o papel da hora (copiado para as desfeitas)", it && it[0]);
+  // a marca e o desfazer de antes da 205 (sem o papel gravado): só o nome, nunca a Tesouraria Geral por suposição
+  const gravados = await um(`SELECT PapelNaHora, DesfeitaPapel FROM FinFolhasDesfeitas WHERE Folha = 70286`);
+  ok(gravados && gravados.PapelNaHora === PAPEL_VN && gravados.DesfeitaPapel === "Tesouraria Geral", "a desfeita guarda os dois papéis da hora", gravados);
+  await q(`UPDATE FinFolhasDesfeitas SET PapelNaHora = NULL, DesfeitaPapel = NULL WHERE Folha = 70286`);
+  r = await GET(H, "historico", geral, { folha: 70286 });
+  it = r.body && r.body.itens;
+  ok(r.status === 200 && it && it.length === 2 && it[0].nome === nomeTes && it[0].papel === null && it[1].nome === nomeGeral && it[1].papel === null,
+    "as linhas antigas, sem o papel gravado: o nome, sem papel", it);
+  await q(`UPDATE FinFolhasDesfeitas SET PapelNaHora = @p, DesfeitaPapel = N'Tesouraria Geral' WHERE Folha = 70286`, { p: PAPEL_VN });
   r = await GET(H, "folhas", local, { bloco: b1405 });
   ok(JSON.stringify(r.body.comHistorico) === JSON.stringify([70286]) && !r.body.folhas.some((x) => x.folha === 70286), "a folha livre de novo continua com histórico", r.body.comHistorico);
   ok((await GET(H, "historico", area, { folha: 70286 })).status === 200, "a área de Vila Nova vê o histórico");
@@ -276,6 +293,10 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
   r = await GET(H, "folhas", local, { bloco: b1405 });
   ok(JSON.stringify(r.body.comHistorico) === JSON.stringify([70286]), "a lançada com histórico continua na lista; a lançada sem histórico, não", r.body.comHistorico);
   ok((await GET(H, "historico", local, { folha: 70251 })).status === 404, "a lançada sem histórico não tem o que mostrar");
+  // a Tesouraria Geral também marca: o papel da hora é a Tesouraria Geral (a sessão dela, não a liderança da pessoa)
+  ok((await POST(H, "folha", geral, { folha: 70288, oQueAconteceu: "cancelada", observacao: "Preenchida errado" })).status === 200, "a Geral marca a 38ª cancelada");
+  r = await GET(H, "historico", local, { folha: 70288 });
+  ok(r.status === 200 && r.body.itens.length === 1 && r.body.itens[0].nome === nomeGeral && r.body.itens[0].papel === "Tesouraria Geral", "a marca da Geral: o papel da hora é a Tesouraria Geral", r.body.itens);
 
   console.log("-- a marcação de outra congregação no bloco que mudou de mãos --");
   r = await GET(H, "folhas", central, { bloco: b1404 });
@@ -391,11 +412,19 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
   r = await GET(H, "livro", area, {});
   ok(r.status === 200 && r.body.escopo.area === "Área Alfa E2E" && r.body.escopo.congregacao === null, "o livro da área diz o nome dela", r.body.escopo);
 
-  console.log("== a 203 de novo, sobre dados ==");
+  console.log("== a 203 e a 205 de novo, sobre dados ==");
   const antes = await retratoFin();
   await aplicarMigracao("203");
   await aplicarMigracao("203");
   ok((await retratoFin()) === antes, "a 203 rodada duas vezes sobre o banco com inexistentes não muda nada");
+  await aplicarMigracao("205");
+  await aplicarMigracao("205");
+  ok((await retratoFin()) === antes, "a 205 rodada duas vezes sobre o banco com os papéis gravados não muda nada");
+  const colunas = await q(`SELECT OBJECT_NAME(object_id) AS Tabela, name AS Coluna, max_length / 2 AS Tam, is_nullable AS Nula FROM sys.columns
+    WHERE (object_id = OBJECT_ID(N'dbo.FinFolhas') AND name = N'PapelNaHora')
+       OR (object_id = OBJECT_ID(N'dbo.FinFolhasDesfeitas') AND name IN (N'PapelNaHora', N'DesfeitaPapel')) ORDER BY 1, 2`);
+  ok(JSON.stringify(colunas.map((c) => [c.Tabela, c.Coluna, c.Tam, c.Nula])) === JSON.stringify([["FinFolhas", "PapelNaHora", 260, true], ["FinFolhasDesfeitas", "DesfeitaPapel", 260, true], ["FinFolhasDesfeitas", "PapelNaHora", 260, true]]),
+    "a 205: o papel da hora em FinFolhas e os dois em FinFolhasDesfeitas, NVARCHAR(260), aceitando vazio (as linhas antigas)", colunas);
   ok(Number(await escalar(`SELECT COUNT(*) FROM FinFolhas WHERE Destino = 'INEXISTENTE'`)) === 5 && b1402 > 0, "as cinco inexistentes continuam lá (as três de antes e as duas do 1.411)");
 
   fim("e2e-202 (Financeiro: o que a r30 pede ao servidor)");

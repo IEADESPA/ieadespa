@@ -110,7 +110,8 @@ export function linhaDoLivro(r: RegistroLivro, nivel: Nivel = "geral"): { readon
     };
   }
   if (r.tipo === "saida") {
-    const para = nivel === "local" ? r.pessoa : `${r.pessoa} (${r.congregacao})`;
+    // a congregação também vê o nome dela na saída, como a 1ª linha do aprovado (portão da parte 2, M6; o desenho mistura as duas formas)
+    const para = `${r.pessoa} (${r.congregacao})`;
     const como = r.levadoPelaArea ? "levado pela área, sem ficar com ela" : `registrou ${r.registradoPor} · Tesouraria Geral`;
     // a saída do bloco que voltou em parte: só as folhas livres, com as posições (r30: "só as folhas 64.436 a 64.450 (36ª a 50ª)")
     if (r.folhas && r.blocoPrimeiraFolha && r.folhas.primeiraFolha !== r.blocoPrimeiraFolha) {

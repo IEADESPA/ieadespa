@@ -431,13 +431,18 @@ describe("o histórico da folha e o desfazer (r30-blocos-desfazer)", () => {
     expect(regra.horaBrasilia(new Date("2026-11-13T01:05:00Z"))).toBe("2026-11-12T22:05");
     expect(regra.horaBrasilia(null)).toBeNull();
   });
-  test("quem marcou: o papel da liderança da pessoa (uma por pessoa), na congregação ou na área; fora delas, a Tesouraria Geral", () => {
+  test("o papel na hora do ato (portão da parte 2, I2): a sessão da Tesouraria Geral é a Tesouraria Geral; a da congregação ou da área, o papel da liderança da pessoa lá; sem liderança, nenhum papel (o histórico mostra só o nome, nunca a Geral por suposição)", () => {
+    expect(regra.papelNoHistorico({ geral: true })).toBe("Tesouraria Geral");
+    expect(regra.papelNoHistorico({ geral: true, escopoTipo: "CONGREGACAO", papel: "Tesoureiro", congregacao: "Vila Nova" })).toBe("Tesouraria Geral");
     expect(regra.papelNoHistorico({ escopoTipo: "CONGREGACAO", papel: "Tesoureiro", congregacao: "Vila Nova" })).toBe("tesoureiro de Vila Nova");
     expect(regra.papelNoHistorico({ escopoTipo: "AREA", papel: "Tesoureiro", area: "Área 2" })).toBe("tesoureiro da Área 2");
     expect(regra.papelNoHistorico({ escopoTipo: "CONGREGACAO", papel: null, congregacao: "Vila Nova" })).toBe("liderança de Vila Nova");
     expect(regra.papelNoHistorico({ escopoTipo: "GLOBAL", papel: "Tesoureiro" })).toBe("Tesouraria Geral");
-    expect(regra.papelNoHistorico({ escopoTipo: "CONGREGACAO", papel: "Tesoureiro", congregacao: null })).toBe("Tesouraria Geral");
-    expect(regra.papelNoHistorico({})).toBe("Tesouraria Geral");
+    expect(regra.papelNoHistorico({ escopoTipo: "CONGREGACAO", papel: "Tesoureiro", congregacao: null })).toBeNull();
+    expect(regra.papelNoHistorico({})).toBeNull();
+    expect(regra.papelNoHistorico()).toBeNull();
+    // cabe na coluna (o papel com 100 letras e o nome da congregação com 150)
+    expect(regra.papelNoHistorico({ escopoTipo: "CONGREGACAO", papel: "P".repeat(100), congregacao: "C".repeat(150) }).length).toBeLessThanOrEqual(260);
   });
   test("a porta do histórico: sem sessão 401, sem a permissão financeiro 403, a folha que não é número 404, sem tocar no banco", async () => {
     expect((await chamar({ acao: "historico", query: { folha: "70086" } })).status).toBe(401);
@@ -505,5 +510,16 @@ describe("a folha digitada vai junto (portão da parte 2, I1)", () => {
     expect(regra.folhaForaDoBloco(70200, b)).toBeNull();
     expect(regra.folhaForaDoBloco(64436, b)).toBe("A folha 64.436 não é do bloco 1.403: confira o número.");
     expect(regra.folhaForaDoBloco(70201, b)).toBe("A folha 70.201 não é do bloco 1.403: confira o número.");
+  });
+});
+describe("a recusa da saída do bloco que já está entregue (portão da parte 2, M3)", () => {
+  test("a saída registrada há pouco (até 10 minutos) é a corrida de duas pessoas (409, o texto da r30); a antiga diz com quem o bloco está desde quando (422)", () => {
+    const b = { numero: 1403, congregacao: "Vila Nova", entregueEm: "2026-11-02" };
+    expect(regra.recusaDaSaidaEntregue({ ...b, minutosDesdeASaida: 0 })).toEqual({ conflito: true, mensagem: "Este bloco acabou de sair por outra pessoa. Confira o livro." });
+    expect(regra.recusaDaSaidaEntregue({ ...b, minutosDesdeASaida: 9 })).toEqual({ conflito: true, mensagem: "Este bloco acabou de sair por outra pessoa. Confira o livro." });
+    expect(regra.recusaDaSaidaEntregue({ ...b, minutosDesdeASaida: 10 })).toEqual({ conflito: false, mensagem: "O bloco 1.403 já saiu: está com Vila Nova desde 02/11/2026." });
+    expect(regra.recusaDaSaidaEntregue({ ...b, minutosDesdeASaida: 60 * 24 * 21 })).toEqual({ conflito: false, mensagem: "O bloco 1.403 já saiu: está com Vila Nova desde 02/11/2026." });
+    // sem a saída no livro (dado antigo, feito à mão): não é corrida
+    expect(regra.recusaDaSaidaEntregue({ ...b, minutosDesdeASaida: null })).toEqual({ conflito: false, mensagem: "O bloco 1.403 já saiu: está com Vila Nova desde 02/11/2026." });
   });
 });

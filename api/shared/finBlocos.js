@@ -230,13 +230,28 @@ function horaBrasilia(d) {
   return new Date(new Date(d).getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 16);
 }
 
-/** quem marcou, entre parênteses no histórico: o papel da liderança da pessoa (uma por pessoa) na congregação ("tesoureiro de Vila Nova") ou na
- *  área ("tesoureiro da Área 2"); fora delas, quem marca é a Tesouraria Geral */
-function papelNoHistorico({ escopoTipo, papel, congregacao, area } = {}) {
+/** o papel de quem marcou ou desfez, entre parênteses no histórico, como fica gravado NA HORA do ato (portão da parte 2, I2): a sessão da
+ *  Tesouraria Geral (ou a liderança no nível geral) é a "Tesouraria Geral"; fora dela, o papel da liderança da pessoa (uma por pessoa) na
+ *  congregação ("tesoureiro de Vila Nova") ou na área ("tesoureiro da Área 2"). Sem liderança, nenhum papel (null): o histórico mostra só o
+ *  nome, nunca a Tesouraria Geral por suposição. Cabe nas 260 letras da coluna (migração 205). */
+function papelNoHistorico({ geral, escopoTipo, papel, congregacao, area } = {}) {
+  if (geral || escopoTipo === "GLOBAL") return "Tesouraria Geral";
   const nome = papel ? String(papel).toLowerCase() : "liderança";
-  if (escopoTipo === "CONGREGACAO" && congregacao) return `${nome} de ${congregacao}`;
-  if (escopoTipo === "AREA" && area) return `${nome} da ${area}`;
-  return "Tesouraria Geral";
+  if (escopoTipo === "CONGREGACAO" && congregacao) return `${nome} de ${congregacao}`.slice(0, 260);
+  if (escopoTipo === "AREA" && area) return `${nome} da ${area}`.slice(0, 260);
+  return null;
+}
+
+/** a recusa da saída do bloco que já está entregue (portão da parte 2, M3): a saída registrada há menos de 10 minutos é a corrida de duas
+ *  pessoas registrando a mesma saída (409, o texto da r30); a antiga, ou sem a hora no livro, diz com quem o bloco está e desde quando (422).
+ *  A data da entrega em aaaa-mm-dd. */
+const MINUTOS_DA_CORRIDA = 10;
+function recusaDaSaidaEntregue({ numero, congregacao, entregueEm, minutosDesdeASaida }) {
+  if (typeof minutosDesdeASaida === "number" && minutosDesdeASaida < MINUTOS_DA_CORRIDA) {
+    return { conflito: true, mensagem: "Este bloco acabou de sair por outra pessoa. Confira o livro." };
+  }
+  const desde = String(entregueEm).slice(0, 10).split("-").reverse().join("/");
+  return { conflito: false, mensagem: `O bloco ${milhar(numero)} já saiu: está com ${congregacao} desde ${desde}.` };
 }
 
 // ---- a folha digitada (portão da parte 2, I1): a saída e a entrada vão pela primeira folha do bloco, e a tela manda junto a folha que a pessoa
@@ -261,5 +276,5 @@ module.exports = {
   numeroDoBloco, blocosDoLote, posicaoDaFolha, situacaoDoBloco, filtroDaLista, procuraDaLista, paginaDaLista, excecaoDaFolha,
   destinoDaTela, contagemDasFolhas, pessoaDoLivro, nomeDoDestino, porPaginaDoLivro, blocosAgora,
   levadoPelaArea, desfazimentoDaFolha, devolucaoParcial, faixaLivre, mensagemDaParcial, mensagemJaVoltouParcial, horaBrasilia, papelNoHistorico,
-  folhaDigitada, folhaForaDoBloco
+  folhaDigitada, folhaForaDoBloco, recusaDaSaidaEntregue
 };

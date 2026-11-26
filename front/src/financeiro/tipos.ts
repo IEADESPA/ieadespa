@@ -89,7 +89,10 @@ export interface BlocoDasFolhas {
   readonly entregueEm: string | null;
   readonly devolvidoEm: string | null;
   readonly usadas: number;
+  /** as folhas da faixa vista ainda sem destino que podem ter destino (0 na entrega já fechada) */
   readonly livres: number;
+  /** nas folhas do bloco, a entrega já fechada: as sem destino que ficaram com a congregação (0 nas outras; o rastreio não manda) */
+  readonly pendentes?: number;
   /** a entrega vista voltou em parte (ou, na Geral, o bloco que voltou em parte e está com ela) */
   readonly parcial?: boolean;
   /** a faixa vista: a entrega (da primeira folha da saída ao fim, ou até a folha antes da primeira em branco) ou, na Geral, a que voltou livre */
@@ -128,8 +131,8 @@ export interface ItemHistorico {
   readonly tipo: "marcou" | "desfez";
   readonly quando: string;
   readonly nome: string;
-  /** "tesoureira de Vila Nova", "Tesouraria Geral" */
-  readonly papel: string;
+  /** o papel NA HORA do ato: "tesoureira de Vila Nova", "Tesouraria Geral"; null na linha de antes da migração 205 (o histórico mostra só o nome) */
+  readonly papel: string | null;
   /** o que foi marcado (null no desfez) */
   readonly destino: DestinoFolha | null;
   /** a observação de quem marcou, ou o motivo de quem desfez */

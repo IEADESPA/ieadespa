@@ -58,7 +58,8 @@ function historico(folha, desfeitas) {
   if (folha === 70060) {
     return { sucesso: true, folha, bloco: 1401, posicao: 10, itens: [{ ...MARCOU_36, destino: "cancelada", texto: "Achei que estava errada" }, { ...DESFEZ_36, texto: `Estava certa ${ATAQUE}` }] };
   }
-  if (folha === 62564) return { sucesso: true, folha, bloco: 1251, posicao: 14, itens: [{ ...MARCOU_36, quando: "2026-06-02T15:05", destino: "arrancada", texto: "Tirada do bloco" }] };
+  // a marca de antes do papel gravado na hora (portão da parte 2, I2): sem papel, o histórico mostra só o nome
+  if (folha === 62564) return { sucesso: true, folha, bloco: 1251, posicao: 14, itens: [{ ...MARCOU_36, papel: null, quando: "2026-06-02T15:05", destino: "arrancada", texto: "Tirada do bloco" }] };
   return null;
 }
 const opcao = (id, numero, congregacao, situacao, extra = {}) => {
@@ -604,6 +605,8 @@ async function provarDesfazer() {
       t = await textoTela(s.page);
       ok(t.includes("Está como") && t.includes("arrancada") && t.includes("Só para consulta: a folha já voltou com o bloco.") && (await textoHistorico(s.page) || "").includes("02/06 15h05"),
         "desfazer local: no bloco devolvido, a folha com histórico abre só para consulta", t.slice(0, 600));
+      ok((await textoHistorico(s.page)) === "O histórico da folha 02/06 15h05 Rute Santos marcou como arrancada: “Tirada do bloco.”",
+        "desfazer local: a marca antiga, sem o papel gravado na hora, mostra só o nome (nunca um papel suposto)", await textoHistorico(s.page));
       ok((await infoFolha(s.page, "62.551")).desligado, "desfazer local: no devolvido, a lançada sem histórico não se clica");
     }
     await fechar(s, `desfazer ${nivel} notebook`);
@@ -817,8 +820,8 @@ async function provarLivro() {
     t.slice(t.indexOf("O livro"), t.indexOf("O livro") + 400));
   ok(t.includes("15/10 Entrada parcial: bloco 1.288 devolvido por Rute Santos recebeu João da Silva · 35 usadas · as 15 em branco ficaram na Tesouraria Geral"),
     "local: a entrada parcial: as em branco ficaram na Tesouraria Geral (r30)", t.slice(t.indexOf("O livro"), t.indexOf("O livro") + 700));
-  ok(t.includes("17/11 Saída: bloco 1.402 entregue a Rute Santos registrou João da Silva · Tesouraria Geral") && !t.includes("(Vila Nova)"),
-    "local: a linha da saída sem o nome da própria congregação (r30)", t.slice(t.indexOf("O livro"), t.indexOf("O livro") + 300));
+  ok(t.includes("17/11 Saída: bloco 1.402 entregue a Rute Santos (Vila Nova) registrou João da Silva · Tesouraria Geral"),
+    "local: a linha da saída com o nome da congregação, como a 1ª linha do aprovado (portão da parte 2, M6)", t.slice(t.indexOf("O livro"), t.indexOf("O livro") + 300));
   await fechar(s, "livro local notebook");
 
   // o celular: a Geral com os dois botões (o formulário só ao tocar); a congregação com o aviso
@@ -1049,10 +1052,10 @@ async function provarAviso() {
   m = await aviso(s.page, "membresia", "Cadastro salvo.", "sucesso");
   ok(m && m.embaixo && Math.abs(m.meio - m.meioConteudo) <= 2 && Math.abs(m.baixo - 20) <= 2 && m.fundo === "rgb(15, 118, 110)" && m.icone, "Membros: o aviso embaixo, no meio, verde-água", m);
   await s.ctx.close();
-  // o celular: 30 px de cada lado, logo acima da barra do telefone
+  // o celular: 16 px de cada lado, como o aprovado (portão da parte 2, M5), logo acima da barra do telefone
   s = await abrir("local", "celular");
   m = await aviso(s.page, "financeiro", FEITO, "sucesso");
-  ok(m && m.embaixo && Math.abs(m.esq - 30) <= 1 && Math.abs(m.larg - m.dir - 30) <= 1 && Math.abs(m.baixo - 20) <= 2 && m.letra === "13px", "celular: o aviso embaixo, 30 px de cada lado", m);
+  ok(m && m.embaixo && Math.abs(m.esq - 16) <= 1 && Math.abs(m.larg - m.dir - 16) <= 1 && Math.abs(m.baixo - 20) <= 2 && m.letra === "13px", "celular: o aviso embaixo, 16 px de cada lado (M5)", m);
   await fechar(s, "aviso celular");
 }
 

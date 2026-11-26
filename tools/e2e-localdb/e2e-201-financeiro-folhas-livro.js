@@ -344,8 +344,8 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   ok((await retratoFin()) === antesP, "as recusas não mexeram no banco");
   r = await GET(H, "folhas", beta, { bloco: b1410 });
   ok(r.status === 200 && r.body.bloco.situacao === "fechado" && r.body.bloco.parcial === true && r.body.bloco.devolvidoEm === "2026-11-12" && JSON.stringify(r.body.bloco.faixa) === JSON.stringify({ primeiraFolha: 70501, ultimaFolha: 70530 })
-    && r.body.bloco.usadas === 21 && r.body.bloco.livres === 9 && r.body.folhas.length === 21 && r.body.folhas.find((x) => x.folha === 70530).observacao === "Sumiu na Beta",
-    "a Beta continua vendo as folhas dela (70.501 a 70.530, só consulta), com a observação", r.body.bloco);
+    && r.body.bloco.usadas === 21 && r.body.bloco.livres === 0 && r.body.bloco.pendentes === 9 && r.body.folhas.length === 21 && r.body.folhas.find((x) => x.folha === 70530).observacao === "Sumiu na Beta",
+    "a Beta continua vendo as folhas dela (70.501 a 70.530, só consulta), com a observação; as 9 sem destino são pendentes, não livres (portão da parte 2, M2)", r.body.bloco);
   const fotoBeta = (x) => JSON.stringify({ bloco: x.body.bloco, opcao: (x.body.opcoes || []).find((o) => o.id === b1410) || null, folhas: x.body.folhas });
   const betaDepoisDaParcial = fotoBeta(r);
   ok(r.body.bloco.congregacao && r.body.bloco.congregacao.id === BETA && r.body.bloco.entregueEm === "2026-11-05" && JSON.parse(betaDepoisDaParcial).opcao

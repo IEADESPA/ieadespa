@@ -65,20 +65,33 @@ async function conferirSaidaDeLideranca(pool, sql, req, context, usuario, membro
   return true;
 }
 
-// O e-mail de quem tem cargo de liderança vigente é o destino do código da segunda etapa do login e do "esqueci o PIN": trocá-lo ou apagá-lo é ato da
-// secretaria do nível do cargo ou de cima, com a confirmação recente (428) — a mesma regra de mudar a situação no rol, sem a trava do último administrador
-// (o e-mail novo não tira o acesso de ninguém). Revisão de fora de 25/11/2026 (S3). Sem cargo, passa. Chamado DEPOIS da conferência do escopo.
-const MENSAGEM_NIVEL_EMAIL = "Esta pessoa tem cargo de liderança de nível acima do seu: só a secretaria do nível do cargo (ou de cima) troca ou apaga o e-mail dela (é por ele que chega o código de acesso).";
-async function conferirTrocaDeEmailDeLideranca(pool, sql, req, context, usuario, membroId) {
+// Quando a secretaria age pela pessoa que tem cargo de liderança vigente (regra do responsável, 25 e 26/11/2026), é ato da secretaria do nível do cargo ou de
+// cima, com a confirmação recente (428), sem a trava do último administrador (nenhum destes atos tira o acesso de ninguém). Sem cargo, passa. Chamado DEPOIS da
+// conferência do escopo (quem não existe e quem está fora já receberam a mesma recusa). `mensagem`: a recusa do nível, que diz qual é o ato.
+// Devolve true se pode seguir; senão já deixou a resposta em context.res.
+async function conferirAtoSobreLideranca(pool, sql, req, context, usuario, membroId, mensagem) {
   const { hojeBrasilia } = require("./dataBrasilia");
   const hoje = hojeBrasilia();
   const cargos = await cargosVigentes(pool, sql, membroId, hoje);
   if (cargos.length === 0) return true;
   if (!(await alcancaOsCargos(pool, sql, usuario, membroId, hoje, cargos))) {
-    context.res = { status: 403, body: { sucesso: false, mensagem: MENSAGEM_NIVEL_EMAIL } };
+    context.res = { status: 403, body: { sucesso: false, mensagem } };
     return false;
   }
   return auth.exigirFatorRecente(req, context);
 }
 
-module.exports = { cargosVigentes, concessaoAlcanca, alcancaOsCargos, ordemDoCargo, conferirSaidaDeLideranca, conferirTrocaDeEmailDeLideranca, MENSAGEM_NIVEL, MENSAGEM_NIVEL_EMAIL };
+// O e-mail é o destino do código da segunda etapa do login e do "esqueci o PIN": trocá-lo ou apagá-lo (revisão de fora de 25/11/2026, S3).
+const MENSAGEM_NIVEL_EMAIL = "Esta pessoa tem cargo de liderança de nível acima do seu: só a secretaria do nível do cargo (ou de cima) troca ou apaga o e-mail dela (é por ele que chega o código de acesso).";
+const conferirTrocaDeEmailDeLideranca = (pool, sql, req, context, usuario, membroId) => conferirAtoSobreLideranca(pool, sql, req, context, usuario, membroId, MENSAGEM_NIVEL_EMAIL);
+
+// A volta ao rol ativo devolve o acesso do cargo (INATIVO, AFASTADO e LICENÇA não encerram o mandato; o login só exige ATIVO): desfaz o que a secretaria do nível
+// do cargo fez, e por isso segue a mesma regra da saída.
+const conferirVoltaDeLideranca = (pool, sql, req, context, usuario, membroId) => conferirAtoSobreLideranca(pool, sql, req, context, usuario, membroId, MENSAGEM_NIVEL);
+
+// O PIN provisório abre a sessão de titular da pessoa (e derruba as dela).
+const MENSAGEM_NIVEL_PIN = "Esta pessoa tem cargo de liderança de nível acima do seu: só a secretaria do nível do cargo (ou de cima) gera o PIN provisório dela.";
+const conferirPinDeLideranca = (pool, sql, req, context, usuario, membroId) => conferirAtoSobreLideranca(pool, sql, req, context, usuario, membroId, MENSAGEM_NIVEL_PIN);
+
+module.exports = { cargosVigentes, concessaoAlcanca, alcancaOsCargos, ordemDoCargo, conferirSaidaDeLideranca, conferirAtoSobreLideranca, conferirTrocaDeEmailDeLideranca,
+  conferirVoltaDeLideranca, conferirPinDeLideranca, MENSAGEM_NIVEL, MENSAGEM_NIVEL_EMAIL, MENSAGEM_NIVEL_PIN };

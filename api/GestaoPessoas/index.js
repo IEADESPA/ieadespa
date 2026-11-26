@@ -479,6 +479,10 @@ module.exports = async function (context, req) {
     // sair do rol ativo (para qualquer outra situação, inclusive as terminais) corta o acesso: quem tem cargo de liderança passa pela conferência
     const saindoDoRolAtivo = existia && statusAnterior !== statusFinal && statusFinal !== "ATIVO";
     if (saindoDoRolAtivo && !(await conferirSaidaDeLideranca(pool, req, context, usuario, membroId))) return;
+    // a volta ao rol ativo devolve o acesso do cargo (INATIVO, AFASTADO e LICENÇA não encerram o mandato; o login só exige ATIVO): a mesma regra do nível do cargo e
+    // a confirmação recente, sem a trava do último administrador. A ficha sem o campo da situação vale ATIVO: também é volta.
+    const voltandoAoRolAtivo = existia && statusAnterior !== statusFinal && statusFinal === "ATIVO";
+    if (voltandoAoRolAtivo && !(await nivelDoCargo.conferirVoltaDeLideranca(pool, sql, req, context, usuario, membroId))) return;
     // O e-mail é o destino do código de acesso (a segunda etapa do login e o "esqueci o PIN"): trocar ou apagar o de quem tem cargo segue o nível do cargo + 428.
     // Sem o campo no pedido, o e-mail é apagado (como sempre): também conta como troca.
     const emailMudou = existia && String(emailAnterior || "").trim().toLowerCase() !== String(email || "").trim().toLowerCase();

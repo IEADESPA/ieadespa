@@ -722,6 +722,80 @@ describe("o e-mail de quem tem cargo de liderança", () => {
   });
 });
 
+// A volta ao rol ativo de quem tem cargo de liderança vigente devolve o acesso do cargo (INATIVO, AFASTADO e LICENÇA não encerram o mandato; o login só exige
+// ATIVO): quando a secretaria age pela pessoa que tem cargo, vale a regra do nível do cargo e a confirmação reforçada (regra de 25 e 26/11/2026), como na saída.
+describe("a volta ao rol ativo de quem tem cargo de liderança", () => {
+  const local = (extra = {}) => sessao(77, { nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], ...extra });
+  const localSemFator = () => local({ fator: { via: "NENHUM", em: Date.now() } });
+  const area = (extra = {}) => sessao(78, { nivel: "AREA", escopoCongregacoes: ["Central", "Vila Nova"], ...extra });
+  const inativa = (extra = {}) => regrasDaFicha(fichaNoBanco({ Status: "INATIVO", DataSaidaAnterior: "2026-10-01", ...extra }));
+
+  test("cargo de área: a secretaria local é barrada (403, a mensagem do nível) e nada é gravado; a da área devolve, com a confirmação recente", async () => {
+    mockCargo = { tipo: "AREA", id: 3 };
+    inativa();
+    const barrada = await chamar("POST", { token: local(), corpo: corpoFicha({ status: "ATIVO" }) });
+    expect(barrada.status).toBe(403);
+    expect(barrada.body.mensagem).toMatch(/nível do cargo/);
+    expect(gravacoes()).toHaveLength(0);
+    const daArea = await chamar("POST", { token: area(), corpo: corpoFicha({ status: "ATIVO" }) });
+    expect(daArea.body.sucesso).toBe(true);
+    expect(gravacoes()[0].entradas.status).toBe("ATIVO");
+  });
+
+  test("cargo geral: a ficha sem o campo da situação (que vale ATIVO) pela secretaria local também é barrada", async () => {
+    mockCargo = { tipo: "GLOBAL", id: null };
+    inativa();
+    const corpo = corpoFicha();
+    delete corpo.status;
+    const r = await chamar("POST", { token: local(), corpo });
+    expect(r.status).toBe(403);
+    expect(gravacoes()).toHaveLength(0);
+  });
+
+  test("cargo local: a secretaria local devolve com a confirmação recente; sem ela, 428 e nada é gravado", async () => {
+    mockCargo = { tipo: "CONGREGACAO", id: 1 };
+    inativa();
+    const semFator = await chamar("POST", { token: localSemFator(), corpo: corpoFicha({ status: "ATIVO" }) });
+    expect(semFator.status).toBe(428);
+    expect(gravacoes()).toHaveLength(0);
+    const r = await chamar("POST", { token: local(), corpo: corpoFicha({ status: "ATIVO" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(gravacoes()).toHaveLength(1);
+  });
+
+  test.each([["AFASTADO"], ["LICENÇA"]])("cargo geral, vindo de %s: a secretaria da área é barrada", async (anterior) => {
+    mockCargo = { tipo: "GLOBAL", id: null };
+    inativa({ Status: anterior });
+    const r = await chamar("POST", { token: area(), corpo: corpoFicha({ status: "ATIVO" }) });
+    expect(r.status).toBe(403);
+    expect(gravacoes()).toHaveLength(0);
+  });
+
+  test("sem cargo: a secretaria local devolve como sempre, sem pedir a confirmação recente", async () => {
+    mockCargo = null;
+    inativa();
+    const r = await chamar("POST", { token: localSemFator(), corpo: corpoFicha({ status: "ATIVO" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(gravacoes()).toHaveLength(1);
+  });
+
+  test("com cargo, quem já está ATIVO: salvar a ficha não é volta, segue sem a conferência", async () => {
+    mockCargo = { tipo: "GLOBAL", id: null };
+    regrasDaFicha(fichaNoBanco());
+    const r = await chamar("POST", { token: localSemFator(), corpo: corpoFicha({ status: "ATIVO" }) });
+    expect(r.body.sucesso).toBe(true);
+  });
+
+  test("o 403 de quem está fora do escopo vem antes (a mesma resposta de quem não existe)", async () => {
+    mockCargo = { tipo: "GLOBAL", id: null };
+    inativa({ CongregacaoNome: "Vila Nova" });
+    const fora = await chamar("POST", { token: local(), corpo: corpoFicha({ status: "ATIVO" }) });
+    expect(fora.status).toBe(403);
+    expect(fora.body.mensagem).not.toMatch(/nível do cargo/);
+    expect(gravacoes()).toHaveLength(0);
+  });
+});
+
 // E2: o aviso ao e-mail antigo que não sai fica dito na resposta e na trilha; a gravação continua valendo.
 describe("o aviso ao e-mail antigo", () => {
   const { enviarEmailNotificacao } = require("../notificacaoEmail");

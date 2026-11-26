@@ -436,6 +436,68 @@ describe("GestaoPinMembro — PIN provisório gerado pela Secretaria", () => {
     });
   });
 
+  // O PIN provisório abre a sessão de titular da pessoa (e derruba as dela): quando a secretaria age pela pessoa que tem cargo de liderança vigente, vale a regra
+  // do nível do cargo e a confirmação reforçada (regra de 25 e 26/11/2026), como no e-mail e na situação no rol.
+  describe("quem tem cargo de liderança: a regra do nível do cargo e a confirmação recente", () => {
+    const comFator = { fator: { via: "CHAVE", em: Date.now() } };
+    const local = (extra = {}) => tokenDe(5, { permissoes: ["pessoas"], nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], ...comFator, ...extra });
+    const daArea = (extra = {}) => tokenDe(5, { permissoes: ["pessoas"], nivel: "AREA", escopoCongregacoes: ["Central", "Vila Nova"], ...comFator, ...extra });
+    const comCargo = (EscopoTipo, EscopoId) => {
+      quando(/FROM Lideranca l WHERE l\.MembroId = @id/, [{ EscopoTipo, EscopoId }]);
+      quando(/FROM Congregacoes WHERE CongregacaoId = @id/, [{ Nome: "Central" }]);
+      quando(/FROM Congregacoes WHERE AreaId = @id/, [{ Nome: "Central" }, { Nome: "Vila Nova" }]);
+    };
+    const gravouAlgo = () => rodou(/MembroPins/).length + rodou(/SessoesAtivas/).length;
+
+    test.each([["de área", "AREA", 3], ["geral", "GLOBAL", null]])("cargo %s: a secretaria local é barrada (403, a mensagem do nível), sem PIN e sem gravar nada", async (_r, tipo, id) => {
+      membroDaCentral();
+      comCargo(tipo, id);
+      quando(/SELECT @@ROWCOUNT AS n/, [{ n: 1 }]);
+      const r = await chamar(hGestao, { token: local(), corpo: { membroId: 20 } });
+      expect(r.status).toBe(403);
+      expect(r.body.mensagem).toMatch(/nível do cargo/);
+      expect(r.body.mensagem).toMatch(/PIN/);
+      expect(r.body.pin).toBeUndefined();
+      expect(gravouAlgo()).toBe(0);
+      expect(registrarAuditoria).not.toHaveBeenCalled();
+      expect(mockEmails).toHaveLength(0);
+    });
+    test("cargo de área: a secretaria da área gera, com a confirmação recente", async () => {
+      membroDaCentral();
+      comCargo("AREA", 3);
+      quando(/SELECT @@ROWCOUNT AS n/, [{ n: 1 }]);
+      const r = await chamar(hGestao, { token: daArea(), corpo: { membroId: 20 } });
+      expect(r.status).toBe(200);
+      expect(r.body.pin).toMatch(/^\d{4}$/);
+    });
+    test("cargo local: a secretaria local sem a confirmação recente recebe 428 e nada é gravado; com ela, gera", async () => {
+      membroDaCentral();
+      comCargo("CONGREGACAO", 1);
+      quando(/SELECT @@ROWCOUNT AS n/, [{ n: 1 }]);
+      const semFator = await chamar(hGestao, { token: local({ fator: { via: "NENHUM", em: Date.now() } }), corpo: { membroId: 20 } });
+      expect(semFator.status).toBe(428);
+      expect(semFator.body.pin).toBeUndefined();
+      expect(gravouAlgo()).toBe(0);
+      const r = await chamar(hGestao, { token: local(), corpo: { membroId: 20 } });
+      expect(r.status).toBe(200);
+      expect(r.body.pin).toMatch(/^\d{4}$/);
+    });
+    test("sem cargo: a secretaria local gera como sempre, sem pedir a confirmação recente", async () => {
+      membroDaCentral();
+      quando(/SELECT @@ROWCOUNT AS n/, [{ n: 1 }]);
+      const r = await chamar(hGestao, { token: local({ fator: { via: "NENHUM", em: Date.now() } }), corpo: { membroId: 20 } });
+      expect(r.status).toBe(200);
+    });
+    test("o 403 de quem está fora do escopo vem antes (a mesma resposta de quem não existe)", async () => {
+      const inexistente = await chamar(hGestao, { token: local(), corpo: { membroId: 21 } });
+      quando(/FROM MembroReferencia m LEFT JOIN Congregacoes c/, [{ MembroId: 20, Nome: "Ana", Email: null, DataNascimento: null, CongregacaoNome: "Vila Nova" }]);
+      comCargo("GLOBAL", null);
+      const fora = await chamar(hGestao, { token: local(), corpo: { membroId: 20 } });
+      expect(fora.status).toBe(403);
+      expect(fora.body).toEqual(inexistente.body);
+    });
+  });
+
   test("membro sem e-mail: gera do mesmo jeito, sem aviso", async () => {
     quando(/FROM MembroReferencia m LEFT JOIN Congregacoes c/, [{ MembroId: 20, Nome: "Ana", Email: null, DataNascimento: null, CongregacaoNome: "Central" }]);
     quando(/SELECT @@ROWCOUNT AS n/, [{ n: 1 }]);

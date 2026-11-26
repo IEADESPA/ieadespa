@@ -2,7 +2,7 @@
 // escreve. O servidor confere tudo (a regra pura está em api/shared/finLancamentos.js); aqui só se escreve o que ele mandou e se monta o pedido.
 import { pedir, qs } from "../comum/api";
 import type { CongregacaoDoSeletor } from "../comum/tipos";
-import type { AreaLancamentos, DizimistaAchado, FormaLancamento, HistoricoLancamento, LinhaPlanilha, PlanilhaMes, ReferenteLancamento, TipoLancamento } from "./tipos";
+import type { AreaLancamentos, DizimistaAchado, FormaLancamento, HistoricoLancamento, LinhaPlanilha, PlanilhaMes, ReferenteLancamento, TipoLancamento, TotaisMes } from "./tipos";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
@@ -136,6 +136,39 @@ export function paraSalvar(r: Rascunho): LinhaParaSalvar {
 
 /** o valor como se digita: só algarismos, a vírgula e o ponto do milhar ("1.250,00"), no máximo 14 caracteres */
 export const soValor = (v: string): string => v.replace(/[^\d.,]/g, "").slice(0, 14);
+
+/** o valor digitado em centavos ("1.250,00" → 125000), como o servidor lê; o que não confere fica null (o servidor recusa ao salvar) */
+export function centavos(v: string): number | null {
+  const t = v.trim();
+  if (!/^(\d{1,3}(\.\d{3})+|\d+)(,\d{1,2})?$/.test(t)) return null;
+  const [inteiro = "", frac = ""] = t.split(",");
+  const c = Number(inteiro.replace(/\./g, "")) * 100 + Number(frac.padEnd(2, "0"));
+  return c > 0 ? c : null;
+}
+
+/**
+ * Os totais do mês com o que já está digitado (o desenho: "os totais de dezembro já contam a 70.161 e a 70.162"): a linha com o tipo, a forma
+ * e o valor soma como o servidor somaria (totaisDoMes); a folha que veio marcada do mês anterior soma também no adiantado; a nova "Mês
+ * posterior" e a folha marcada não somam aqui. Ao salvar, os totais voltam do servidor.
+ */
+export function totaisComRascunhos(t: TotaisMes, rascunhos: readonly Rascunho[]): TotaisMes {
+  const n = { ...t } as { -readonly [K in keyof TotaisMes]: TotaisMes[K] };
+  for (const r of rascunhos) {
+    if (!r.tipo || ehMarca(r.tipo) || !r.forma || (r.como === "nova" && r.referente === "MES_POSTERIOR")) continue;
+    const v = centavos(r.valor);
+    if (v === null) continue;
+    const vol = r.tipo === "DIZIMO" ? (centavos(r.voluntaria) ?? 0) : 0;
+    if (r.tipo === "DIZIMO") n.dizimos += v;
+    else if (r.tipo === "OFERTA_CULTO") n.ofertaCulto += v;
+    else { n.ofertaVoluntaria += v; n.voluntariasSozinhas++; }
+    if (vol) { n.ofertaVoluntaria += vol; n.voluntariasJunto++; }
+    if (r.forma === "PIX") n.pix += v + vol; else n.especie += v + vol;
+    if (r.como === "preencher") n.adiantado += v + vol;
+    n.total += v + vol;
+    n.folhas++;
+  }
+  return n;
+}
 
 /** "a 70.161", "a 70.161 e a 70.162", "as 3 folhas" */
 export function asFolhas(folhas: readonly number[]): string {

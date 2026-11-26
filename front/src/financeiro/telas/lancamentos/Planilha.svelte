@@ -80,13 +80,13 @@
         <span class="rel" role="cell">—</span>
       </div>
     {:else if l.situacao === "excecao"}
-      <button type="button" class="linha lida" class:clicada={clicada === l.folha} class:erro={erroFolha === l.folha} onclick={() => onclicar(l)}>
+      <button type="button" class="linha lida" class:clicada={clicada === l.folha} class:erro={erroFolha === l.folha} data-folha={l.folha} onclick={() => onclicar(l)}>
         <span class="n">{folhaTxt(l.folha)}</span>
         <span class="quem"><span class="chip">{NOME_MARCA[l.destino ?? ""] ?? "Marcada"}</span>{#if l.observacao}<span class="motivo">motivo: {l.observacao}</span>{/if}</span>
         <span>—</span><span>—</span><span class="dir">—</span><span>—</span><span>—</span>
       </button>
     {:else if l.situacao === "lancada"}
-      <button type="button" class="linha lida" class:clicada={clicada === l.folha} class:erro={erroFolha === l.folha} onclick={() => onclicar(l)}>
+      <button type="button" class="linha lida" class:clicada={clicada === l.folha} class:erro={erroFolha === l.folha} data-folha={l.folha} onclick={() => onclicar(l)}>
         <span class="n">{folhaTxt(l.folha)}</span>
         <span class="quem">{@render quem(l)}</span>
         <span class="corta">{l.tipo ? NOME_TIPO[l.tipo] : "—"}</span>

@@ -2,10 +2,11 @@
 // verdade; /api/financeiro/blocos/* responde com dados de mentira nos formatos reais (api/shared/finBlocosDb.js) e grava cada pedido; o resto da
 // casca usa a API simulada do equipamento da CSP (tools/csp-e2e: servidor.js, instrumento.js, modelo-respostas.json).
 // Incremento 2 (23/11/2026): as abas "Folhas do bloco" e "Livro de entrada e saída" (r17-blocos-folhas e r17-blocos-livro, opção 1).
+// Incremento 3 (26/11/2026): "Lançar dízimos e ofertas" (prova-lancamentos.js; a API simulada em dados-lancamentos.js, com a regra do servidor).
 //
 // Rodar (pelo PowerShell; pelo Bash o Edge sem tela não abre neste notebook):
 //   node tools/front-financeiro/navegador.js            (PUPPETEER_CORE = a pasta do puppeteer-core; sem ela, tools/csp-e2e/node_modules)
-//   LISTA=1 mostra cada caso aprovado; SO=folhas, SO=desfazer, SO=livro, SO=saida, SO=rastreio, SO=vazios ou SO=aviso roda só uma parte.
+//   LISTA=1 mostra cada caso aprovado; SO=folhas, SO=desfazer, SO=livro, SO=saida, SO=rastreio, SO=vazios, SO=aviso ou SO=lancamentos roda só uma parte.
 "use strict";
 const fs = require("fs");
 const os = require("os");
@@ -15,6 +16,8 @@ const puppeteer = require(process.env.PUPPETEER_CORE || path.join(EQUIP, "node_m
 const { criarServidor } = require(path.join(EQUIP, "servidor.js"));
 const { instrumento } = require(path.join(EQUIP, "instrumento.js"));
 const modelo = require(path.join(EQUIP, "modelo-respostas.json"));
+const { apiLancamentos } = require("./dados-lancamentos.js");
+const provarLancamentos = require("./prova-lancamentos.js");
 const RAIZ = path.join(__dirname, "..", "..", "app");
 const EDGE = process.env.EDGE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
 const SO = process.env.SO || "";
@@ -144,10 +147,13 @@ const PERFIS = {
 
 // a API simulada do Financeiro: cada página tem o seu estado (as folhas registradas) e a lista dos pedidos
 function apiFinanceiro(nivel, opcoes) {
-  const estado = { registradas: [], desfeitas: [], pedidos: [], saidas: [], saiu: [] };
+  const lancamentos = apiLancamentos(nivel);
+  const estado = { registradas: [], desfeitas: [], pedidos: [], saidas: [], saiu: [], lancamentos: lancamentos.estado };
   const responder = (metodo, u, corpo) => {
     const p = u.pathname, q = u.searchParams;
     estado.pedidos.push({ metodo, caminho: p, busca: Object.fromEntries(q.entries()), corpo });
+    const rl = lancamentos.responder(metodo, u, corpo);
+    if (rl) return rl;
     if (p === "/api/financeiro/blocos" && metodo === "GET") {
       if (opcoes.listaFalha) return { status: 500, corpo: { sucesso: false, mensagem: "Falha simulada." } };
       // os vazios da r30: antes do primeiro lote, ou a procura que nada acha (99.999)
@@ -1338,6 +1344,10 @@ async function provarRastreioVelho() {
     if (!SO || SO === "rastreio") { console.log("O rastreio velho (trocar o número e clicar na hora)"); await provarRastreioVelho(); }
     if (!SO || SO === "vazios") { console.log("As listas vazias"); await provarVazios(); }
     if (!SO || SO === "aviso") { console.log("O aviso das telas novas"); await provarAviso(); }
+    if (!SO || SO === "lancamentos") {
+      console.log("Lançar dízimos e ofertas");
+      await provarLancamentos({ abrir, fechar, ok, calmo, espera, pedidos, esperarPedido, textoTela, clicar });
+    }
   } finally {
     await nav.close();
     await srv.fechar();

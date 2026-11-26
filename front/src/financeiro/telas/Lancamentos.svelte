@@ -21,7 +21,7 @@
   import type { AreaLancamentos, DestinoFolha, HistoricoFolha, HistoricoLancamento, LinhaPlanilha, PlanilhaMes } from "../tipos";
   import {
     diaComSemana, folhaDaRecusa, lerArea, mesVizinho, lerCongregacoes, lerHistoricoLancamento, lerPlanilha, nomeDoMes, paraSalvar, rascunhoNovo, rascunhoVazio,
-    salvarLinhas, type Rascunho
+    salvarLinhas, totaisComRascunhos, type Rascunho
   } from "../lancamentos";
   import Tira from "./lancamentos/Tira.svelte";
   import Planilha from "./lancamentos/Planilha.svelte";
@@ -364,7 +364,7 @@
           onmudar={mudar} onenter={(f) => void proximaLinha(f)} onclicar={(l) => void clicar(l)} />
         {@render folhaClicada()}
         <Avisos tipo="nota" mes={planilha.mes} {marcadas} />
-        {#if planilha.totais}<Totais totais={planilha.totais} mes={planilha.mes} {marcadas} />{/if}
+        {#if planilha.totais}<Totais totais={totaisComRascunhos(planilha.totais, Object.values(rascunhos))} mes={planilha.mes} {marcadas} />{/if}
       {/if}
     {/if}
   {/if}

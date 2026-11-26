@@ -535,12 +535,28 @@ async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOT
   let n = Math.max(1, Math.min(TAMANHO_LOTE, Math.floor(Number(tamanho) || TAMANHO_LOTE)));
   const por = Number(usuario.membroId);
   const fora = [];   // as recusadas desta chamada, ainda sem uma linha depois delas que tenha entrado: { linha, erro } (o número do erro, nunca a mensagem)
-  const prazo = agora() + Math.max(0, Number(orcamentoMs) || 0);   // o orçamento de tempo vale para a chamada inteira (ORCAMENTO_LOTE_MS)
+  const inicio = agora();
+  const orcamento = Math.max(0, Number(orcamentoMs) || 0);
+  let prazo = inicio + orcamento;   // o orçamento de tempo vale para a chamada inteira (ORCAMENTO_LOTE_MS)
+  let antesDaPrimeira = null;       // quantas linhas entraram, neste lote, antes da 1ª recusada desta chamada
+  let recuou = false;
   for (;;) {
     try {
       return await emTransacao(pool, (t, rq) => gravarLote(t, rq, { id, n, por, fora, prazo, agora }));
     } catch (e) {
       if (!recusaDaLinha(e)) throw e;
+      if (antesDaPrimeira === null) antesDaPrimeira = e.antesNoLote;
+      // A recusada com a metade do orçamento (ou mais) já gasta (missão C, 26/11/2026): refazer o lote até a prova custa de novo o tempo das linhas de antes,
+      // e uma vez a cada recusada seguida (5 seguidas: ~6 vezes o orçamento). A chamada grava só as linhas de antes da 1ª recusada (sem corte de tempo e sem
+      // ninguém de fora: nada foi provado), e a recusada fica em primeiro na chamada seguinte, onde a prova custa uma linha. Com nenhuma linha antes dela, a
+      // regra de sempre (gravar zero linhas não andaria). Assim a chamada fica em até ~2 vezes o orçamento.
+      if (!recuou && antesDaPrimeira > 0 && (agora() - inicio) * 2 >= orcamento) {
+        recuou = true;
+        fora.length = 0;
+        n = antesDaPrimeira;
+        prazo = Infinity;
+        continue;
+      }
       fora.push({ linha: e.linhaImportacao, erro: e.number });
       if (fora.length >= SEGUIDAS_MAX) {
         if (deixarDeFora === true) return emTransacao(pool, (t, rq) => gravarLote(t, rq, { id, n: 0, por, fora, confirmadoNaTela: true }));

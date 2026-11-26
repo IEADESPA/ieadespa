@@ -282,14 +282,49 @@ describe("a linha que o banco recusa (a saída do IMPORTANDO)", () => {
     expect(mockConsultas.some((c) => /SET Situacao = N'CONCLUIDA'/.test(c.sql))).toBe(true);
     expect(mockTx).toEqual(["begin", "rollback", "begin", "commit"]);
   });
-  // o orçamento de tempo (missão C, 26/11/2026) não corta a prova: o lote refeito vai até a linha depois da recusada, mesmo com o tempo acabado; senão a
-  // recusada ficaria de fora sem a prova de que é a linha, e não o banco
-  test("o orçamento de tempo não corta a prova da recusada: o lote refeito vai até a linha depois dela", async () => {
+  // O orçamento de tempo e a recusada (missão C, 26/11/2026). Refazer o lote custa de novo o tempo das linhas de antes da recusada; com recusadas seguidas, o
+  // lote era refeito a cada uma (5 recusadas: ~6 vezes o tempo, ~60 s). Agora: a recusada que chega com MENOS da metade do orçamento gasta segue a regra de
+  // sempre (o lote refeito até a linha da prova, sem corte); a que chega com a metade ou mais gasta faz a chamada gravar só as linhas de antes dela, sem ninguém
+  // de fora, e a recusada fica em primeiro na chamada seguinte, onde a prova custa uma linha. Assim a chamada fica em até ~2 vezes o orçamento (~20 s).
+  test("a recusada cedo (menos da metade do orçamento gasta): a prova de sempre, o lote refeito até a linha depois dela", async () => {
     let t = 0;
-    cenarioRecusa({ linhas: tres(), recusar: (i) => { t += 6000; return i.nome === "Recusada"; } });
+    cenarioRecusa({ linhas: tres(), recusar: (i) => { t += 2000; return i.nome === "Recusada"; } });
     const r = await db.importarLote(POOL, QUEM, 7, { orcamentoMs: 10000, agora: () => t });
     expect(tentadas()).toEqual(["Pessoa 2", "Recusada", "Pessoa 2", "Pessoa 4"]);
     expect(r).toEqual({ sucesso: true, importacaoId: 7, importadas: 2, fora: 1, restantes: 5, concluida: false });
+  });
+  test("a recusada tarde (metade do orçamento ou mais): grava só as de antes dela, sem ninguém de fora; ela fica em primeiro para a próxima chamada", async () => {
+    let t = 0;
+    cenarioRecusa({ linhas: tres(), recusar: (i) => { t += 6000; return i.nome === "Recusada"; } });
+    const r = await db.importarLote(POOL, QUEM, 7, { orcamentoMs: 10000, agora: () => t });
+    expect(tentadas()).toEqual(["Pessoa 2", "Recusada", "Pessoa 2"]);
+    expect(r).toEqual({ sucesso: true, importacaoId: 7, importadas: 1, fora: 0, restantes: 5, concluida: false });
+    expect(marcas()).toHaveLength(0);
+    expect(mockTx).toEqual(["begin", "rollback", "begin", "commit"]);
+    // a chamada seguinte (o relógio de novo do zero) começa pela recusada: a prova custa só a linha dela e a de depois
+    mockConsultas = []; mockTx = []; t = 0;
+    cenarioRecusa({ linhas: tres().slice(1), recusar: (i) => { t += 6000; return i.nome === "Recusada"; } });
+    const r2 = await db.importarLote(POOL, QUEM, 7, { orcamentoMs: 10000, agora: () => t });
+    expect(tentadas()).toEqual(["Recusada", "Pessoa 4"]);
+    expect(r2).toEqual({ sucesso: true, importacaoId: 7, importadas: 1, fora: 1, restantes: 5, concluida: false });
+  });
+  test("recusadas seguidas depois do meio do orçamento: o lote é refeito UMA vez só (antes, uma vez por recusada), e as 5 seguidas ainda param na chamada seguinte", async () => {
+    const linhas = [2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => linha({ Linha: n, MatriculaArquivo: String(500 + n), Matricula: 500 + n, Nome: n >= 5 ? `Recusada ${n}` : `Pessoa ${n}` }));
+    let t = 0;
+    cenarioRecusa({ linhas, recusar: (i) => { t += 1500; return /^Recusada/.test(i.nome); } });
+    const r = await db.importarLote(POOL, QUEM, 7, { orcamentoMs: 10000, agora: () => t });
+    expect(tentadas()).toEqual(["Pessoa 2", "Pessoa 3", "Pessoa 4", "Recusada 5", "Pessoa 2", "Pessoa 3", "Pessoa 4"]);
+    expect(r).toMatchObject({ sucesso: true, importadas: 3, fora: 0 });
+    expect(t).toBeLessThanOrEqual(2 * 10000 + 1500);
+    // a seguinte começa pelas recusadas: as 5 seguidas, sem nenhuma entrar entre elas, param como sempre (409, ninguém de fora)
+    mockConsultas = []; mockTx = []; t = 0;
+    cenarioRecusa({ linhas: linhas.slice(3), recusar: (i) => { t += 1500; return /^Recusada/.test(i.nome); } });
+    mockRegras.push([/SELECT Linha, Nome FROM ImportacoesMembrosLinhas/, [5, 6, 7, 8, 9].map((n) => ({ Linha: n, Nome: `Recusada ${n}` }))]);
+    const { sql } = require("../db");
+    const r2 = await db.importarLote({ request: () => new sql.Request() }, QUEM, 7, { orcamentoMs: 10000, agora: () => t });
+    expect(tentadas()).toEqual(["Recusada 5", "Recusada 6", "Recusada 7", "Recusada 8", "Recusada 9"]);
+    expect(r2).toMatchObject({ sucesso: false, status: 409, mensagem: db.MSG.RECUSADAS(5), podeDeixarDeFora: true });
+    expect(mockTx.filter((x) => x === "commit")).toHaveLength(0);
   });
 });
 

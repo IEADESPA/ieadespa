@@ -62,10 +62,22 @@ async function principal() {
   const c = await R(tok.geral(), { metodo: "POST", acao: "confirmar", corpo: { importacaoId: id } });
   ok(c.status === 200 && c.body.restantes === 10, "confirmada: 10 a importar", c.body);
 
-  console.log("== 1º lote: a recusada sozinha fica de fora e as outras entram, na ordem ==");
+  // Missão C (26/11/2026): a recusada que chega depois da METADE do orçamento de tempo não faz a chamada refazer o lote até a prova: grava só as de antes dela,
+  // sem ninguém de fora, e ela fica em primeiro na chamada seguinte (onde a prova custa uma linha). O relógio de mentira (cada leitura anda 1 s; orçamento de
+  // 2 s) põe a recusa da linha 3 depois da metade, contra o SQL Server de verdade (a transação desfeita e o lote refeito são o que o jest não prova).
+  console.log("== 1º lote, com o tempo passado da metade: grava só a de antes da recusada, ninguém de fora ==");
+  let relogio = 0;
+  const camada = require("../../api/shared/importacaoMembrosDb");
+  const b0 = await camada.importarLote(await obterPool(), { membroId: 9901 }, id, { orcamentoMs: 2000, agora: () => (relogio += 1000) });
+  ok(b0.sucesso === true && b0.importadas === 1 && b0.fora === 0 && b0.restantes === 9 && b0.concluida === false, "1 entrou (a 2), nenhuma de fora, 9 faltam", b0);
+  const l3antes = await linhaDb(id, 3);
+  ok(l3antes && l3antes.Acao === "NOVA" && l3antes.Estado === "PENDENTE", "a linha 3 continua pendente, em primeiro para a próxima chamada", l3antes);
+  ok(await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId = 990201 AND SituacaoMembro = N'ARROLAMENTO'") === 1, "a 2 no banco, em ARROLAMENTO");
+
+  console.log("== 2ª chamada: a recusada em primeiro fica de fora com a prova (a 4) ==");
   const b1 = await R(tok.geral(), { metodo: "POST", acao: "lote", corpo: { importacaoId: id } });
-  ok(b1.status === 200 && b1.body.sucesso === true && b1.body.importadas === 2 && b1.body.fora === 1 && b1.body.restantes === 7 && b1.body.concluida === false,
-    "200: 2 entraram (a 2 e a 4, a prova), 1 de fora (a 3), 7 faltam", b1.body);
+  ok(b1.status === 200 && b1.body.sucesso === true && b1.body.importadas === 1 && b1.body.fora === 1 && b1.body.restantes === 7 && b1.body.concluida === false,
+    "200: 1 entrou (a 4, a prova), 1 de fora (a 3), 7 faltam", b1.body);
   const l3 = await linhaDb(id, 3);
   ok(l3 && l3.Acao === "PROBLEMA" && l3.Estado === "FORA" && l3.Problemas === "ERRO_AO_GRAVAR" && l3.MatriculaFinal === null, "a linha 3: PROBLEMA, FORA, ERRO_AO_GRAVAR, sem matrícula", l3);
   ok(await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId IN (990201, 990203) AND SituacaoMembro = N'ARROLAMENTO'") === 2, "a 2 e a 4 no banco, em ARROLAMENTO");

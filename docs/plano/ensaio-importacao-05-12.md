@@ -25,8 +25,9 @@ Ela passou inteira pela rota de verdade, no SQL Server local:
 
 **O que o ensaio consertou no banco: a migração 188.** A prévia procura as fichas que já existem com o mesmo nome e
 nascimento de cada pessoa do arquivo. Sem um índice no nascimento, o caminho que o banco escolhe depende de quantas fichas
-ele tem. Com poucas, como a produção antes da importação grande, ele relia o arquivo inteiro para cada ficha: 1,49 milhão
-de páginas numa consulta só, 2 s no computador e bem mais no Basic, perto dos 45 s da prévia. Com algumas centenas de fichas
+ele tem. Com poucas, ele relia o arquivo inteiro para cada ficha: 1,49 milhão de páginas numa consulta só, 2 s no
+computador. **Duas estimativas, não medidas:** a produção antes da importação grande deve estar nesse caso (tem poucas
+fichas), e no Basic essa consulta levaria bem mais, talvez perto dos 45 s da prévia. Com algumas centenas de fichas
 ele muda de caminho sozinho. Por isso **a homologação, com mais de 5 mil fichas, nunca mostraria esse caso.** Com o índice, o
 caminho é o mesmo em qualquer tamanho: cerca de 30 mil páginas, uns 50 ms. A 188 vai para a produção junto com o Membros,
 antes da importação grande. O ensaio do computador confere sempre que nenhuma consulta passa de 100 mil páginas.
@@ -52,8 +53,11 @@ menos uma pessoa. A conta para 6 mil pessoas, com a distância que a nuvem tiver
 | 120 ms | ~25 | ~236 | 43 min |
 | 150 ms | ~20 | ~300 | 55 min |
 
-Cada chamada fica perto de 10 a 12 s, longe dos 45 s, seja qual for a distância. O próprio ensaio mede a distância: ela é
-cerca de 10 s ÷ (3 × as pessoas por chamada + 10).
+Sem linha recusada, cada chamada fica perto de 10 a 12 s. Com uma linha que o banco recusa, a chamada refaz o lote uma vez
+(para deixar a linha de fora só com a prova de que é ela, e não o banco) e chega a uns 20 s. Se a recusa vem depois da metade
+do orçamento, a chamada grava só as pessoas de antes dela, e a linha recusada fica em primeiro na chamada seguinte, onde a
+prova custa uma linha. Assim, nem com várias recusadas seguidas uma chamada passa de uns 20 s: longe dos 45 s, seja qual
+for a distância. O próprio ensaio mede a distância: ela é cerca de 10 s ÷ (3 × as pessoas por chamada + 10).
 
 ## 3. Antes do dia (até 04/12)
 
@@ -90,8 +94,25 @@ cerca de 10 s ÷ (3 × as pessoas por chamada + 10).
 7. **Os tempos:** no F12, use "Exportar HAR" e rode `node tools/ensaio-importacao/ler-har.js ensaio.har`. Ele dá a prévia,
    cada lote, a média, o p95, o maior e quantos passaram de 30 s e de 45 s. **Apague o HAR depois:** ele tem o arquivo inteiro.
 8. **O banco:** no portal do Azure, no `ieadespa-homolog`, olhe as métricas da janela do ensaio (CPU, E/S de log, E/S de
-   dados, sessões e workers) e o Query Performance Insight (as 5 consultas mais pesadas, pela CPU e pelas leituras). A
-   procura do mesmo nome e nascimento da prévia (a do índice da 188) e o `SELECT TOP` das linhas de cada lote são as que
+   dados, sessões e workers) e o Query Performance Insight (as 5 consultas mais pesadas pela CPU, pela duração e pelo
+   número de execuções). **O Query Performance Insight não mostra as páginas lidas:** elas estão no Query Store do próprio
+   banco. Leia-as com uma consulta só de leitura, no editor de consultas do portal, no `ieadespa-homolog` (nunca na
+   produção), logo depois dos lotes:
+
+   ```sql
+   SELECT TOP 5 LEFT(qt.query_sql_text, 120) AS consulta, rs.count_executions AS execucoes,
+          rs.max_logical_io_reads AS paginas_no_maximo, CAST(rs.avg_logical_io_reads AS INT) AS paginas_em_media,
+          rs.max_duration / 1000 AS ms_no_maximo
+   FROM sys.query_store_runtime_stats rs
+   JOIN sys.query_store_runtime_stats_interval i ON i.runtime_stats_interval_id = rs.runtime_stats_interval_id
+   JOIN sys.query_store_plan p ON p.plan_id = rs.plan_id
+   JOIN sys.query_store_query q ON q.query_id = p.query_id
+   JOIN sys.query_store_query_text qt ON qt.query_text_id = q.query_text_id
+   WHERE i.start_time >= DATEADD(HOUR, -3, SYSUTCDATETIME())
+   ORDER BY rs.max_logical_io_reads DESC;
+   ```
+
+   A procura do mesmo nome e nascimento da prévia (a do índice da 188) e o `SELECT TOP` das linhas de cada lote são as que
    o ensaio do computador mais vigiou.
 9. **A prova da permissão de ALTER** (juntar fichas, item 6).
 10. **Amostra:** abra 3 fichas importadas. Confira o nome com acento e apóstrofo, "Arrolamento a completar" e nenhum CPF
@@ -161,7 +182,7 @@ item 5 mostra).
 - as 6 mil pessoas entram em até 60 min;
 - o resultado bate com o gabarito: as importadas, as de fora e as pendências;
 - o banco fica com a CPU e a E/S de log médias abaixo de 80% durante os lotes (no Basic, o DTU médio abaixo de 90%);
-- nenhuma consulta lê mais de 100 mil páginas numa execução (o Query Performance Insight mostra as leituras);
+- nenhuma consulta lê mais de 100 mil páginas numa execução (a consulta do Query Store do item 4, passo 8);
 - juntar e desfazer a junção funcionam.
 
 **Não vai**, se acontecer qualquer um destes:

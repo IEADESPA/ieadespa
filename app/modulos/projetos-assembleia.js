@@ -152,9 +152,11 @@ async function salvarAssentoDiretoria() {
 }
 
 async function encerrarAssentoDiretoriaAcao(assentoId) {
-  if (!(await confirmarAcao("Encerrar esta cadeira?", "Encerrar"))) return;
+  // volta 10: encerrar pede o motivo (vai para a cadeira e para a trilha; o servidor recusa sem ele); sem motivo, nada se encerra
+  const motivo = await pedirTexto("Encerrar esta cadeira: qual o motivo?", "Ex.: fim do mandato, ou ainda não é membro (congregado)", "", { botao: "Encerrar", maximo: 200 });
+  if (!motivo) return;
   const res = await fetchProtegido(`${API_BASE}/assentos/${assentoId}/encerrar`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivoEncerramento: motivo })
   });
   const data = await res.json();
   avisarResultado(data);
@@ -249,9 +251,11 @@ async function salvarAssentoConselhoFiscal() {
 }
 
 async function encerrarAssentoConselhoFiscalAcao(assentoId) {
-  if (!(await confirmarAcao("Encerrar esta cadeira?", "Encerrar"))) return;
+  // volta 10: encerrar pede o motivo (vai para a cadeira e para a trilha; o servidor recusa sem ele); sem motivo, nada se encerra
+  const motivo = await pedirTexto("Encerrar esta cadeira: qual o motivo?", "Ex.: fim do mandato, ou ainda não é membro (congregado)", "", { botao: "Encerrar", maximo: 200 });
+  if (!motivo) return;
   const res = await fetchProtegido(`${API_BASE}/assentos/${assentoId}/encerrar`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivoEncerramento: motivo })
   });
   const data = await res.json();
   avisarResultado(data);
@@ -342,9 +346,11 @@ async function salvarAssentoCEI() {
 }
 
 async function encerrarAssentoCEIAcao(assentoId) {
-  if (!(await confirmarAcao("Encerrar esta cadeira?", "Encerrar"))) return;
+  // volta 10: encerrar pede o motivo (vai para a cadeira e para a trilha; o servidor recusa sem ele); sem motivo, nada se encerra
+  const motivo = await pedirTexto("Encerrar esta cadeira: qual o motivo?", "Ex.: fim do mandato, ou ainda não é membro (congregado)", "", { botao: "Encerrar", maximo: 200 });
+  if (!motivo) return;
   const res = await fetchProtegido(`${API_BASE}/assentos/${assentoId}/encerrar`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivoEncerramento: motivo })
   });
   const data = await res.json();
   avisarResultado(data);

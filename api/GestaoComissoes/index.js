@@ -7,7 +7,7 @@
 // muda a sigla e o limite de membros (sem tabela nova por comissão).
 // GET  /api/comissoes                      -> { CCJ: [...], CFO: [...], CEP: [...], PMO: [...] }
 // POST /api/comissoes/{ccj|pmo}                  -> body: { membroId }
-// POST /api/comissoes/{ccj|pmo}/{id}/encerrar    -> body: { motivoEncerramento? }
+// POST /api/comissoes/{ccj|pmo}/{id}/encerrar    -> body: { motivoEncerramento }  (obrigatório desde a volta 10, até 200 caracteres)
 // ESCOPO: a composição de comissão (CCJ, PMO) é INSTITUCIONAL e dá o direito de emitir parecer sobre projeto da igreja inteira (GestaoProjetos). Adicionar e encerrar
 // membro é só do nível GERAL (papel Global com escopo "TODAS"); "pessoas"/"financeiro" também são do Dirigente, do Pastor de Área e dos Tesoureiros locais. Ler a composição
 // (GET) segue para quem tem as permissões de hoje.
@@ -65,9 +65,12 @@ module.exports = comConflito(async function (context, req) {
   if (!usuario) return;
 
   if (req.method === "POST" && id && acao === "encerrar") {
-    const { motivoEncerramento } = req.body || {};
-    if (motivoEncerramento != null && (typeof motivoEncerramento !== "string" || motivoEncerramento.length > 200)) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Motivo inválido (texto de até 200 caracteres)." } };
+    // volta 10 (importante 2 do portão v9, decisão do coordenador): encerrar pede o motivo, para todos e em todos os botões; vazio ou só espaços: recusa. O
+    // motivo vai sem os espaços das pontas para a vaga e para a trilha.
+    const corpoEnc = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+    const motivoEncerramento = typeof corpoEnc.motivoEncerramento === "string" ? corpoEnc.motivoEncerramento.trim() : "";
+    if (!motivoEncerramento || motivoEncerramento.length > 200) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o motivo do encerramento (até 200 caracteres)." } };
       return;
     }
     const comissaoMembroId = auth.idDeRota(id);
@@ -82,11 +85,11 @@ module.exports = comConflito(async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: `Esse membro já saiu da ${sigla}.` } };
       return;
     }
-    await pool.request().input("id", sql.Int, comissaoMembroId).input("motivo", sql.NVarChar(200), motivoEncerramento || null)
+    await pool.request().input("id", sql.Int, comissaoMembroId).input("motivo", sql.NVarChar(200), motivoEncerramento)
       .query(`UPDATE ComissaoMembros SET DataFim = CAST(SYSUTCDATETIME() AS DATE), MotivoEncerramento = @motivo WHERE ComissaoMembroId = @id AND DataFim IS NULL`);
     await registrarAuditoria({
       tabela: "ComissaoMembros", registroId: comissaoMembroId, acao: `Encerrou membro da ${sigla}`, usuarioId: usuario.membroId,
-      dadosAntes: antes.recordset[0], dadosDepois: { motivoEncerramento: motivoEncerramento || null }
+      dadosAntes: antes.recordset[0], dadosDepois: { motivoEncerramento }
     });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Membro removido da ${sigla}.` } };
     return;

@@ -157,7 +157,10 @@ function confirmarAcao(mensagem, tituloBotao) {
 }
 
 // Promise<string|null> — texto digitado, ou null se cancelou.
-function pedirTexto(titulo, placeholder, valorInicial) {
+// `opcoes` (opcional, volta 10 do Membros): { botao: o rótulo do botão de confirmar (padrão "Enviar"), maximo: o limite de letras do campo }.
+function pedirTexto(titulo, placeholder, valorInicial, opcoes) {
+  const rotuloBotao = (opcoes && typeof opcoes.botao === "string" && opcoes.botao) || "Enviar";
+  const maximo = opcoes && Number.isInteger(opcoes.maximo) && opcoes.maximo > 0 ? opcoes.maximo : 0;
   return new Promise(resolve => {
     const caixa = document.getElementById("modalCaixa");
     caixa.innerHTML = `
@@ -165,10 +168,11 @@ function pedirTexto(titulo, placeholder, valorInicial) {
       <textarea id="modalTexto" rows="3" placeholder="${escaparHtmlEbd(placeholder || "")}"></textarea>
       <div class="modal-acoes">
         <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
-        <button class="btn-confirmar" id="modalConfirmar">Enviar</button>
+        <button class="btn-confirmar" id="modalConfirmar">${escaparHtmlEbd(rotuloBotao)}</button>
       </div>`;
     document.getElementById("modalOverlay").classList.remove("escondido");
     const campo = document.getElementById("modalTexto");
+    if (maximo) campo.maxLength = maximo;   // pela propriedade, sem montar atributo no HTML
     campo.value = valorInicial || "";
     campo.focus();
     document.getElementById("modalConfirmar").onclick = () => { const v = campo.value.trim(); fecharModal(); resolve(v || null); };

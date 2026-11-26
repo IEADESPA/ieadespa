@@ -100,10 +100,10 @@ const INSTITUCIONAIS = [
   ["ConvocarAssembleia POST (editar)", hConvocar, { metodo: "POST", ligado: { sessaoId: "10" }, corpo: { materias: ["APROVACAO_CONTAS"], dataPrevista: "2099-06-10", pauta: "x", senhaAcesso: "abc" } }, ["assembleia"]],
   ["ConvocarAssembleia DELETE", hConvocar, { metodo: "DELETE", ligado: { sessaoId: "10" } }, ["assembleia"]],
   ["GestaoAssentos POST (criar cadeira)", hAssentos, { metodo: "POST", corpo: { membroId: 5, orgaoId: 3, tipoAssento: "FUNCAO", cargoOuFuncao: "PRESIDENTE" } }, ["pessoas"]],
-  ["GestaoAssentos POST (encerrar cadeira)", hAssentos, { metodo: "POST", ligado: { id: "8", acao: "encerrar" }, corpo: {} }, ["pessoas"]],
+  ["GestaoAssentos POST (encerrar cadeira)", hAssentos, { metodo: "POST", ligado: { id: "8", acao: "encerrar" }, corpo: { motivoEncerramento: "Fim do mandato" } }, ["pessoas"]],
   ["GestaoComissoes POST CCJ", hComissoes, { metodo: "POST", ligado: { sigla: "ccj" }, corpo: { membroId: 40 } }, ["pessoas"]],
   ["GestaoComissoes POST PMO", hComissoes, { metodo: "POST", ligado: { sigla: "pmo" }, corpo: { membroId: 40 } }, ["financeiro"]],
-  ["GestaoComissoes encerrar CCJ", hComissoes, { metodo: "POST", ligado: { sigla: "ccj", id: "3", acao: "encerrar" }, corpo: {} }, ["pessoas"]],
+  ["GestaoComissoes encerrar CCJ", hComissoes, { metodo: "POST", ligado: { sigla: "ccj", id: "3", acao: "encerrar" }, corpo: { motivoEncerramento: "Fim do mandato" } }, ["pessoas"]],
   ["GestaoCredenciamento POST (credenciar)", hCredenciamento, { metodo: "POST", ligado: { sessaoId: "5" }, corpo: { membroId: 40 } }, ["assembleia", "reunioes"]],
   ["GestaoCredenciamento POST (relatório)", hCredenciamento, { metodo: "POST", ligado: { sessaoId: "5", acao: "relatorio" }, corpo: {} }, ["assembleia", "reunioes"]],
   ["GestaoProjetos POST (urgência)", hProjetos, { metodo: "POST", ligado: { id: "3", acao: "urgencia" }, corpo: {} }, ["reunioes", "cli"]]
@@ -333,9 +333,22 @@ describe("GestaoAssentos", () => {
     expect(upd[0].sql).toMatch(/DataFim IS NULL/);
 
     mockConsultas = [];
-    const malformado = await chamar(hAssentos, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { id: "abc", acao: "encerrar" }, corpo: {} });
+    const malformado = await chamar(hAssentos, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { id: "abc", acao: "encerrar" }, corpo: { motivoEncerramento: "Fim do mandato" } });
     expect(malformado.body).toMatchObject({ sucesso: false, mensagem: "Cadeira não encontrada." });
     expect(rodou(/UPDATE Assentos/)).toHaveLength(0);
+  });
+  test("volta 10 (importante 2 do portão v9): encerrar a cadeira pede o motivo no servidor; vazio, só espaços ou que não é texto: 400, nada gravado", async () => {
+    quando(/SELECT \* FROM Assentos WHERE AssentoId = @id/, [{ AssentoId: 8, DataFim: null }]);
+    quando(/UPDATE Assentos SET DataFim/, [], 1);
+    for (const corpo of [{}, { motivoEncerramento: "" }, { motivoEncerramento: "   " }, { motivoEncerramento: null }, { motivoEncerramento: 7 }, { motivoEncerramento: ["x"] }, { motivoEncerramento: "x".repeat(201) }]) {
+      const r = await chamar(hAssentos, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { id: "8", acao: "encerrar" }, corpo });
+      expect(r.status).toBe(400);
+      expect(r.body).toMatchObject({ sucesso: false, mensagem: "Informe o motivo do encerramento (até 200 caracteres)." });
+    }
+    expect(rodou(/UPDATE Assentos/)).toHaveLength(0);
+    const ok = await chamar(hAssentos, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { id: "8", acao: "encerrar" }, corpo: { motivoEncerramento: "  Fim do mandato  " } });
+    expect(ok.body.sucesso).toBe(true);
+    expect(rodou(/UPDATE Assentos SET DataFim/)[0].inputs).toMatchObject({ motivo: "Fim do mandato" });   // gravado sem os espaços das pontas
   });
 });
 
@@ -386,13 +399,26 @@ describe("GestaoComissoes", () => {
   test("geral encerra membro (UPDATE só em quem não saiu); id malformado: 'não encontrado', nada gravado", async () => {
     quando(/SELECT \* FROM ComissaoMembros WHERE ComissaoMembroId = @id AND Sigla = @sigla/, [{ ComissaoMembroId: 3, DataFim: null }]);
     quando(/UPDATE ComissaoMembros SET DataFim/, [], 1);
-    const ok = await chamar(hComissoes, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { sigla: "ccj", id: "3", acao: "encerrar" }, corpo: {} });
+    const ok = await chamar(hComissoes, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { sigla: "ccj", id: "3", acao: "encerrar" }, corpo: { motivoEncerramento: "Fim do mandato" } });
     expect(ok.body.sucesso).toBe(true);
     expect(rodou(/UPDATE ComissaoMembros SET DataFim/)[0].sql).toMatch(/DataFim IS NULL/);
     mockConsultas = [];
-    const ruim = await chamar(hComissoes, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { sigla: "ccj", id: "x", acao: "encerrar" }, corpo: {} });
+    const ruim = await chamar(hComissoes, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { sigla: "ccj", id: "x", acao: "encerrar" }, corpo: { motivoEncerramento: "Fim do mandato" } });
     expect(ruim.body.sucesso).toBe(false);
     expect(rodou(/UPDATE ComissaoMembros/)).toHaveLength(0);
+  });
+  test("volta 10 (importante 2 do portão v9): encerrar a vaga de comissão pede o motivo no servidor; vazio ou só espaços: 400, nada gravado", async () => {
+    quando(/SELECT \* FROM ComissaoMembros WHERE ComissaoMembroId = @id AND Sigla = @sigla/, [{ ComissaoMembroId: 3, DataFim: null }]);
+    quando(/UPDATE ComissaoMembros SET DataFim/, [], 1);
+    for (const corpo of [{}, { motivoEncerramento: "" }, { motivoEncerramento: "  	 " }, { motivoEncerramento: false }, { motivoEncerramento: "x".repeat(201) }]) {
+      const r = await chamar(hComissoes, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { sigla: "ccj", id: "3", acao: "encerrar" }, corpo });
+      expect(r.status).toBe(400);
+      expect(r.body).toMatchObject({ sucesso: false, mensagem: "Informe o motivo do encerramento (até 200 caracteres)." });
+    }
+    expect(rodou(/UPDATE ComissaoMembros/)).toHaveLength(0);
+    const ok = await chamar(hComissoes, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { sigla: "ccj", id: "3", acao: "encerrar" }, corpo: { motivoEncerramento: " Saiu da Igreja " } });
+    expect(ok.body.sucesso).toBe(true);
+    expect(rodou(/UPDATE ComissaoMembros SET DataFim/)[0].inputs).toMatchObject({ motivo: "Saiu da Igreja" });
   });
   test("sigla numérica na URL não derruba a rota (o Azure entrega /comissoes/1 como número)", async () => {
     expect((await chamar(hComissoes, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { sigla: 1 }, corpo: {} })).status).toBe(400);

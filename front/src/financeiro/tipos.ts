@@ -214,3 +214,88 @@ export interface Rastreio {
 export interface CongregacaoSaida { readonly id: number; readonly nome: string; readonly area: string | null }
 /** a congregação escolhida e a liderança dela (a lista do "Entregue a") */
 export interface LiderancaSaida { readonly congregacao: CongregacaoSaida; readonly pessoas: readonly PessoaDevolve[] }
+
+// ---- incremento 3 (26/11/2026): lançar dízimos e ofertas (r24-lancamento, opção 1) ----
+
+/** a linha da planilha: lançada no mês, a marcada "mês posterior" que espera o nome e o valor, a que somou em outro mês (tarja), a marcada
+ *  (cancelada, arrancada, inexistente, extraviada) e a sem destino que ficou para trás (pendente) */
+export type SituacaoLinha = "pendente" | "anterior" | "excecao" | "preencher" | "lancada" | "posterior" | "depois";
+export type TipoLancamento = "DIZIMO" | "OFERTA_CULTO" | "OFERTA_VOLUNTARIA";
+export type FormaLancamento = "PIX" | "ESPECIE";
+export type ReferenteLancamento = "ESTE_MES" | "MES_POSTERIOR";
+export interface LinhaPlanilha {
+  readonly folha: number;
+  readonly bloco: number;
+  readonly situacao: SituacaoLinha;
+  /** a marcada: o destino como o banco guarda (CANCELADA, ARRANCADA...) e o motivo */
+  readonly destino?: string;
+  readonly observacao?: string | null;
+  readonly dia?: string | null;
+  readonly referente?: ReferenteLancamento;
+  readonly mesSoma?: string | null;
+  readonly tipo?: TipoLancamento | null;
+  readonly forma?: FormaLancamento | null;
+  /** em centavos */
+  readonly valor?: number | null;
+  readonly voluntaria?: number | null;
+  readonly membroId?: number | null;
+  readonly membro?: string | null;
+  readonly nome?: string | null;
+  readonly pelaGeral?: boolean;
+  readonly corrigida?: boolean;
+  readonly veioDoMesAnterior?: boolean;
+}
+/** os totais do mês (centavos): o que soma nele, com o adiantado (as marcadas "mês posterior" no mês anterior) */
+export interface TotaisMes {
+  readonly dizimos: number; readonly ofertaCulto: number; readonly ofertaVoluntaria: number; readonly voluntariasJunto: number; readonly voluntariasSozinhas: number;
+  readonly total: number; readonly pix: number; readonly especie: number; readonly adiantado: number; readonly folhas: number;
+}
+export type EstadoTira = "antes" | "posterior" | "mes" | "depois" | "proxima" | "livre";
+/** a tira do bloco (os 50 quadradinhos) com a legenda escrita pelo servidor */
+export interface TiraBloco {
+  readonly numero: number; readonly primeiraFolha: number; readonly ultimaFolha: number;
+  readonly posicoes: readonly EstadoTira[]; readonly legenda: readonly { readonly estado: EstadoTira; readonly texto: string }[];
+}
+export interface PlanilhaMes {
+  readonly congregacao: { readonly id: number; readonly nome: string; readonly area: string | null } | null;
+  readonly mes: string;
+  readonly hoje?: string;
+  readonly podeLancar: boolean;
+  readonly lancavel?: boolean;
+  readonly mandouAnterior?: boolean;
+  readonly diaPadrao?: string;
+  readonly comeca?: number | null;
+  readonly proxima?: { readonly folha: number; readonly bloco: number } | null;
+  readonly marcadasNoAnterior?: readonly number[];
+  readonly linhas?: readonly LinhaPlanilha[];
+  readonly totais?: TotaisMes;
+  readonly tira?: TiraBloco | null;
+}
+/** o dizimista achado no cadastro: só o nome, o número e a congregação (a resposta 2 de 26/11) */
+export interface DizimistaAchado { readonly membroId: number; readonly nome: string; readonly congregacao: string | null }
+
+/** o histórico de uma folha lançada (financeiro/lancamentos/historico): quem lançou, quem preencheu e cada correção, com o antes e o depois */
+/** um lado da correção (o antes ou o depois), como o servidor grava: os valores em centavos e o nome de quem deu */
+export interface LadoCorrecao {
+  readonly tipo: TipoLancamento | null; readonly forma: FormaLancamento | null; readonly valor: number | null; readonly voluntaria: number | null;
+  readonly membroId: number | null; readonly quem: string | null;
+}
+export interface HistoricoLancamento {
+  readonly folha: number;
+  readonly lancamento: {
+    readonly dia: string; readonly referente: ReferenteLancamento; readonly mesSoma: string; readonly pelaGeral: boolean;
+    readonly registradoPor: string | null; readonly registradoEm: string | null; readonly preenchidoPor: string | null; readonly preenchidoEm: string | null;
+  };
+  readonly correcoes: readonly { readonly antes: LadoCorrecao; readonly depois: LadoCorrecao; readonly motivo: string; readonly por: string | null; readonly em: string | null }[];
+}
+
+/** a área acompanha (financeiro/lancamentos/area, r20LancArea): cada congregação e os números da área */
+export interface CongregacaoDaArea {
+  readonly id: number; readonly nome: string; readonly ultimoLancamento: string | null; readonly lancadoNoMes: number; readonly folhasNoMes: number;
+  readonly agora: { readonly bloco: number; readonly folha: number } | null; readonly precisa: readonly string[];
+}
+export interface AreaLancamentos {
+  readonly mes: string;
+  readonly congregacoes: readonly CongregacaoDaArea[];
+  readonly resumo: { readonly congregacoes: number; readonly lancaram: number; readonly total: number; readonly precisam: number };
+}

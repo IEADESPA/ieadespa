@@ -1,17 +1,22 @@
-<!-- O módulo Financeiro ("Finanças" no desenho): a tela de agora, o caminho no topo ("Finanças › Blocos de recibo") e o cabeçalho do módulo. -->
+<!-- O módulo Financeiro ("Finanças" no desenho): a tela de agora, o caminho no topo ("Finanças › Blocos de recibo") e o cabeçalho do módulo.
+     No celular, a barra do alto mostra o título que a tela pedir ("Lançar") e, com uma peça cobrindo a tela (o seletor), o título e o voltar
+     dela. -->
 <script lang="ts">
   import { ponte } from "../comum/ponte";
-  import { tela } from "../comum/tela.svelte";
+  import { tela, sobreposta } from "../comum/tela.svelte";
   import EmConstrucao from "../comum/EmConstrucao.svelte";
-  import { nav, ir, itemDe, itemDoMenu, escopo, textoEscopoModulo } from "./estado.svelte";
+  import { nav, ir, itemDe, itemDoMenu, escopo, textoEscopoModulo, barra } from "./estado.svelte";
   import Blocos from "./telas/Blocos.svelte";
+  import Lancamentos from "./telas/Lancamentos.svelte";
 
   const rotuloAgora = $derived(itemDe(itemDoMenu(nav.rota))?.rotulo ?? "Finanças");
 
   $effect(() => {
     const p = ponte();
     const rotulo = rotuloAgora;
-    p.trilha([{ rotulo: "Finanças", ir: () => ir({ tela: "blocos", aba: "blocos" }) }, { rotulo }], rotulo, null);
+    const passo = barra.passo;
+    const partes = [{ rotulo: "Finanças", ir: () => ir({ tela: "blocos", aba: "blocos" }) }, passo ? { rotulo, ir: passo.voltar } : { rotulo }, ...(passo ? [{ rotulo: passo.rotulo }] : [])];
+    p.trilha(partes, sobreposta.titulo ?? barra.tituloCelular ?? rotulo, sobreposta.fechar ?? passo?.voltar ?? null);
     p.menuRecolhido(null);
   });
   $effect(() => { const t = textoEscopoModulo(escopo.tela); if (t) ponte().escopoDoModulo(t); });
@@ -21,6 +26,8 @@
   <div class="tela">
     {#if nav.rota.tela === "blocos"}
       <Blocos aba={nav.rota.aba} celular={tela.celular} />
+    {:else if nav.rota.tela === "lancamentos"}
+      <Lancamentos celular={tela.celular} />
     {:else}
       <div class="pilha">
         {#if !tela.celular}<h1 class="tit">{rotuloAgora}</h1>{/if}

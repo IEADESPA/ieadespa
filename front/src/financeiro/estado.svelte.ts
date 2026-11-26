@@ -71,21 +71,27 @@ export function menuDoNivel(n: Nivel): readonly GrupoMenu[] {
 /** as telas do módulo: as construídas e o aviso "em construção" de um item do menu */
 export type Rota =
   | { readonly tela: "blocos"; readonly aba: AbaBlocos; /** no livro: abre o "Registrar saída" já com esta folha (o bloco que voltou em parte) */ readonly saida?: number }
+  | { readonly tela: "lancamentos" }
   | { readonly tela: "obra"; readonly item: ChaveMenu };
+
+/** as telas construídas, pelo item do menu (o resto abre o aviso "em construção"). Ponto de encaixe: os itens novos (os centros de custo de
+ *  dezembro, por exemplo) entram aqui, em lerRota e em irItem. */
+const CONSTRUIDAS: ReadonlySet<ChaveMenu> = new Set<ChaveMenu>(["blocos", "lancamentos"]);
 
 /** a rota que chega de FORA (a casca): só telas conhecidas; o resto é ignorado (fica a tela de agora) */
 export function lerRota(x: unknown): Rota | null {
   if (!x || typeof x !== "object") return null;
   const o = x as Record<string, unknown>;
   if (o.tela === "blocos") return { tela: "blocos", aba: o.aba === "folhas" || o.aba === "livro" ? o.aba : "blocos" };
-  if (o.tela === "obra" && typeof o.item === "string" && ITENS.has(o.item) && o.item !== "blocos") return { tela: "obra", item: o.item as ChaveMenu };
+  if (o.tela === "lancamentos") return { tela: "lancamentos" };
+  if (o.tela === "obra" && typeof o.item === "string" && ITENS.has(o.item) && !CONSTRUIDAS.has(o.item as ChaveMenu)) return { tela: "obra", item: o.item as ChaveMenu };
   return null;
 }
 
 /** o item do menu de cada tela (o item marcado e o caminho do topo) */
-export const itemDoMenu = (r: Rota): ChaveMenu => (r.tela === "blocos" ? "blocos" : r.item);
+export const itemDoMenu = (r: Rota): ChaveMenu => (r.tela === "obra" ? r.item : r.tela);
 
-/** a 1ª tela do módulo: os blocos de recibo (a única construída até agora) */
+/** a 1ª tela do módulo: os blocos de recibo (a primeira construída) */
 const INICIO: Rota = { tela: "blocos", aba: "blocos" };
 export const nav = $state<{ rota: Rota }>({ rota: INICIO });
 
@@ -96,8 +102,12 @@ export function ir(r: Rota): void {
   if (conteudo) conteudo.scrollTop = 0;
 }
 export function irItem(chave: ChaveMenu): void {
-  ir(chave === "blocos" ? { tela: "blocos", aba: "blocos" } : { tela: "obra", item: chave });
+  ir(chave === "blocos" ? { tela: "blocos", aba: "blocos" } : chave === "lancamentos" ? { tela: "lancamentos" } : { tela: "obra", item: chave });
 }
+
+/** o que a tela de agora pede à barra do alto: o título no celular ("Lançar") e o passo a mais do caminho, com o voltar (a área que abriu a
+ *  planilha de uma congregação volta para a lista dela). A tela põe e tira. */
+export const barra = $state<{ tituloCelular: string | null; passo: { readonly rotulo: string; readonly voltar: () => void } | null }>({ tituloCelular: null, passo: null });
 
 /** o nível de quem está vendo: a Geral, a área (mais de uma congregação) ou a congregação. O servidor confere tudo de novo. */
 export function nivelDaSessao(): Nivel {
@@ -122,4 +132,6 @@ export function textoEscopoModulo(e: EscopoTela | null): string {
 export function zerarModulo(): void {
   nav.rota = INICIO;
   escopo.tela = null;
+  barra.tituloCelular = null;
+  barra.passo = null;
 }

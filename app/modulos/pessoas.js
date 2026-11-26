@@ -1168,9 +1168,12 @@ function imprimirMinhaCarta(cartaId) {
 }
 
 function renderizarImpressaoCarta(c) {
+  // volta 10 do Membros: a ficha em arrolamento (a completar) não tem documento de carta, como no PDF (api/shared/cartaSituacao.js): o modelo diria
+  // "Membro" e "Comunhão" de quem a secretaria ainda não conferiu
+  if (c.situacaoMembro === "ARROLAMENTO") { mostrarToast("A ficha ainda está para completar: a carta sai depois que a secretaria completar a ficha.", "erro"); return; }
   const rotulo = ROTULO_CARTA[c.tipo] || c.tipo;
   const ehCongregado = c.situacaoMembro === "CONGREGADO";
-  const situacaoRotulo = LABEL_SITUACAO_CARTA[c.situacaoMembro] || "Comunhão";
+  const situacaoRotulo = LABEL_SITUACAO_CARTA[c.situacaoMembro] || "______________";   // fora da lista do modelo, a linha em branco (antes: "Comunhão")
   const hoje = new Date();
   const dataEmissaoFmt = c.dataEmissao ? c.dataEmissao.split("-").reverse().join("/") : `____ / ____ / ${hoje.getFullYear()}`;
   const w = window.open("", "_blank", "width=760,height=900");

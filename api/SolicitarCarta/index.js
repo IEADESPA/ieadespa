@@ -29,6 +29,7 @@ const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { garantirContaSite } = require("../shared/directusContas");
 const auth = require("../shared/auth");
+const { recusaDaEmissaoNaHora } = require("../shared/cartaSituacao");   // volta 10 do Membros: quem está em arrolamento não emite na hora
 
 const TIPOS = ["RECOMENDACAO", "MUDANCA", "ATESTADO_SUPLETIVO"];
 const EMISSAO_IMEDIATA = ["RECOMENDACAO", "ATESTADO_SUPLETIVO"];
@@ -94,7 +95,7 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   const membro = await pool.request().input("id", sql.Int, matricula)
-    .query(`SELECT MembroId, Nome, Email FROM MembroReferencia WHERE MembroId = @id`);
+    .query(`SELECT MembroId, Nome, Email, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id`);
   if (membro.recordset.length === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
     return;
@@ -146,6 +147,13 @@ module.exports = async function (context, req) {
 
   if (cartaAtiva) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Você já tem uma carta deste tipo em aberto (aguardando ou ainda dentro da validade)." } };
+    return;
+  }
+
+  // volta 10 do Membros (25/11/2026): a ficha em arrolamento (a completar) não emite sozinha a carta que sai na hora; a frase é neutra (shared/cartaSituacao.js)
+  const recusaSituacao = recusaDaEmissaoNaHora(tipo, membro.recordset[0].SituacaoMembro);
+  if (recusaSituacao) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: recusaSituacao } };
     return;
   }
 

@@ -11,9 +11,9 @@ const auth = require("../shared/auth");
 const { exigirTitularOuPermissao } = require("../shared/titular");
 const { gerarProtocolo } = require("../shared/protocolo");
 const { novoDocumento, cabecalhoInstitucional, rodapeInstitucional, gerarBuffer } = require("../shared/pdfInstitucional");
+const { recusaDoDocumento, rotuloSituacaoCartaAntiga } = require("../shared/cartaSituacao");
 
 const ROTULO_CARTA = { RECOMENDACAO: "CARTA DE RECOMENDAÇÃO", MUDANCA: "CARTA DE MUDANÇA", ATESTADO_SUPLETIVO: "ATESTADO SUPLETIVO" };
-const LABEL_SITUACAO_CARTA = { EM_COMUNHAO: "Comunhão", SEM_COMUNHAO: "Paz", CONGREGADO: "Observação", NOVO_CONVERTIDO: "Observação" };
 const LABEL_ESTADO_CIVIL = { SOLTEIRO: "Solteiro(a)", CASADO: "Casado(a)", VIUVO: "Viúvo(a)", DIVORCIADO: "Divorciado(a)", UNIAO_ESTAVEL: "União Estável" };
 const LABEL_CARGO_MINISTERIAL = { AUXILIAR: "Auxiliar", MISSIONARIO: "Missionário(a)", DIACONO: "Diácono", PRESBITERO: "Presbítero", EVANGELISTA: "Evangelista", PASTOR: "Pastor" };
 
@@ -57,6 +57,13 @@ module.exports = async function (context, req) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Esta carta ainda não foi emitida/confirmada." } };
     return;
   }
+  // volta 10 do Membros (25/11/2026): a ficha em arrolamento (a completar) não tem documento de carta, nem a já emitida: o modelo diria "Membro" e
+  // "Comunhão" de quem a secretaria ainda não conferiu. Vale para o titular e para a secretaria; não gasta protocolo (shared/cartaSituacao.js).
+  const recusaSituacao = recusaDoDocumento(carta.tipo, carta.situacaoMembro);
+  if (recusaSituacao) {
+    context.res = { status: 422, body: { sucesso: false, mensagem: recusaSituacao } };
+    return;
+  }
 
   // Protocolo único (vB.4) gerado sob demanda, na 1ª vez que a carta sai em
   // PDF — nunca antes (rascunho nunca "gasta" número da sequência).
@@ -85,7 +92,8 @@ module.exports = async function (context, req) {
   const ehCongregado = carta.situacaoMembro === "CONGREGADO";
   doc.text(`${!ehCongregado ? "(X)" : "( )"} Membro     ${ehCongregado ? "(X)" : "( )"} Congregado`).moveDown(0.5);
 
-  const situacaoRotulo = LABEL_SITUACAO_CARTA[carta.situacaoMembro] || "Comunhão";
+  // fora da lista do modelo não há rótulo: a linha fica em branco, como no papel (antes caía em "Comunhão")
+  const situacaoRotulo = rotuloSituacaoCartaAntiga(carta.situacaoMembro) || "______________";
   doc.text(`Nesta Igreja desde ${fmtData(carta.dataAdmissao) || "____/____/______"}, por se achar em: ${situacaoRotulo}.`).moveDown(0.5);
   doc.text("Nós o(a) recomendamos que recebais no Senhor, como usam os Santos.").moveDown(0.5);
 

@@ -72,6 +72,7 @@ nunca dentro do desenho: o que está no desenho é o que o construtor faz.
 
 ## Publicar
 
+- **A página da rodada 35**: `https://claude.ai/artifact/G6iCv25ZBDB6bcK9pjYHYC` ("Propostas de tela · rodada 35"), publicada em 26/11/2026, com o banco (`db`) das escolhas (ids `r35-*` e `geral-r35`).
 - **A página da rodada 34**: `https://claude.ai/artifact/6sztidgaZ5r3a46jdZYzfi` ("Propostas de tela · rodada 34"),
   publicada em 25/11/2026 (versão 2, id 1795631022-db04), com o banco (`db`) das escolhas (testado: gravar e apagar).
 - **As páginas das rodadas anteriores**, nunca mais republicadas, cada uma com o seu banco: a

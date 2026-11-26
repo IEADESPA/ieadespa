@@ -1375,7 +1375,7 @@ guardadas para quando o módulo 3 começar. O levantamento completo do desenhist
       - uma frase no próprio termo: a pessoa declara que aceita assinar pelo sistema.
     - **Confirmar com o advogado da igreja antes da produção.** Se ele pedir mais, a assinatura pelo gov.br (gratuita) entra
       como opção para os termos que pedirem.
-- **A rodada 35 (26/11/2026), a última do Módulo 3, publicada numa página nova:** `(endereço na publicação)`, com 7 telas (35
+- **A rodada 35 (26/11/2026), a última do Módulo 3, publicada numa página nova:** `https://claude.ai/artifact/G6iCv25ZBDB6bcK9pjYHYC`, com 7 telas (35
   perfis, 70 desenhos):
   - **os perfis de acesso de cada cargo:** a Geral cuida de um perfil por cargo (os módulos em que o cargo entra, os de
     hoje); o alcance vem do nível; exige 90 dias de membro e o termo aceito; os acessos de cada congregação e da área; a

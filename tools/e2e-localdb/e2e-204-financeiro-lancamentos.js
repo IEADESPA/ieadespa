@@ -143,6 +143,7 @@ const lancar = (token, congregacaoId, linhas) => ({ handler: "finLancamentos", a
   ok(r.body.linhas[0].veioDoMesAnterior === true, "a linha diz que veio do mês anterior");
   r = await salvar(local, VILA_NOVA, hoje, [{ folha: 70053, tipo: "OFERTA_CULTO", forma: "ESPECIE", valor: "100,00" }]);
   ok(r.status === 422 && r.body.mensagem === "Folha 70.053: informe quem deu (a folha veio marcada do mês anterior).", "a marcada sem quem deu é recusada", r.body);
+  ok(r.body.folha === 70053, "a recusa diz a folha (a tela marca a linha)", r.body);
   r = await salvar(local, VILA_NOVA, hoje, [{ folha: 70053, referente: "MES_POSTERIOR", tipo: "DIZIMO", forma: "ESPECIE", valor: "250,00", voluntaria: "30,00", pessoa: { membroId: BRUNO } },
     { folha: 70054, tipo: "DIZIMO", forma: "PIX", valor: "280,00", pessoa: { nome: "  Lídia   Teste " } }, dizimo(70055, ANA, "320,00"), dizimo(70056, BRUNO, "410,00", { forma: "ESPECIE" })]);
   ok(r.status === 200 && r.body.mensagem === "4 folhas salvas (70.053 a 70.056).", "a 70.053 e a 70.054 preenchidas, a 70.055 e a 70.056 novas, de uma vez", r.body);
@@ -260,7 +261,7 @@ const lancar = (token, congregacaoId, linhas) => ({ handler: "finLancamentos", a
   ok(lin57 && lin57.situacao === "excecao" && lin57.destino === "ARRANCADA" && lin57.observacao === "Rasgou ao preencher" && r.body.proxima.folha === 70058,
     "a planilha mostra a arrancada com o motivo; a próxima é a 70.058", { lin57, proxima: r.body.proxima });
   r = await salvar(local, VILA_NOVA, hoje, [dizimo(70057, BRUNO, "10")]);
-  ok(r.status === 409 && r.body.mensagem === "A folha 70.057 está marcada como arrancada.", "a arrancada não se lança", r.body);
+  ok(r.status === 409 && r.body.mensagem === "A folha 70.057 está marcada como arrancada." && r.body.folha === 70057, "a arrancada não se lança (a recusa diz a folha)", r.body);
 
   console.log("== o desfazer da r30 vale para a folha marcada na planilha ==");
   ok((await POST(HB, "desfazer-folha", local, { folha: 70057, motivo: "x" })).status === 403, "a congregação não desfaz (só a Tesouraria Geral)");

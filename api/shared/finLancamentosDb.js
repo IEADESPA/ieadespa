@@ -152,7 +152,7 @@ async function salvar(pool, usuario, { congregacaoId, dados, por, pelaGeral }) {
     return { sucesso: false, mensagem: "Confira o número da folha." };
   }
   const vistas = new Set();
-  for (const l of entrada) { if (vistas.has(l.folha)) return { sucesso: false, mensagem: `A folha ${milhar(l.folha)} está duas vezes.` }; vistas.add(l.folha); }
+  for (const l of entrada) { if (vistas.has(l.folha)) return { sucesso: false, mensagem: `A folha ${milhar(l.folha)} está duas vezes.`, folha: l.folha }; vistas.add(l.folha); }
   const linhas = [...entrada].sort((a, b) => a.folha - b.folha);
   const folhas = linhas.map((l) => l.folha);
   const hoje = hojeBrasilia();
@@ -177,41 +177,41 @@ async function salvar(pool, usuario, { congregacaoId, dados, por, pelaGeral }) {
       SELECT f.Folha, f.Destino, l.LancamentoId, l.Referente, l.MesSoma, l.Valor
       FROM OPENJSON(@fs) j JOIN FinFolhas f ON f.Folha = CAST(j.value AS INT) LEFT JOIN FinLancamentos l ON l.Folha = f.Folha`)).recordset.map((x) => [Number(x.Folha), x]));
 
-    // 1ª passada: cada linha conferida (a regra pura e o estado da folha); a folha nova segue a ordem do bloco
+    // 1ª passada: cada linha conferida (a regra pura e o estado da folha); a folha nova segue a ordem do bloco. A recusa leva o número da folha
+    // (`folha`), para a tela marcar a linha.
     const acoes = [], esperada = new Map();
     for (const l of linhas) {
       const n = milhar(l.folha);
+      const recusa = (mensagem) => ({ sucesso: false, mensagem, folha: l.folha });
       const fx = faixas.find((f) => l.folha >= f.de && l.folha <= f.ate);
-      if (!fx) return { sucesso: false, mensagem: `A folha ${n} não é de um bloco entregue a ${c.Nome}.` };
+      if (!fx) return recusa(`A folha ${n} não é de um bloco entregue a ${c.Nome}.`);
       const x = estado.get(l.folha);
       const marca = l.excecao !== undefined;
       if (!x) {
         const v = marca ? regra.excecaoNaPlanilha(l) : regra.validarLinha(l);
-        if (!v.ok) return { sucesso: false, mensagem: v.mensagem };
+        if (!v.ok) return recusa(v.mensagem);
         // a marca vale só na entrega em curso, como na aba Folhas: a folha sem destino de uma entrega que já voltou só se lança
-        if (marca && !fx.aberta) {
-          return { sucesso: false, mensagem: `Folha ${n}: o bloco ${milhar(fx.bloco)} já voltou desta entrega; a folha que ficou sem destino só se lança.` };
-        }
+        if (marca && !fx.aberta) return recusa(`Folha ${n}: o bloco ${milhar(fx.bloco)} já voltou desta entrega; a folha que ficou sem destino só se lança.`);
         // a folha depois da última usada da entrega em curso vem na sequência (a sem destino que ficou para trás é um pendente e vale)
         if (fx.aberta && (fx.ultima === null || l.folha > fx.ultima)) {
           const proxima = esperada.has(fx.saidaId) ? esperada.get(fx.saidaId) : (fx.ultima === null ? fx.de : fx.ultima + 1);
-          if (l.folha !== proxima) return { sucesso: false, mensagem: `Folha ${n}: a próxima folha deste bloco é a ${milhar(proxima)} (as folhas vão na ordem do bloco).` };
+          if (l.folha !== proxima) return recusa(`Folha ${n}: a próxima folha deste bloco é a ${milhar(proxima)} (as folhas vão na ordem do bloco).`);
           esperada.set(fx.saidaId, proxima + 1);
         }
         acoes.push(marca ? { marca: v.excecao, folha: l.folha } : { nova: true, fx, ...v.linha });
         continue;
       }
-      if (x.Destino !== "LANCADA") return MUDOU(`A folha ${n} está marcada como ${regraBlocos.destinoDaTela(x.Destino)}.`);
-      if (marca || !x.LancamentoId || x.Referente !== "MES_POSTERIOR" || x.Valor !== null) return MUDOU(`A folha ${n} já foi lançada: para mudar, use Corrigir.`);
+      if (x.Destino !== "LANCADA") return { ...MUDOU(`A folha ${n} está marcada como ${regraBlocos.destinoDaTela(x.Destino)}.`), folha: l.folha };
+      if (marca || !x.LancamentoId || x.Referente !== "MES_POSTERIOR" || x.Valor !== null) return { ...MUDOU(`A folha ${n} já foi lançada: para mudar, use Corrigir.`), folha: l.folha };
       const somaEm = iso(x.MesSoma);
-      if (somaEm !== d.mes) return { sucesso: false, mensagem: `A folha ${n} soma em ${regra.nomeDoMes(somaEm)}: o nome e o valor entram na planilha de ${regra.nomeDoMes(somaEm)}.` };
+      if (somaEm !== d.mes) return recusa(`A folha ${n} soma em ${regra.nomeDoMes(somaEm)}: o nome e o valor entram na planilha de ${regra.nomeDoMes(somaEm)}.`);
       const v = regra.validarLinha(l, { preencher: true });
-      if (!v.ok) return { sucesso: false, mensagem: v.mensagem };
+      if (!v.ok) return recusa(v.mensagem);
       acoes.push({ nova: false, lancamentoId: Number(x.LancamentoId), ...v.linha });
     }
     const faltam = await membrosQueFaltam(t, acoes);
     const semMembro = acoes.find((a) => faltam.has(a.membroId));
-    if (semMembro) return { sucesso: false, mensagem: `Folha ${milhar(semMembro.folha)}: o membro escolhido não foi encontrado no cadastro.` };
+    if (semMembro) return { sucesso: false, mensagem: `Folha ${milhar(semMembro.folha)}: o membro escolhido não foi encontrado no cadastro.`, folha: semMembro.folha };
 
     // 2ª passada: grava
     const dec = (c) => (c === null ? null : regra.decimalDoBanco(c));
@@ -220,7 +220,7 @@ async function salvar(pool, usuario, { congregacaoId, dados, por, pelaGeral }) {
       if (a.marca) {
         // a exceção grava a folha, o papel de quem marcou e a auditoria dela (FIN_FOLHA_EXCECAO), na mesma transação: tudo ou nada
         const r = await marcarExcecaoNaTransacao(t, usuario, { geral: pelaGeral, v: a.marca, por });
-        if (!r.sucesso) return r;
+        if (!r.sucesso) return { ...r, folha: a.folha };
         continue;
       }
       const pedido = pedidoNaTransacao(t).input("tipo", sql.NVarChar(17), a.tipo).input("forma", sql.NVarChar(7), a.forma)
@@ -240,7 +240,7 @@ async function salvar(pool, usuario, { congregacaoId, dados, por, pelaGeral }) {
           UPDATE FinLancamentos SET Tipo = @tipo, Forma = @forma, Valor = @valor, Voluntaria = @vol, MembroId = @membro, NomeDigitado = @nome,
                  PreenchidoPor = @por, PreenchidoEm = SYSUTCDATETIME()
           WHERE LancamentoId = @id AND Valor IS NULL`);
-        if (r.rowsAffected[0] !== 1) return MUDOU(`A folha ${milhar(a.folha)} mudou enquanto você lançava. Confira a planilha.`);
+        if (r.rowsAffected[0] !== 1) return { ...MUDOU(`A folha ${milhar(a.folha)} mudou enquanto você lançava. Confira a planilha.`), folha: a.folha };
         if (primeiroId === null) primeiroId = a.lancamentoId;
       }
     }

@@ -3,7 +3,8 @@
 //   1. a recusa da ficha não entrega a quem não vê a disciplina daquela pessoa que ela tem exclusão julgada: a mesma resposta para a exclusão e para o
 //      processo de cargo, e a recusa vem depois de todas as outras que quem salva provoca à vontade (a sonda sem gravar nada responde igual para todos);
 //   2. o "processar" das Cartas de Mudança confere a pessoa DENTRO da transação: quem faleceu ou saiu do rol por outra causa não vira "desligado por carta"
-//      (a carta é cancelada e a ficha fica como está), e quem foi readmitido no meio do processamento não é minimizado.
+//      (a carta é cancelada e a ficha fica como está), e quem foi readmitido no meio do processamento não é minimizado;
+//   3. a licença por candidatura começa 90 dias antes do pleito: o pleito que já passou e o registro antes da hora são recusados; dentro dos 90 dias começa hoje.
 process.env.AUTH_SECRET = "segredo-do-roteiro-da-revisao-3-" + "x".repeat(24);
 const L = require("./lib");
 const { ok, fim, q, escalar, obterPool } = L;
@@ -152,6 +153,25 @@ async function principal() {
   const trilhaFalecida = await escalar("SELECT TOP 1 CONCAT(Acao, ' ', DadosDepois) FROM AuditLog WHERE Tabela = N'CartasTransito' AND RegistroId = @c ORDER BY AuditId DESC",
     { c: carta.cartaFalecida });
   ok(/já saiu do rol/.test(trilhaFalecida || "") && /"situacaoNoRol":"FALECIDO"/.test(trilhaFalecida || ""), "a trilha diz por que a carta foi cancelada", String(trilhaFalecida).slice(0, 200));
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 3. a licença por candidatura começa 90 dias antes do pleito ==");
+  const { hojeBrasilia } = require(L.path.join(L.API, "shared/dataBrasilia.js"));
+  const diasDeHoje = (n) => { const d = new Date(`${hojeBrasilia()}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const dataBr = (iso) => iso.split("-").reverse().join("/");
+  const licenca = (membroId, dataPleito) => chamarRota("GestaoLicencasCandidatura/index.js", { metodo: "POST", token: L.GERAL(ID.geral, ["pessoas"]), corpo: { membroId, dataPleito } });
+  const statusDe = (id) => escalar("SELECT Status FROM MembroReferencia WHERE MembroId = @id", { id });
+  const licencasDe = (id) => escalar("SELECT COUNT(*) FROM LicencasCandidatura WHERE MembroId = @id", { id });
+  const passado = await licenca(ID.comum, diasDeHoje(-1));
+  ok(passado.body && passado.body.sucesso === false && new RegExp(`pleito \\(${dataBr(diasDeHoje(-1))}\\) já passou`).test(fala(passado))
+    && (await statusDe(ID.comum)) === "ATIVO" && (await licencasDe(ID.comum)) === 0, "o pleito que já passou é recusado (nada muda)", resumo(passado));
+  const cedo = await licenca(ID.comum, diasDeHoje(400));
+  ok(cedo.body && cedo.body.sucesso === false && fala(cedo).includes(`em ${dataBr(diasDeHoje(310))}: registre a partir desse dia`)
+    && (await statusDe(ID.comum)) === "ATIVO" && (await licencasDe(ID.comum)) === 0, "o registro antes dos 90 dias é recusado com o dia em que a licença começa; a pessoa continua ATIVO", resumo(cedo));
+  const dentro = await licenca(ID.comum, diasDeHoje(60));
+  const gravada = await escalar("SELECT CONCAT(CONVERT(varchar(10), DataPleito, 120), '|', CONVERT(varchar(10), DataInicioLicenca, 120)) FROM LicencasCandidatura WHERE MembroId = @id", { id: ID.comum });
+  ok(dentro.status === 201 && (await statusDe(ID.comum)) === "LICENCA_CANDIDATURA" && gravada === `${diasDeHoje(60)}|${diasDeHoje(0)}`
+    && fala(dentro).includes(`a partir de hoje (${dataBr(diasDeHoje(0))})`), "dentro dos 90 dias: a licença começa hoje, e é hoje o início gravado e dito", `${resumo(dentro)} ${gravada}`);
 }
 
 principal().then(() => fim("e2e-153 (acesso, revisão de fora)")).catch((e) => { console.error(e); ok(false, "o roteiro quebrou: " + (e && e.message)); fim("e2e-153 (acesso, revisão de fora)"); });

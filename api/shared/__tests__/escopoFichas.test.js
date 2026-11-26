@@ -504,12 +504,14 @@ describe("GestaoLicencasCandidatura", () => {
     expect(dentro.body.map((l) => l.licencaId)).toEqual([1]);
   });
   describe("criar", () => {
-    const criar = (membroId, token = LOCAL(), dataPleito = "2026-10-04") => chamar(hLicencas, { metodo: "POST", token, corpo: { membroId, dataPleito } });
+    // o pleito daqui a 30 dias (dentro dos 90 dias: a licença começa hoje; shared/licencaCandidatura.js::inicioDaLicenca)
+    const PLEITO = (() => { const d = new Date(`${require("../dataBrasilia").hojeBrasilia()}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 30); return d.toISOString().slice(0, 10); })();
+    const criar = (membroId, token = LOCAL(), dataPleito = PLEITO) => chamar(hLicencas, { metodo: "POST", token, corpo: { membroId, dataPleito } });
     beforeEach(() => quando(/INSERT INTO LicencasCandidatura/, [{ LicencaId: 5 }]));
     test("pessoa da congregação: grava a licença, muda o status e faz a vacância", async () => {
       const r = await criar(10);
       expect(r.status).toBe(201);
-      expect(rodou(/INSERT INTO LicencasCandidatura/)[0].inputs).toMatchObject({ membroId: 10, dataPleito: "2026-10-04" });
+      expect(rodou(/INSERT INTO LicencasCandidatura/)[0].inputs).toMatchObject({ membroId: 10, dataPleito: PLEITO });
       expect(rodou(/UPDATE MembroReferencia SET Status = 'LICENCA_CANDIDATURA'/)).toHaveLength(1);
       expect(vacancia.encerrarVinculos.mock.calls).toHaveLength(1);
       expect(vacancia.encerrarVinculos.mock.calls[0].slice(2)).toEqual([10, "LICENCA_CANDIDATURA"]);
@@ -763,13 +765,16 @@ describe("GestaoCartas", () => {
     expect(upd[0].sql).not.toMatch(/Status IN \('SOLICITADA','CONFIRMADA'\)/);
   });
   describe("processar (minimização irreversível)", () => {
-    const candidatas = (extra = []) => quando(/WHERE c\.Tipo = 'MUDANCA' AND c\.Status IN/, [
+    const candidatas = (extra = [], porMembro = {}) => pessoaAgora(porMembro) && quando(/WHERE c\.Tipo = 'MUDANCA' AND c\.Status IN/, [
       { CartaId: 1, MembroId: 10, MotivoSaida: "Mudança", ConfirmadaPeloMembro: 1, dataReferencia: diasAtras(60), dataAdmissao: "2010-01-01", congregacaoNome: "Central", extensaoNome: null },
       { CartaId: 2, MembroId: 20, MotivoSaida: "Mudança", ConfirmadaPeloMembro: 1, dataReferencia: diasAtras(60), dataAdmissao: "2010-01-01", congregacaoNome: "Vila Nova", extensaoNome: null },
       { CartaId: 3, MembroId: 11, MotivoSaida: "Mudança", ConfirmadaPeloMembro: 1, dataReferencia: diasAtras(60), dataAdmissao: diasAtras(10), congregacaoNome: "Central", extensaoNome: null },
       { CartaId: 4, MembroId: 11, MotivoSaida: "Mudança", ConfirmadaPeloMembro: 1, dataReferencia: diasAtras(5), dataAdmissao: "2010-01-01", congregacaoNome: "Central", extensaoNome: null },
       ...extra
     ]);
+    // a pessoa como está agora, relida dentro da transação de cada carta (revisão de fora, 26/11/2026); por padrão, ATIVO e sem readmissão
+    const pessoaAgora = (porMembro = {}) => quando(/FROM MembroReferencia WITH \(UPDLOCK, HOLDLOCK\) WHERE MembroId = @m/,
+      (i) => [{ Status: "ATIVO", MotivoSaida: null, DataAdmissao: "2010-01-01", DataSaida: null, ...(porMembro[i.m] || {}) }]);
     const processar = (token) => chamar(hCartas, { metodo: "POST", token, ligado: { acao: "processar" } });
     test("dirigente: só mexe nas cartas da sua congregação (minimiza a vencida, cancela a de quem voltou, deixa a recente) e deixa trilha de cada ato", async () => {
       candidatas();
@@ -783,6 +788,29 @@ describe("GestaoCartas", () => {
       expect(registrarAuditoria).not.toHaveBeenCalled();   // E5: as duas trilhas na transação do ato
       expect(acoes.find((a) => /Minimizou/.test(a.acao))).toMatchObject({ tabela: "MembroReferencia", registroId: 10, usuarioId: 5, dadosDepois: { cartaId: 1 } });
       expect(acoes.find((a) => /Cancelou carta/.test(a.acao))).toMatchObject({ tabela: "CartasTransito", registroId: 3, usuarioId: 5 });
+    });
+    // Revisão de fora, 26/11/2026: a pessoa é relida dentro da transação de cada carta (a leitura de antes do laço pode ter ficado velha).
+    test("quem já saiu do rol por outra causa não é minimizado: a carta é cancelada, a trilha diz a situação e a resposta conta", async () => {
+      candidatas([], { 10: { Status: "FALECIDO", MotivoSaida: "FALECIMENTO", DataSaida: "2026-11-20" } });
+      const r = await processar(LOCAL());
+      expect(minimizacao.minimizarNaTransacao).not.toHaveBeenCalled();
+      expect(rodou(/UPDATE CartasTransito SET Status = 'CONCLUIDA'/)).toHaveLength(0);
+      expect(rodou(/UPDATE CartasTransito SET Status = 'CANCELADA'/).map((c) => c.inputs.id).sort()).toEqual([1, 3]);
+      const trilha = require("../auditoria").registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1]).find((a) => a.registroId === 1);
+      expect(trilha).toMatchObject({ tabela: "CartasTransito", acao: "Cancelou carta: a pessoa já saiu do rol por outra causa (processamento)", dadosDepois: { situacaoNoRol: "FALECIDO" } });
+      expect(r.body.mensagem).toMatch(/0 saída\(s\) minimizada\(s\), 1 carta\(s\) cancelada\(s\) por retorno/);
+      expect(r.body.mensagem).toMatch(/1 carta\(s\) cancelada\(s\) porque a pessoa já tinha saído do rol/);
+    });
+    test("a readmissão gravada depois da leitura das cartas: cancelada pelo retorno dentro da transação, sem minimizar", async () => {
+      candidatas([], { 10: { DataAdmissao: diasAtras(1) } });
+      const r = await processar(LOCAL());
+      expect(minimizacao.minimizarNaTransacao).not.toHaveBeenCalled();
+      expect(r.body.mensagem).toMatch(/0 saída\(s\) minimizada\(s\), 2 carta\(s\) cancelada\(s\) por retorno/);
+    });
+    test("a saída por carta já gravada na ficha: minimizada com a data de saída que estava", async () => {
+      candidatas([], { 10: { Status: "DESLIGADO", MotivoSaida: "CARTA_MUDANCA", DataSaida: "2026-11-02" } });
+      await processar(LOCAL());
+      expect(minimizacao.minimizarNaTransacao.mock.calls.map((c) => [c[1], c[2].dataSaida])).toEqual([[10, "2026-11-02"]]);
     });
     test("geral: processa as cartas de todas as congregações", async () => {
       candidatas();

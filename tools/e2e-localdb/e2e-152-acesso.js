@@ -240,7 +240,9 @@ async function principal() {
 
   // ------------------------------------------------------------------------------------------------------------------
   console.log("== 2c. a saída da licença por candidatura ==");
-  const lic = (membroId) => chamarRota("GestaoLicencasCandidatura/index.js", { metodo: "POST", token: geral(), corpo: { membroId, dataPleito: "2026-10-04" } });
+  // o pleito daqui a 30 dias: dentro dos 90 dias, a licença começa hoje (revisão de fora, 26/11/2026: o pleito que já passou é recusado)
+  const PLEITO = (() => { const d = new Date(`${hojeBrasilia()}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 30); return d.toISOString().slice(0, 10); })();
+  const lic = (membroId) => chamarRota("GestaoLicencasCandidatura/index.js", { metodo: "POST", token: geral(), corpo: { membroId, dataPleito: PLEITO } });
   const decidir = (licencaId, retornou) => chamarRota("GestaoLicencasCandidatura/index.js", { metodo: "POST", token: geral(), binding: { id: String(licencaId) }, corpo: { retornou } });
   const licencaDe = (m) => escalar("SELECT TOP 1 CONCAT(Status, '|', ISNULL(ObservacaoRetorno, '-')) FROM LicencasCandidatura WHERE MembroId = @m ORDER BY LicencaId DESC", { m });
   const idLic = {};
@@ -524,7 +526,7 @@ async function principal() {
 
   // ------------------------------------------------------------------------------------------------------------------
   console.log("== 5d. a licença por candidatura de quem tem cargo: o nível do cargo, o 428 e uma transação só ==");
-  const licenca = (token, membroId) => chamarRota("GestaoLicencasCandidatura/index.js", { metodo: "POST", token, corpo: { membroId, dataPleito: "2026-10-04" } });
+  const licenca = (token, membroId) => chamarRota("GestaoLicencasCandidatura/index.js", { metodo: "POST", token, corpo: { membroId, dataPleito: PLEITO } });
   LID.licArea = await lideranca(ID.licArea, pArea, "AREA", area);
   LID.licLocal = await lideranca(ID.licLocal, pTes, "CONGREGACAO", sede);
   LID.licFalha = await lideranca(ID.licFalha, pTes, "CONGREGACAO", sede);

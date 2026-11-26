@@ -1688,8 +1688,8 @@ async function carregarLicencasCandidatura(membroId) {
   </tr></thead><tbody>`;
   licencas.forEach(l => {
     html += `<tr>
-      <td>${escaparHtmlEbd(l.dataPleito) || "-"}</td>
-      <td>${escaparHtmlEbd(l.dataInicioLicenca) || "-"}</td>
+      <td>${formatarDataEbd(l.dataPleito)}</td>
+      <td>${formatarDataEbd(l.dataInicioLicenca)}</td>
       <td>${ROTULO_STATUS_LICENCA[l.status] || escaparHtmlEbd(l.status)}</td>
       <td>${authGeral && l.status === "EM_LICENCA" ? `<button class="btn-link" data-on-click="registrarRetornoLicencaAcao" data-args-click="${argsAttr(l.licencaId)}">Registrar retorno</button>` : "-"}</td>
     </tr>`;
@@ -1706,7 +1706,8 @@ async function salvarLicencaCandidatura() {
   const dataPleito = document.getElementById("licencaDataPleito").value;
   if (!dataPleito) { msg.textContent = "Informe a data do pleito."; return; }
 
-  if (!(await confirmarAcao("Confirma registrar a licença por candidatura? A pessoa perde Assentos/Liderança/Cargo até a Diretoria decidir o retorno.", "Registrar Licença"))) return;
+  // a licença começa 90 dias antes do pleito e vale a partir do dia do registro (o servidor recusa o pleito que já passou e o registro antes da hora)
+  if (!(await confirmarAcao("Confirma registrar a licença por candidatura a partir de hoje? A pessoa perde Assentos/Liderança/Cargo até a Diretoria decidir o retorno.", "Registrar Licença"))) return;
 
   const res = await fetchProtegido(`${API_BASE}/licencas-candidatura`, {
     method: "POST",

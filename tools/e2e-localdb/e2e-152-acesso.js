@@ -722,19 +722,20 @@ async function principal() {
   ok(voltaSemCargo.body && voltaSemCargo.body.sucesso === true && (await statusDe(ID.voltaSemCargo)) === "ATIVO", "sem cargo: a secretaria local devolve como sempre", resumo(voltaSemCargo));
 
   const pinProvisorio = (token, membroId) => tentar(() => chamarRota("GestaoPinMembro/index.js", { metodo: "POST", token, corpo: { membroId } }));
+  const resumoPin = (r) => resumo(r).replace(/"pin":"\d+"/g, '"pin":"####"');   // o PIN (de mentira) não vai para o log
   const pinsDe = (m) => escalar("SELECT COUNT(*) FROM MembroPins WHERE MembroId = @m", { m });
   for (const [rotulo, alvo] of [["de área", ID.voltaArea], ["geral", ID.pinGeral]]) {
     const r = await pinProvisorio(local(), alvo);
     ok(r.status === 403 && /PIN/.test(r.body && r.body.mensagem) && !(r.body && r.body.pin) && (await pinsDe(alvo)) === 0,
-      `cargo ${rotulo}: a secretaria local não gera o PIN provisório (403, nada gravado)`, resumo(r).replace(/"pin":"\d+"/, '"pin":"####"'));
+      `cargo ${rotulo}: a secretaria local não gera o PIN provisório (403, nada gravado)`, resumoPin(r));
   }
   const pinAreaSemFator = await pinProvisorio(daAreaSemFator, ID.voltaArea);
-  ok(pinAreaSemFator.status === 428 && (await pinsDe(ID.voltaArea)) === 0, "a secretaria da área sem a confirmação recente: 428", resumo(pinAreaSemFator));
+  ok(pinAreaSemFator.status === 428 && (await pinsDe(ID.voltaArea)) === 0, "a secretaria da área sem a confirmação recente: 428", resumoPin(pinAreaSemFator));
   const pinArea = await pinProvisorio(daArea(), ID.voltaArea);
   ok(pinArea.status === 200 && /^\d{4}$/.test((pinArea.body && pinArea.body.pin) || "") && (await pinsDe(ID.voltaArea)) === 1,
     "com a confirmação recente, a secretaria da área gera", `${pinArea.status} ${pinArea.body && pinArea.body.sucesso}`);
   const pinLocalSemFator = await pinProvisorio(localSemFator(), ID.voltaLocal);
-  ok(pinLocalSemFator.status === 428 && (await pinsDe(ID.voltaLocal)) === 0, "cargo local: a secretaria local sem a confirmação recente recebe 428", resumo(pinLocalSemFator));
+  ok(pinLocalSemFator.status === 428 && (await pinsDe(ID.voltaLocal)) === 0, "cargo local: a secretaria local sem a confirmação recente recebe 428", resumoPin(pinLocalSemFator));
   const pinLocal = await pinProvisorio(local(), ID.voltaLocal);
   ok(pinLocal.status === 200 && (await pinsDe(ID.voltaLocal)) === 1, "e com ela gera", `${pinLocal.status} ${pinLocal.body && pinLocal.body.sucesso}`);
   const pinSemCargo = await pinProvisorio(localSemFator(), ID.voltaSemCargo);

@@ -295,11 +295,11 @@ incremento 4); o pré-repasse e o repasse (5, esperando o desenho da rodada 27);
 seguidos só com o teclado. O item "Lançamentos" do menu fica em `front/src/financeiro/estado.svelte.ts` (o mesmo ponto em que o ramo
 dos centros de custo vai mexer em dezembro).
 
-**Perguntas antes de construir** (regra que não está escrita; cada uma muda o servidor ou a tela):
+**Perguntas antes de construir** (o modelo da 204 já pode começar: o estorno está decidido; estas mudam a rota ou a tela):
 
-1. **Corrigir depois de salvar.** A tesoureira salvou a 70.161 com R$ 250,00 e era R$ 205,00. Com o mês aberto, ela corrige na própria
-   linha (a trilha guarda quem mudou e o valor de antes) ou vale o estorno do resto do Financeiro (a linha contrária com o motivo e uma
-   linha nova)?
+1. **Como se estorna na tela.** A regra já está escrita (seção 2: "o erro se corrige com estorno", com o motivo; nada se apaga). Falta
+   o gesto, que o desenho não tem: a tesoureira salvou a 70.161 com R$ 250,00 e era R$ 205,00. Onde ela pede o estorno (na própria linha
+   da planilha?) e como a folha volta a ser lançada com o valor certo (a linha estornada fica visível, riscada, com o motivo)?
 2. **A procura do dizimista.** A irmã Ana, de Cidade Jardim, deixou o dízimo em Vila Nova. A tesoureira de Vila Nova acha a Ana na
    procura (a Igreja inteira, só o nome e o número) ou só os membros de Vila Nova, e a Ana entra como nome digitado?
 3. **O dia do lançamento.** Até quando se lança num mês que passou? Proposta: só o mês atual e o anterior, nunca depois de hoje, até o

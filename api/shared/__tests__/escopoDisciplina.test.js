@@ -953,7 +953,7 @@ describe("EvoluirProcessoDisciplinar (escopo do réu + órgão central é do ger
       prepararDecisao();
       const r = await evoluir(geral(["disciplina"]), PROCESSO_CENTRAL, { acao: "JULGAR", resultado: "EXCLUSAO" });
       expect(r.body.sucesso).toBe(true);
-      expect(rodou(/UPDATE ProcessosDisciplinares SET\s+Status = 'JULGADO'/)[0].sql).toMatch(/AND Status <> 'JULGADO'/);
+      expect(rodou(/UPDATE ProcessosDisciplinares SET\s+Status = 'JULGADO'/)[0].sql).toMatch(/AND Status IN \('EM_ANDAMENTO', 'AFASTAMENTO_CAUTELAR'\)/);
       await conferirVacanciaNaTransacao();
       conferirTudoNaTransacao();
       conferirLicencaFechada();
@@ -978,6 +978,30 @@ describe("EvoluirProcessoDisciplinar (escopo do réu + órgão central é do ger
       expect(vacancia.encerrarVinculos).not.toHaveBeenCalled();
       expect(registrarAuditoriaNaTransacao).not.toHaveBeenCalled();
       expect(mockTransacoes.map((t) => t.estado)).toEqual(["desfeita"]);
+    });
+    // Portão de 26/11/2026 (I4): só se julga o processo na fase de julgamento (EM_ANDAMENTO ou AFASTAMENTO_CAUTELAR). O processo EM_RECURSO tem o recurso
+    // julgado no processo NOVO da instância de cima (o RECORRER nunca reabre o mesmo registro): a instância de origem não troca a própria decisão por cima dele.
+    test.each([["EM_RECURSO", /recurso/], ["JULGADO", /já foi julgado/]])("julgar o processo %s: recusa, sem transação nem gravação", async (status, mensagem) => {
+      prepararDecisao();
+      PROCESSOS[PROCESSO_CENTRAL].Status = status;
+      PROCESSOS[PROCESSO_CENTRAL].Resultado = "SANCAO";
+      const r = await evoluir(geral(["disciplina"]), PROCESSO_CENTRAL, { acao: "JULGAR", resultado: "ARQUIVADO" });
+      expect(r.body.sucesso).toBe(false);
+      expect(r.body.mensagem).toMatch(mensagem);
+      expect(mockTransacoes).toHaveLength(0);
+      expect(escritas()).toHaveLength(0);
+    });
+    test("julgar: o WHERE da gravação aceita só a fase de julgamento (a corrida com o recurso também é barrada no banco)", async () => {
+      prepararDecisao();
+      const r = await evoluir(geral(["disciplina"]), PROCESSO_CENTRAL, { acao: "JULGAR", resultado: "ARQUIVADO" });
+      expect(r.body.sucesso).toBe(true);
+      expect(rodou(/UPDATE ProcessosDisciplinares SET\s+Status = 'JULGADO'/)[0].sql).toMatch(/WHERE ProcessoId = @id AND Status IN \('EM_ANDAMENTO', 'AFASTAMENTO_CAUTELAR'\)/);
+    });
+    test("julgar o processo com afastamento cautelar: continua valendo", async () => {
+      prepararDecisao();
+      PROCESSOS[PROCESSO_CENTRAL].Status = "AFASTAMENTO_CAUTELAR";
+      const r = await evoluir(geral(["disciplina"]), PROCESSO_CENTRAL, { acao: "JULGAR", resultado: "ARQUIVADO" });
+      expect(r.body.sucesso).toBe(true);
     });
     test("homologar a exclusão: a homologação, a vacância e a trilha na mesma transação", async () => {
       prepararDecisao();

@@ -28,6 +28,8 @@ const { membroAutorizadoNoOrgaoLocal, ancestraisTerritoriais } = require("../sha
 const { ehGeral, pessoaAlcancavel } = require("../shared/escopoRotas");
 
 const RESULTADOS_VALIDOS = ["ARQUIVADO", "SANCAO", "EXCLUSAO"];
+// As fases em que o processo ainda pode ser julgado (antes do julgamento; o EM_RECURSO se julga no processo novo da instância de cima).
+const FASES_DE_JULGAMENTO = ["EM_ANDAMENTO", "AFASTAMENTO_CAUTELAR"];
 const CANAIS_CITACAO_VALIDOS = ["WHATSAPP", "CARTA_REGISTRADA"];
 
 module.exports = async function (context, req) {
@@ -347,8 +349,12 @@ module.exports = async function (context, req) {
 
   // ---- JULGAR: encerra a fase de instrução com um resultado ----
   if (acao === "JULGAR") {
-    if (atual.Status === "JULGADO") {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Este processo já foi julgado." } };
+    // Só na fase de julgamento. O processo EM_RECURSO tem o recurso julgado no processo NOVO da instância de cima (o RECORRER nunca reabre o mesmo registro):
+    // a instância de origem não troca a própria decisão por cima dele (portão de 26/11/2026). O mesmo filtro vai no WHERE da gravação.
+    if (!FASES_DE_JULGAMENTO.includes(atual.Status)) {
+      const mensagem = atual.Status === "EM_RECURSO" ? "Este processo está em recurso: o recurso é julgado no processo da instância de cima, não neste."
+        : atual.Status === "JULGADO" ? "Este processo já foi julgado." : "Este processo não está na fase de julgamento.";
+      context.res = { status: 200, body: { sucesso: false, mensagem } };
       return;
     }
     const { resultado, diasSancao } = req.body || {};
@@ -426,7 +432,7 @@ module.exports = async function (context, req) {
             HomologadoPeloCEI = @homologadoPeloCei,
             DataTerminoPrevisao = CASE WHEN @diasSancao IS NOT NULL THEN DATEADD(day, @diasSancao, DataAbertura) ELSE NULL END,
             DataConclusao = CAST(SYSUTCDATETIME() AS DATE)
-          WHERE ProcessoId = @id AND Status <> 'JULGADO'`);
+          WHERE ProcessoId = @id AND Status IN ('EM_ANDAMENTO', 'AFASTAMENTO_CAUTELAR')`);
       if (!((julgou.rowsAffected && julgou.rowsAffected[0]) || 0)) { await desistir(); return "JA_JULGADO"; }
       if (vacanciaAgora) await vacancia.encerrarVinculos(executor, sql, atual.MembroId, "DISCIPLINA");
       // a exclusão com efeito já fecha a licença por candidatura aberta (decisão de 25/11/2026), com o motivo neutro

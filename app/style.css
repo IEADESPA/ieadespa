@@ -2065,9 +2065,30 @@ html[data-tema="escuro"] [data-cor="conquistas"] { --cor-modulo: #67E8F9; --cor-
 .atalho-vida-mini .tile-casca { width: 30px; height: 30px; border-radius: 9px; }
 .vida-data span { text-transform: none; }
 
-/* ---- NOTEBOOK: o menu com 248 px, a rolagem própria e o modo RECOLHIDO (só os ícones) ---- */
+/* ---- NOTEBOOK: o menu com a largura do desenho, a rolagem própria e o modo RECOLHIDO (só os ícones) ----
+   As páginas de propostas não usam box-sizing: o menu principal (lateralSimples, 248 px + 14 px de cada lado) aparece com 276 px e o menu
+   de cada módulo (menuCor, 256 px + 12 px de cada lado) com 280 px. Aqui tudo é border-box, por isso as larguras já somam o recuo. */
 @media (min-width: 641px) {
-  .sidebar { width: 248px; min-width: 248px; height: 100vh; height: 100dvh; overflow-y: auto; padding: 20px 14px 14px; gap: 6px; }
+  .sidebar { width: 276px; min-width: 276px; height: 100vh; height: 100dvh; overflow-y: auto; padding: 20px 14px 14px; gap: 6px; }
+  /* dentro de um módulo, o menuCor do desenho: 280 px, 18 px em cima e 12 dos lados, o logo de 36 px (40 com a borda), 2 px entre as linhas,
+     a pessoa logo depois do último grupo */
+  .painel-layout[data-modulo] .sidebar:not(.recolhido) { width: 280px; min-width: 280px; padding: 18px 12px 12px; gap: 2px; }
+  .painel-layout[data-modulo] .sidebar:not(.recolhido) .sidebar-topo { padding: 0 8px 8px; }
+  .painel-layout[data-modulo] .sidebar:not(.recolhido) .sidebar-logo { width: 40px; height: 40px; }
+  .painel-layout[data-modulo] .sidebar:not(.recolhido) .sidebar-titulo { font-size: 15px; }
+  .painel-layout[data-modulo] .sidebar:not(.recolhido) .abas-secretaria { gap: 2px; }
+  .painel-layout[data-modulo] .sidebar:not(.recolhido) .menu-modulo-cabecalho { line-height: 1.35; }
+  .painel-layout[data-modulo] .sidebar:not(.recolhido) .menu-modulo-titulo { line-height: 1.35; }
+  .painel-layout[data-modulo] .sidebar:not(.recolhido) .sidebar-rodape { padding-top: 0; }
+  /* como no desenho, as linhas ENCOLHEM um pouco quando o menu não cabe na altura (no notebook de 800 px, o Financeiro da Geral: o item de 40
+     vira 37, o grupo de 36 vira 33, e o último grupo aparece); quando cabe (o Membros), ficam inteiras; abaixo do mínimo, a barra rola.
+     No desenho cada linha é filha direta da barra; aqui os invólucros (as abas, o grupo do módulo, a raiz do menu Svelte) viram
+     display:contents e o menu do módulo (front/src/comum/MenuModulo.svelte) faz o mesmo com os seus. O grupo do módulo recebe display:block
+     da casca (entrarModulo), por isso o !important. */
+  .painel-layout[data-modulo] .sidebar:not(.recolhido):has(.grupo-modulo[style*="block"] > .menu-svelte .menu-mod) .abas-secretaria { display: contents; }
+  .painel-layout[data-modulo] .sidebar:not(.recolhido) .grupo-modulo[style*="block"]:has(> .menu-svelte .menu-mod) { display: contents !important; }
+  .painel-layout[data-modulo] .sidebar:not(.recolhido) .menu-svelte { display: contents; }
+  .painel-layout[data-modulo] .sidebar:not(.recolhido) #btnVoltarModulo { flex: 0 1 30px; min-height: 28px; }
   .sidebar.recolhido { width: 76px; min-width: 76px; padding: 16px 10px 12px; }
   .sidebar.recolhido .sidebar-topo { flex-direction: column; gap: 10px; padding: 0 0 12px; }
   .sidebar.recolhido .sidebar-titulo, .sidebar.recolhido .rotulo, .sidebar.recolhido .cartao-usuario-textos, .sidebar.recolhido .seta-grupo,
@@ -2268,6 +2289,11 @@ body { font-family: var(--fonte-sistema); }
   .painel-layout.com-voltar .btn-voltar-celular:not([hidden]) { display: inline-flex; }
   .painel-layout.com-voltar #btnMenuCelular { display: none; }
 }
+/* FASE 10 (22/11/2026): as telas do Financeiro novo no notebook com o recuo do desenho aprovado (r16bAperta das rodadas 16 e 17: 18 px em cima e
+   28 dos lados, no lugar de 24 e 32) */
+@media (min-width: 641px) {
+  .conteudo > #abaFinancas.aba-svelte { margin: 18px 28px 0; }
+}
 /* FASE 10 (22/11/2026): o Financeiro novo ("Finanças") no celular — a barra do alto na cor do módulo (rodadas 13 a 26); as pílulas da casca
    (Início, Trabalho, Minha vida, Avisos) ficam, como no desenho aprovado. */
 @media (max-width: 640px) {
@@ -2278,4 +2304,39 @@ body { font-family: var(--fonte-sistema); }
   .painel-layout[data-modulo="financeiro"]:has(#abaFinancas[style*="block"]) .cabecalho-secretaria .btn-sino,
   .painel-layout[data-modulo="financeiro"]:has(#abaFinancas[style*="block"]) .cabecalho-secretaria .btn-tema { color: #FFFFFF; background: transparent; border-color: transparent; }
   .painel-layout[data-modulo="financeiro"]:has(#abaFinancas[style*="block"]) .faixa-modulo-casca { display: none; }
+}
+
+/* ---- FASE 10, rodada 30 (o "r30Toast"; decisão de 26/11/2026): o AVISO das telas novas, Membros e Finanças, embaixo, no meio do conteúdo,
+   verde-água com o ✓; o erro em vermelho, com o alerta. A classe vem do mostrarToast (script.js), que pergunta à casca (svAvisoEmbaixo) a cada
+   aviso; fora das telas novas, o aviso continua no alto, à direita. No notebook, o meio do conteúdo fica à direita do menu do módulo (280 px;
+   recolhido, 76 px); no celular, 30 px de cada lado, logo acima da barra do telefone. ---- */
+#toastContainer.toast-embaixo {
+  top: auto; right: auto; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: calc(100vw - 32px); align-items: center; gap: 8px;
+}
+#toastContainer.toast-embaixo .toast {
+  display: flex; align-items: center; gap: 9px; padding: 10px 14px; border: 0; border-radius: 12px; background: #0F766E; color: #FFFFFF;
+  font-size: 13.5px; font-weight: 600; line-height: 1.35; box-shadow: 0 10px 28px rgba(0, 0, 0, .22); animation-name: toast-subir;
+}
+#toastContainer.toast-embaixo .toast > svg { flex: none; }
+#toastContainer.toast-embaixo .toast > span { min-width: 0; }
+#toastContainer.toast-embaixo .toast.toast-erro { background: #B91C1C; }
+#toastContainer.toast-embaixo .toast.toast-saindo { animation-name: toast-descer; }
+html[data-tema="escuro"] #toastContainer.toast-embaixo .toast { background: #115E59; box-shadow: 0 10px 28px rgba(0, 0, 0, .45); }
+html[data-tema="escuro"] #toastContainer.toast-embaixo .toast.toast-erro { background: #991B1B; }
+@keyframes toast-subir { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes toast-descer { to { opacity: 0; transform: translateY(8px); } }
+@media (min-width: 641px) {
+  #toastContainer.toast-embaixo { left: calc(50% + 140px); max-width: calc(100vw - 328px); }
+  body:has(.sidebar.recolhido) #toastContainer.toast-embaixo { left: calc(50% + 38px); max-width: calc(100vw - 124px); }
+}
+@media (max-width: 640px) {
+  #toastContainer.toast-embaixo { left: 16px; right: 16px; transform: none; width: auto; max-width: none; align-items: stretch; }
+  #toastContainer.toast-embaixo .toast { font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #toastContainer.toast-embaixo .toast { animation-name: toast-aparecer; }
+  #toastContainer.toast-embaixo .toast.toast-saindo { animation-name: toast-sumir; }
+  @keyframes toast-aparecer { from { opacity: 0; } }
+  @keyframes toast-sumir { to { opacity: 0; } }
 }

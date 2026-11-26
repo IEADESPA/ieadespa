@@ -87,7 +87,8 @@
 // v71 (25/11/2026): FASE 10, Membros volta 9 — a casca (abrirAba: o aviso da Geral abre Estrutura -> Órgãos) e os módulos reunioes.js e
 // catalogos-estrutura.js (encerrar a cadeira e a vaga de comissão pedem o motivo). Pula a v67 a v70 (usadas no ramo do acesso). Só no ramo
 // v10-membros-svelte e na homologação.
-const CACHE_NOME = "ieadespa-app-shell-v71";
+// v74 (26/11/2026): só no homolog — a mescla do Financeiro parte 2 (a casca comum: o aviso embaixo nas telas novas). Pula a v72 e a v73 (ramo do Membros).
+const CACHE_NOME = "ieadespa-app-shell-v74";
 const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/afm.js", "/modulos/arquivos.js", "/modulos/assistencia.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/casca.js", "/modulos/catalogos-estrutura.js", "/modulos/checkin-infantil.js", "/modulos/comunicacao.js", "/modulos/consagracoes.js", "/modulos/crise-seguranca.js", "/modulos/cuidado-pastoral.js", "/modulos/disciplina.js", "/modulos/discipulado.js", "/modulos/distritos.js", "/modulos/doacoes.js", "/modulos/ebd.js", "/modulos/educacao-continuada.js", "/modulos/endereco.js", "/modulos/enquetes.js", "/modulos/entidades-vinculadas.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/expansao.js", "/modulos/financeiro.js", "/modulos/identidade-visual.js", "/modulos/meu-painel.js", "/modulos/meus-dados.js", "/modulos/ministerio-menores.js", "/modulos/missoes.js", "/modulos/ouvidoria.js", "/modulos/permissoes.js", "/modulos/pessoas.js", "/modulos/projetos-assembleia.js", "/modulos/protecao.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/reunioes.js", "/modulos/seminario.js", "/modulos/setores-tecnicos.js", "/modulos/territorio.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js", "/vendor/simplewebauthn-browser.js"];
 
 self.addEventListener("install", (evento) => {

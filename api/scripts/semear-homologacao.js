@@ -208,7 +208,8 @@ async function main() {
       const blocoAlfa = await escalar("SELECT BlocoId FROM dbo.FinBlocos WHERE PrimeiraFolha = 70051");
       for (let f = 70051; f <= 70088; f++) {
         const destino = f === 70067 ? "CANCELADA" : f === 70079 ? "ARRANCADA" : "LANCADA";
-        await q("INSERT INTO dbo.FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor) VALUES (@b, @f, @d, @o, @p)",
+        // a folha guarda a entrega que a usou (a regra de 24/11/2026: FinFolhas.SaidaId, a saída do bloco no livro)
+        await q("INSERT INTO dbo.FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor, SaidaId) SELECT @b, @f, @d, @o, @p, (SELECT TOP 1 RegistroId FROM dbo.FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = @b ORDER BY RegistroId DESC)",
           { b: blocoAlfa, f, d: destino, o: destino === "LANCADA" ? null : "Dado fictício de homologação", p: por });
       }
       feito.push("blocos de recibo fictícios (lote 2026 de 200 blocos, 100 chegaram, 6 entregues, 38 folhas com destino)");

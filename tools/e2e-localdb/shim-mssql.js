@@ -75,6 +75,8 @@ class Request {
     return this;
   }
   on(evento, fn) { (this._ouvintes[evento] = this._ouvintes[evento] || []).push(fn); return this; }
+  // o lote solto do mssql (execSqlBatch, sem sp_executesql): a ponte manda o texto sem parâmetro, que o SQL Server também roda como lote
+  async batch(texto) { return this.query(texto); }
   async query(texto) {
     const r = await this._ponte.enviar({ op: "query", sql: texto, params: this._params, limiteMs: this._limiteMs });
     if (!r.ok && r.erro.tempo) throw new ErroSql(`Timeout: Request failed to complete in ${this._limiteMs}ms`, 0, "ETIMEOUT");

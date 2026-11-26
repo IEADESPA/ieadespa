@@ -963,6 +963,11 @@ function fecharFinanceiroSvelte() {
   ponteSvelteCasca("financeiro").menuRecolhido(null);
   atualizarVoltarCelularCasca();
 }
+// o AVISO (toast) das telas novas, Membros e Finanças (rodada 30, o "r30Toast"; decisão de 26/11, peça comum dos dois módulos): embaixo, no meio
+// do conteúdo, verde-água com o ✓ (o erro em vermelho, com o alerta). O resto do sistema continua com o aviso no alto, à direita. O mostrarToast
+// (script.js) pergunta aqui a cada aviso: vale também para o aviso que o fetchProtegido dá enquanto a tela nova está aberta.
+function svAvisoEmbaixo() { return membrosSvelteMontado || financeiroSvelteMontado; }
+function svIconeDoAviso(tipo) { return iconeSvg(tipo === "erro" ? "alerta" : "check", 17).replace('stroke-width="1.8"', 'stroke-width="2.4"'); }
 // chamada pela troca de aba (mostrarAbaSecretaria): entrar em "membros" ou "financas" abre as telas novas; sair desmonta
 function svAbaMudou(aba) {
   if (aba === "membros") abrirMembrosSvelte(null);

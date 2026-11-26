@@ -8,7 +8,7 @@
 --
 -- Esta migração cria:
 --   FinCentrosCusto      os centros de custo da IGREJA INTEIRA, em árvore. Nascem sozinhos: os 3 da Geral (Presidente, Tesouro Geral e
---                        Convenção) e um por congregação (shared/finCentrosCusto.js os completa quando surge congregação nova). Os de
+--                        Convenção) e um por congregação (o deploy roda esta migração de novo e ela completa a que surgir). Os de
 --                        departamentos e secretarias vêm com o módulo de cada um (fora da 1ª entrega).
 --   FinMovimentosCentro  o livro de cada centro de custo, com o valor com sinal; o saldo é a soma. Nada se apaga: o erro se corrige com
 --                        ESTORNO (o movimento contrário, com o motivo). Aqui nascem a ABERTURA (o saldo de janeiro de 2027, positivo ou
@@ -17,7 +17,7 @@
 --   FinBlocos            cada bloco do lote: o número (calculado pela primeira folha: 70.051 → bloco 1.401), as folhas, quando chegou da
 --                        gráfica, com qual congregação está e a situação guardada (na Geral, entregue, devolvido). "Esperando" e "Em uso"
 --                        não se guardam: saem do uso das folhas (entregue sem folha usada = esperando).
---   FinFolhas            a folha que teve destino: lançada (o lançamento vem na migração 201), cancelada, arrancada ou extraviada (com a
+--   FinFolhas            a folha que teve destino: lançada (o lançamento vem numa migração seguinte), cancelada, arrancada ou extraviada (com a
 --                        observação). Uma folha, um destino: o número é único (a numeração da série nunca se repete).
 --   FinLivroBlocos       o livro de entrada e saída: o cadastro do lote, a chegada da gráfica, a saída (entregue a quem, de qual
 --                        congregação; a área só leva) e a entrada (devolvido por quem; quem recebe é a Tesouraria Geral).

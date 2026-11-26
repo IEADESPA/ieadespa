@@ -255,11 +255,16 @@ Cada versão parte da base da anterior (`BASE=...`):
 - **FASE 10, Financeiro** (migrações a partir da 200; roteiros `e2e-200` em diante). Roda numa **instância própria** do LocalDB, para não atropelar
   quem trabalha no `psc7` ao mesmo tempo: `sqllocaldb create fin` + `start fin`, copie para `bak/` a última base de Membros e use
   `E2E_INSTANCIA=fin E2E_BANCO=ieadespa_fin E2E_CS='Server=(localdb)\fin;Database=ieadespa_fin;Integrated Security=true'` em todos os comandos
-  (o `bases.ps1` restaura com os arquivos do banco novo). Base `cenario-200` (`bash rodar.sh preparar-200`: a `cenario-184` com a 200 aplicada duas
-  vezes): `e2e-200` (o esquema da 200 com os CHECK e os índices únicos; os centros de custo da Geral e de cada congregação que nascem uma vez só;
+  (o `bases.ps1` restaura com os arquivos do banco novo). Base `cenario-200` (`bash rodar.sh preparar-200`: a `cenario-184` com a 200, a 201, a
+  202 e a 203 aplicadas duas vezes cada): `e2e-200` (o esquema da 200 com os CHECK e os índices únicos; a 202, com o nome da restrição em cada recusa; os centros de custo da Geral e de cada congregação que nascem uma vez só;
   a abertura negativa e o estorno único; o lote da gráfica numerado pela primeira folha, o lote que cruza, a chegada e a entrega com as recusas;
   a lista em páginas de 40 com os filtros, a procura e o quadro da direita; o escopo da Geral, da área e da congregação; lixo em cada campo; e
-  corridas: o mesmo lote, a mesma entrega e lotes que se cruzam, em processos separados).
+  corridas: o mesmo lote, a mesma entrega e lotes que se cruzam, em processos separados); `e2e-201` (as folhas do bloco e o livro: a exceção, o
+  desfazer, a devolução completa e a parcial, o rastreio e as corridas da mesma folha); `e2e-202` (o que a rodada 30 pede ao servidor: a folha
+  inexistente de ponta a ponta, a devolução parcial com ela no fim e no meio, o seletor de bloco e a volta parcial, o histórico da folha com
+  quem marcou e quem desfez, no escopo de cada nível, a saída da r30 (as congregações ativas com a área, a liderança da escolhida, o rastreio
+  do bloco que nunca saiu e a linha do livro com a primeira folha do bloco), a devolução da r30 (quem trouxe, a primeira em branco que já
+  tem destino, as usadas da entrega na linha do livro e as inexistentes da entrega no rastreio) e a 203 rodada de novo sobre dados).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

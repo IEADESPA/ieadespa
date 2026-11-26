@@ -1096,6 +1096,20 @@ Depois da revisão do Financeiro até `4c06d58`:
 - **Onde se marca a inexistente (ele, 24/11):** ninguém confere o lote folha por folha quando ele chega da gráfica.
   A inexistente aparece no lançamento, na planilha, e se marca ali, do mesmo jeito que a cancelada ou a arrancada. Na
   devolução parcial, a inexistente no fim do bloco não impede: as folhas em branco antes dela voltam livres.
+- **Decididas pela sessão na construção (26/11/2026, "para conferir" na homologação), pela regra "o desenho mais novo vale":**
+  - o botão "Cadastrar lote da gráfica" dourado (r30) e a procura também na aba Blocos do celular (r30);
+  - o aviso de confirmação embaixo, no meio, nas telas novas de Membros e Finanças (nas telas antigas fica no alto);
+  - os textos das listas vazias que não tinham desenho: "Nenhum bloco nesta situação.", "Nenhum bloco nesta situação
+    com esse número.", "Nenhum bloco com a sua congregação." e "Nenhum bloco com as congregações da área.".
+- **O lançamento (parte 3), decidido pela sessão pelas regras dele (26/11, "para conferir"):**
+  - o erro se corrige na própria linha ("Corrigir", com motivo): a linha mostra o valor novo, e o histórico guarda o
+    antigo, o novo, o motivo, quem e quando. Nada se apaga. A nota já conferida pelo Conselho vira "Pedir correção"
+    (com a auditoria, na 2ª leva);
+  - a procura do dizimista é na Igreja inteira, mostrando só o nome, o número e a congregação;
+  - lança-se no mês atual e no anterior, nunca depois de hoje, e no anterior só enquanto a congregação não mandou o
+    relatório daquele mês;
+  - a cancelada, a arrancada e a inexistente se marcam na própria planilha, como ele decidiu em 24/11;
+  - "marcada em novembro" sai dos 4 pontos da tela, com o fundo azul da linha.
 
 ### Rodada 28: o que ele aprovou (23/11/2026)
 

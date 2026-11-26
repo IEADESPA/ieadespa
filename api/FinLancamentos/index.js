@@ -2,7 +2,8 @@
 // consultas em shared/finLancamentosDb.js). Tela aprovada: rodada 24, "r24-lancamento", opção 1, sem "marcada em novembro".
 //  GET  financeiro/lancamentos?congregacaoId=&mes=AAAA-MM   (financeiro, no escopo) a planilha do mês: as linhas, a próxima folha, os totais e a
 //                                                           tira do bloco; a congregação de quem tem uma só vem sozinha
-//  GET  financeiro/lancamentos/congregacoes                 (financeiro) as congregações do escopo, com a área (o seletor "Lançando por")
+//  GET  financeiro/lancamentos/congregacoes                 (financeiro) as congregações do escopo, com a área e a situação de agora (o
+//                                                           seletor "Lançando por / Trocar", r20-seletor)
 //  GET  financeiro/lancamentos/area?mes=AAAA-MM             (financeiro, no escopo) a área acompanha: cada congregação, o último lançamento, o
 //                                                           lançado no mês, o bloco e a folha agora, o que precisa
 //  GET  financeiro/lancamentos/historico?folha=             (financeiro, no escopo) quem lançou, quem preencheu e cada correção
@@ -62,7 +63,7 @@ module.exports = comConflito(async function (context, req) {
   }
   if (metodo === "GET" && acao === "congregacoes") {
     const pool = await getPool();
-    context.res = { status: 200, headers: SEM_CACHE, body: { sucesso: true, congregacoes: await db.congregacoesDoEscopo(pool, usuario) } };
+    context.res = { status: 200, headers: SEM_CACHE, body: { sucesso: true, congregacoes: await db.seletor(pool, usuario) } };
     return;
   }
   if (metodo === "GET" && acao === "historico") {

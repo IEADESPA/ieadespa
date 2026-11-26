@@ -410,4 +410,18 @@ async function area(pool, usuario, { mes }) {
   };
 }
 
-module.exports = { congregacoesDoEscopo, planilha, salvar, corrigir, historico, procurarMembros, area, MAX_LINHAS };
+// O seletor "Lançando por / Trocar" (r20-seletor, a peça comum): as congregações do escopo, com a área e a situação de agora. A situação é
+// só o que o lançamento já sabe (a resposta 6 de 26/11/2026: nada de repasse inventado até o incremento 5): o primeiro "precisa" da área
+// ("2 folhas sem destino") ou "em dia".
+async function seletor(pool, usuario) {
+  const lista = await congregacoesDoEscopo(pool, usuario);
+  if (!lista.length) return [];
+  const a = await area(pool, usuario, { mes: regra.mesDe(hojeBrasilia()) });
+  const precisa = new Map(a.congregacoes.map((c) => [c.id, c.precisa]));
+  return lista.map((c) => {
+    const p = precisa.get(c.id) || [];
+    return { ...c, situacao: p.length ? { texto: p[0], tom: "pend" } : { texto: "em dia", tom: "ok" } };
+  });
+}
+
+module.exports = { congregacoesDoEscopo, seletor, planilha, salvar, corrigir, historico, procurarMembros, area, MAX_LINHAS };

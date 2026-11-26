@@ -336,6 +336,9 @@ const lancar = (token, congregacaoId, linhas) => ({ handler: "finLancamentos", a
   r = await GET(H, "congregacoes", geral, {});
   ok(r.status === 200 && r.body.congregacoes.some((c) => c.nome === "Vila Nova E2E" && c.area === "Área Alfa E2E") && r.body.congregacoes.some((c) => c.nome === "Beta E2E"),
     "o seletor da Geral: as congregações com a área", r.body.congregacoes);
+  const vnSel = r.body.congregacoes.find((c) => c.nome === "Vila Nova E2E"), ceSel = r.body.congregacoes.find((c) => c.nome === "Central E2E");
+  ok(JSON.stringify(vnSel.situacao) === JSON.stringify({ texto: "1 folha sem destino", tom: "pend" }) && JSON.stringify(ceSel.situacao) === JSON.stringify({ texto: "em dia", tom: "ok" }),
+    "a situação de cada uma é só o que o lançamento sabe: Vila Nova com a 70.061 sem destino; a Central em dia", { vnSel, ceSel });
   r = await GET(H, "", geral, { congregacaoId: VILA_NOVA });
   ok(r.status === 200 && r.body.congregacao.nome === "Vila Nova E2E" && r.body.linhas.some((x) => x.folha === 70061 && x.situacao === "pendente"), "a Geral abre a planilha de Vila Nova", r.body.congregacao);
   r = await salvar(geral, VILA_NOVA, hoje, [dizimo(70061, BRUNO, "12,00")]);

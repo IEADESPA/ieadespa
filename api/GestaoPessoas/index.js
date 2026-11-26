@@ -60,6 +60,11 @@ const DATA_SAIDA_MINIMA = "2006-01-01";   // a fundação da igreja
 // a volta, que é decisão da Diretoria.
 const LICENCA_CANDIDATURA = "LICENCA_CANDIDATURA";
 const MSG_LICENCA_ABERTA = "Esta pessoa está em licença por candidatura: a volta e o não retorno se registram na aba \"Licença Candidatura\" (decisão da Diretoria, pelo nível geral); o falecimento, aqui na ficha, escolhendo \"Falecido\"; o desligamento, pelo botão \"Desligar\".";
+// A recusa de nascimento, admissão e estado civil fora do nível geral, para quem NÃO vê a disciplina daquela pessoa: a mesma para a exclusão julgada e para o
+// processo de cargo, sem dizer qual (revisão de fora, 26/11/2026: a mensagem da exclusão entregava o que a lista e a ficha escondem de quem não tem "disciplina").
+const MSG_ESCADA_SO_GERAL = "A data de nascimento, a data de admissão e o estado civil desta pessoa só a Secretaria (nível geral) altera: peça a ela.";
+const MSG_READMISSAO = "Esta pessoa tem exclusão julgada: a data de admissão nova é a readmissão, e só a Secretaria (nível geral) a registra.";
+const MSG_PROCESSO_DE_CARGO = "Esta pessoa tem um processo de cargo em andamento: nascimento, admissão e estado civil só a Secretaria (nível geral) altera.";
 // a licença por candidatura ainda aberta da pessoa (o índice IX_LicencasCandidatura_MembroId_Status, migração 300, atende a busca)
 const SQL_LICENCA_ABERTA = (dica) => `SELECT TOP 1 LicencaId FROM LicencasCandidatura${dica} WHERE MembroId = @id AND Status = 'EM_LICENCA'`;
 const TAMANHO_STATUS = 20;   // MembroReferencia.Status é NVARCHAR(20); a sigla do catálogo vai até 30
@@ -403,21 +408,15 @@ module.exports = async function (context, req) {
     }
     // Trava 8-A: nascimento e admissão (idade e tempo de membro do Auxiliar) e estado civil (escrutínio do CEI, "Pastor casado") também contam para a escada: ninguém
     // os muda em si mesmo, e com um processo de cargo em andamento só o nível geral muda.
+    // (A recusa da exclusão julgada e do processo de cargo fica para o fim, logo antes da gravação: ver "a última recusa" abaixo.)
+    let mudouAdmissao = false, mudouEscada = false;
     if (existia) {
       const ant = existente.recordset[0];
       const igual = (a, b) => (a ? String(a).slice(0, 10) : null) === (b ? String(b).slice(0, 10) : null);
-      const mudouEscada = !igual(ant.NascimentoAnterior, dataNascimento) || !igual(ant.AdmissaoAnterior, dataAdmissao) || (ant.EstadoCivilAnterior || null) !== (estadoCivil || null);
+      mudouAdmissao = !igual(ant.AdmissaoAnterior, dataAdmissao);
+      mudouEscada = !igual(ant.NascimentoAnterior, dataNascimento) || mudouAdmissao || (ant.EstadoCivilAnterior || null) !== (estadoCivil || null);
       if (mudouEscada && Number(membroId) === Number(usuario.membroId)) {
         context.res = { status: 422, body: { sucesso: false, mensagem: "Ninguém altera a própria data de nascimento, de admissão nem o estado civil no cadastro: peça a outra pessoa da Secretaria." } };
-        return;
-      }
-      // a data de admissão nova de quem tem exclusão julgada é a READMISSÃO (desfaz o "excluído" na credencial, na escada e na CLI): ato só do nível geral
-      if (!igual(ant.AdmissaoAnterior, dataAdmissao) && !geral && ant.TemExclusao) {
-        context.res = { status: 403, body: { sucesso: false, mensagem: "Esta pessoa tem exclusão julgada: a data de admissão nova é a readmissão, e só a Secretaria (nível geral) a registra." } };
-        return;
-      }
-      if (mudouEscada && !geral && ant.EmProcessoDeCargo) {
-        context.res = { status: 403, body: { sucesso: false, mensagem: "Esta pessoa tem um processo de cargo em andamento: nascimento, admissão e estado civil só a Secretaria (nível geral) altera." } };
         return;
       }
     }
@@ -431,8 +430,8 @@ module.exports = async function (context, req) {
     // nem troca a causa disciplinar ao salvar
     const motivoAnterior = existia ? (existente.recordset[0].MotivoAnterior || null) : null;
     const vDiscSalvar = auth.visaoDaPermissao(usuario, "disciplina");
-    const motivoOculto = existia && SAIDAS_DISCIPLINARES.has(motivoAnterior)
-      && !(vDiscSalvar && noEscopoDaPessoa(vDiscSalvar, existente.recordset[0].CongregacaoNome, existente.recordset[0].ExtensaoNome));
+    const veDisciplinaDaPessoa = existia && !!(vDiscSalvar && noEscopoDaPessoa(vDiscSalvar, existente.recordset[0].CongregacaoNome, existente.recordset[0].ExtensaoNome));
+    const motivoOculto = existia && SAIDAS_DISCIPLINARES.has(motivoAnterior) && !veDisciplinaDaPessoa;
     const motivoSaidaFinal = motivoOculto ? motivoAnterior : (motivoSaida || null);
     const statusAnterior = existia ? existente.recordset[0].Status : null;
     const emailAnterior = existia ? existente.recordset[0].EmailAnterior : null;
@@ -509,6 +508,22 @@ module.exports = async function (context, req) {
       enderecoFinal = prep.endereco; partesFinais = prep.partes;
     } else if (existia) {
       partesFinais = await territorioDb.linhasDiantedaLinhaLegada(() => pool.request(), membroId, enderecoFinal);
+    }
+
+    // A ÚLTIMA recusa antes da gravação (Trava 8-A e a readmissão). Fora do nível geral: a data de admissão nova de quem tem exclusão julgada é a READMISSÃO
+    // (desfaz o "excluído" na credencial, na escada e na CLI), e com um processo de cargo em andamento nascimento, admissão e estado civil não mudam.
+    // Vem depois de todas as recusas que quem salva provoca à vontade (o cargo lido, a situação, o endereço...): antes, a recusa da exclusão vinha primeiro e
+    // a diferença entre ela e o 409 do cargo lido servia de sonda sem gravar nada. Quem não vê a disciplina desta pessoa recebe a mesma resposta nos dois
+    // casos (MSG_ESCADA_SO_GERAL); quem vê recebe a explicação (revisão de fora, 26/11/2026).
+    if (existia && !geral) {
+      const ant = existente.recordset[0];
+      const barraExclusao = mudouAdmissao && !!ant.TemExclusao;
+      const barraProcesso = mudouEscada && !!ant.EmProcessoDeCargo;
+      if (barraExclusao || barraProcesso) {
+        const mensagem = !veDisciplinaDaPessoa ? MSG_ESCADA_SO_GERAL : barraExclusao ? MSG_READMISSAO : MSG_PROCESSO_DE_CARGO;
+        context.res = { status: 403, body: { sucesso: false, mensagem } };
+        return;
+      }
     }
 
     // os parâmetros da gravação (o endereço entra à parte: com um bairro da lista, a linha única é refeita com o bairro travado — revisão de 06/11/2026)

@@ -110,7 +110,7 @@ const somar = (n) => req("shared/afm.js").somarDias(hojeBr(), n);
   ok(r.status === 422, "o próprio estado civil: 422", r.body);
   const pv = id(await protocolar({ membroId: P.vetado, assunto: TIPO.MISSIONARIO, proponenteMembroId: 1002 }));
   r = await salvarPessoa(P.vetado, { dataAdmissao: "2019-01-01" }, LIDER(P.lider, ["pessoas"], [CENTRAL]));
-  ok(r.status === 403 && /processo de cargo em andamento/.test(r.body.mensagem), "com processo de cargo aberto, a liderança local não muda a admissão", r.body);
+  ok(r.status === 403 && /só a Secretaria \(nível geral\) altera: peça a ela/.test(r.body.mensagem), "com processo de cargo aberto, a liderança local não muda a admissão (sem a disciplina, a recusa neutra)", r.body);
   r = await salvarPessoa(P.vetado, { estadoCivil: "CASADO", telefone: "91999990000" }, LIDER(P.lider, ["pessoas"], [CENTRAL]));
   ok(r.status === 200 && r.body.sucesso, "mas o resto do cadastro segue com ela (o estado civil igual não conta como mudança)", r.body);
 
@@ -282,7 +282,10 @@ const somar = (n) => req("shared/afm.js").somarDias(hojeBr(), n);
   ok((((r.body.requisitos || {}).itens || []).find((i) => i.chave === "disciplina") || {}).situacao === "ATENDE", "nem na escada", r.body);
   await q("UPDATE MembroReferencia SET DataAdmissao = '2020-01-01' WHERE MembroId = @m", { m: P.menor });
   r = await salvarPessoa(P.menor, { dataAdmissao: "2026-02-01" }, LIDER(P.lider, ["pessoas"], [CENTRAL]));
-  ok(r.status === 403 && /readmissão/.test(r.body.mensagem) && (await credDb.pessoa(pool, P.menor)).excluido, "a liderança local não 'readmite' mudando a data de admissão (revisão)", r.body);
+  ok(r.status === 403 && /só a Secretaria \(nível geral\) altera: peça a ela/.test(r.body.mensagem) && !/exclus|readmiss/i.test(r.body.mensagem) && (await credDb.pessoa(pool, P.menor)).excluido,
+    "a liderança local não 'readmite' mudando a data de admissão (revisão); sem a disciplina, a recusa não diz que há exclusão (revisão de fora, 26/11/2026)", r.body);
+  r = await salvarPessoa(P.menor, { dataAdmissao: "2026-02-01" }, LIDER(P.lider, ["pessoas", "disciplina"], [CENTRAL]));
+  ok(r.status === 403 && /readmissão/.test(r.body.mensagem) && (await credDb.pessoa(pool, P.menor)).excluido, "com a disciplina da congregação, a explicação da readmissão", r.body);
   r = await salvarPessoa(P.menor, { dataAdmissao: "2026-02-01" });
   ok(r.status === 200 && !(await credDb.pessoa(pool, P.menor)).excluido, "a Secretaria (nível geral) registra a readmissão", r.body);
 

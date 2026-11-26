@@ -87,19 +87,22 @@ nunca dentro do desenho: o que está no desenho é o que o construtor faz.
 
 ## A próxima rodada
 
-1. Copie `montar-r34.js` para `montar-r35.js`: a base passa a ser `propostas-r34/index.html` (a publicada), a lista da
-   34 sai (a linha `TELAS.unshift(...TELAS_R34...)` é trocada pelos fontes da 35), os nomes `r34` viram `r35` e entra
-   no alto o link da página da 34 (6szt…), antes dos outros. O código da 32 a 34 que a 35 reaproveitar fica na base;
-   o que a poda já tirou (o mapa e a virada da 33, por exemplo) se copia da página antiga.
+1. Copie `montar-r35.js` para `montar-r36.js`: a base passa a ser `propostas-r35/index.html` (a publicada), a lista da
+   35 sai (a linha `TELAS.unshift(...TELAS_R35...)` é trocada pelos fontes da 36), os nomes `r35` viram `r36` e entra
+   no alto o link da página da 35, antes dos outros. O código da 32 à 35 que a 36 reaproveitar fica na base; o que a
+   poda já tirou se copia da página antiga. A 35 fechou a Estrutura: a 36 é do próximo módulo da ordem fixa.
 2. As telas novas em `r35-*.js` e a explicação em `r35-lista.js`: só no claro, cada nível, celular com a barra do
    telefone. Quando ele se confunde com muitas opções, uma versão única bem explicada.
-3. `node montar-r35.js` e um `conferir-r35.js` (cópia do da 34), os dois com zero problema. Confira também que não
-   sobrou nada da 34 na página (`TELAS_R34`, `geral-r34`).
+3. `node montar-r36.js` e um `conferir-r36.js` (cópia do da 35), os dois com zero problema. Confira também que não
+   sobrou nada da 35 na página (`TELAS_R35`, `geral-r35`).
 4. Publique numa página nova, só com a 35, e registre: commit dos fontes e esta seção com o endereço novo.
 5. Uma página por rodada, sem teto de tamanho a vigiar: a 32 tem 145 KB, e só a página nova é lida antes de publicar.
 6. O conferidor não mede transbordo: meça no Edge (o `medir.js` da pasta de fotos da rodada, só no claro) e olhe as
    fotos do pior caso (a mensagem de erro, o seletor aberto, o celular com o formulário), sem fotografar tudo. Na 34, o `medir.js` ganhou a conferência do botão esmagado (a
-   altura desenhada menor que a pedida), que o transbordo não pega.
+   altura desenhada menor que a pedida), que o transbordo não pega; na cópia da 34 as barras do padrão se perderam e ela
+   nunca casava (consertada na 35, `C:/tmp/ieadespa-desenho-r35-fotos/ferr/medir.js`). O "esmagado" da folha em PDF no
+   celular é efeito do `zoom` (608 × 0,8326 = 506), não defeito. O medir pode dar limpo e a foto mostrar corte: quem
+   decide é a foto.
 
 Para as fotos de conferência no Windows: o Edge sem janela, sempre com `--disable-gpu` e com um `--user-data-dir` próprio
 (com o Edge do dia a dia aberto, sem ele a foto não sai). A foto aparece um instante depois de o comando voltar. A página

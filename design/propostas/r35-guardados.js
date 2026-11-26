@@ -5,7 +5,7 @@
 // 5 anos depois do fim do mandato, para ele conferir com o advogado. Hoje, nos desenhos, é 15/01/2028.
 const R35_GU_HOJE = '15/01/2028';
 // [quem, cargo, onde, ano, situação, tom, fim]
-const R35_TERMOS = [['Débora Lima', '1ª secretária', 'Vila Nova (7)', '2028', 'valendo', 'verde', 'até 31/12/2028'], ['Débora Lima', '1ª secretária', 'Vila Nova (7)', '2027', 'encerrado no fim do ano', 'azul', '31/12/2027'], ['Marcos Vieira', '1º tesoureiro', 'Vila Nova (7)', '2027', 'encerrado: outro foi posto', 'azul', '30/04/2027'], ['Paulo Mendes', '2º secretário', 'Vila Nova (7)', '2027', 'não aceito por ele', 'verm', '10/02/2027'], ['Pb. Rui Andrade', 'dirigente', 'Monte Sião (12)', '2027', 'encerrado: igreja fechada', 'azul', '28/02/2027'], ['Ana Paula Reis', 'sem cargo, pela Geral', 'Vila Nova (7)', '2027', 'encerrado no prazo', 'azul', '31/03/2027']];
+const R35_TERMOS = [['Débora Lima', '1ª secretária', 'Vila Nova (7)', '2028', 'valendo', 'verde', 'até 31/12/2028'], ['Débora Lima', '1ª secretária', 'Vila Nova (7)', '2027', 'encerrado no fim do ano', 'azul', '31/12/2027'], ['Marcos Vieira', '1º tesoureiro', 'Vila Nova (7)', '2027', 'encerrado: outro foi posto', 'azul', '30/04/2027'], ['Paulo Mendes', '2º secretário', 'Vila Nova (7)', '2027', 'não aceito por ele', 'verm', '10/02/2027'], ['Lia Moura', '1º secretário', 'Monte Sião (12)', '2027', 'encerrado: igreja fechada', 'azul', '28/02/2027'], ['Ana Paula Reis', 'sem cargo, pela Geral', 'Vila Nova (7)', '2027', 'encerrado no prazo', 'azul', '31/03/2027']];
 function r35GuGeral(p, cel) {
   if (cel) return r32EsCel(p, 'Termos guardados', `${r17Campo(p, '', 'Buscar pelo nome', { icone: 'busca', vazio: 1 })}${r32Pils(p, ['2028', '2027', 'Todos os cargos'], '2027')}${r16aListaCel(p, R35_TERMOS.slice(1).map(x => [`${x[0]} · ${x[1]}`, `${x[2]} · ${x[4]}`, r28Mais(p, 'PDF')])).replace(/min-height:52px/g, 'min-height:48px')}${r20Nota(p, 'Guardados por 5 anos depois do fim do mandato.')}`);
   const tab = r16aTab(p, 'minmax(0,1fr) minmax(0,.95fr) minmax(0,.85fr) 46px minmax(0,1.6fr) 90px', ['Quem', 'Cargo', 'Onde', 'Ano', 'Situação', ''], R35_TERMOS.map(x => [`<strong style="color:${p.titulo}">${x[0]}</strong>`, x[1], x[2], x[3], r18Etiq(p, `${x[4]}${x[5] === 'verde' ? '' : ' · ' + x[6].slice(0, 5)}`, x[5]), r28Mais(p, 'Baixar PDF')])).replace(/min-height:44px/g, 'min-height:46px');
@@ -24,11 +24,11 @@ function r35GuLocal(p, cel) {
 }
 // a área: os termos das congregações, por ano
 function r35GuArea(p, cel) {
-  const L = [['Vila Nova (7)', 9, 7], ['Cidade Jardim (9)', 8, 7], ['Monte Sião (12)', 4, 0], ['Bela Vista (15)', 9, 8], ['Jardim Ipê (18)', 7, 7]];
+  const L = [['Vila Nova (7)', 9, 7], ['Cidade Jardim (9)', 8, 7], ['Monte Sião (12)', 4, 0], ['Bela Vista (14)', 9, 8], ['Jardim Ipê (17)', 7, 7]];
   if (cel) return r32EsCel(p, 'Termos de posse', `${r29Nums(p, [r32Num('101', 'de 2028'), r32Num('96', 'de 2027')], 1)}${r16aListaCel(p, L.map(x => [x[0], `2027: ${x[1]} · 2028: ${x[2]}`, r28Mais(p, '›')]))}${r20Nota(p, 'O PDF só de quem você pôs no cargo; dos outros, a situação e o QR.')}`);
   const tab = r16aTab(p, 'minmax(0,1.4fr) 110px 110px minmax(0,1.3fr)', ['Congregação', 'Termos 2027', 'Termos 2028', 'Observação'], L.map(x => [`<strong style="color:${p.titulo}">${x[0]}</strong>`, String(x[1]), String(x[2]), x[2] ? 'em dia' : 'fechada em 28/02/2027']));
   const tit = r18Tit(p, 'Os termos guardados da Área 2', `por congregação e por ano · ${R35_GU_HOJE}`);
-  return r35Es(p, 'area', 'Termos de posse', `${tit}${r29Nums(p, [r32Num('101', 'termos de 2028 na área'), r32Num('96', 'termos de 2027'), r32Num('9', 'que você pôs no cargo')], 0)}${tab}${r20Nota(p, 'Mostra 5 das 13. O PDF você baixa só de quem pôs no cargo; dos outros, vê a situação e a página do QR, como na 34.')}`, ['Área 2', 'Termos de posse', 'Guardados']);
+  return r35Es(p, 'area', 'Termos de posse', `${tit}${r29Nums(p, [r32Num('101', 'termos de 2028 na área'), r32Num('96', 'termos de 2027'), r32Num('9', 'que você pôs no cargo')], 0)}${tab}${r20Nota(p, 'Mostra 5 das 11 de hoje, com Monte Sião, fechada. O PDF você baixa só de quem pôs no cargo; dos outros, vê a situação e a página do QR, como na 34.')}`, ['Área 2', 'Termos de posse', 'Guardados']);
 }
 // a pessoa: os meus termos
 function r35GuPessoa(p, cel) {

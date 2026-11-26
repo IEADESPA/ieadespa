@@ -33,10 +33,10 @@ function r35Membro(p, cel) {
   return r28Mv(p, R35_USU.marcosV, ['Início'], `${tit}${aviso}${r17Dois(r32Car(p, 'Você continua membro ativo', r35Sit(p, 'ok', 'membro'), continua), r18Col(r32Car(p, 'O seu cargo', '', r31Fatos(p, [['Cargo', '1º tesoureiro de Vila Nova'], ['Situação', 'afastado desde 01/02/2027'], ['Acesso', 'sem o acesso do cargo']])), saiu), '1fr 1fr')}`);
 }
 // a área: afasta só os cargos da área; vê os afastamentos das congregações
-const R35_AFAST_A2 = [['Marcos Vieira', '1º tesoureiro', 'Vila Nova (7)', 'secretaria de Vila Nova', '01/02'], ['Pb. Davi Lopes', 'vice-dirigente', 'Bela Vista (15)', 'secretaria de Bela Vista', '20/01']];
+const R35_AFAST_A2 = [['Marcos Vieira', '1º tesoureiro', 'Vila Nova (7)', 'secretaria de Vila Nova', '01/02'], ['Pb. Davi Lopes', 'vice-dirigente', 'Bela Vista (15)', 'secretaria de Bela Vista', '20/01'], ['Ana Lúcia Prado', '2º secretário', 'Betel (27)', 'secretaria de Betel', '18/01']];
 function r35AfArea(p, cel) {
   const dir = r32Car(p, 'A diretoria da área', r18Etiq(p, 'você afasta', 'azul'), [['Secretário da área', 'Elias Prado'], ['Tesoureiro da área', 'Rita Gomes']].map((x, i) => r28Pes(p, r32Ic(p, 'maleta'), `${x[0]} · ${x[1]}`, 'acesso valendo · até 31/12/2027', r28Mais(p, 'Afastar'), { i, alt: 44 })).join(''), cel);
-  const lista = r32Car(p, 'Afastados nas congregações da área', r18Etiq(p, '2', 'verm'), R35_AFAST_A2.map((x, i) => r28Pes(p, r32Ic(p, 'alerta', 'verm'), `${x[0]} · ${x[1]}`, `${x[2]} · por ${x[3]}, em ${x[4]}`, cel ? '' : r28Mais(p, 'Ver o motivo'), { i, alt: 46 })).join(''), cel);
+  const lista = r32Car(p, 'Afastados nas congregações da área', r18Etiq(p, '3', 'verm'), R35_AFAST_A2.map((x, i) => r28Pes(p, r32Ic(p, 'alerta', 'verm'), `${x[0]} · ${x[1]}`, `${x[2]} · por ${x[3]}, em ${x[4]}`, cel ? '' : r28Mais(p, 'Ver o motivo'), { i, alt: 46 })).join(''), cel);
   const regra = r20Nota(p, 'Os cargos de cada congregação, quem afasta é a secretaria dela, sem esperar a área nem a Geral. A área vê e acompanha.');
   if (cel) return r32EsCel(p, 'Afastados do cargo', `${dir}${lista}${regra}`);
   const tit = r18Tit(p, 'Afastar do cargo: a Área 2', `a área afasta os cargos da área · ${R35_HOJE}`);

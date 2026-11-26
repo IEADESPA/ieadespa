@@ -295,24 +295,20 @@ incremento 4); o pré-repasse e o repasse (5, esperando o desenho da rodada 27);
 seguidos só com o teclado. O item "Lançamentos" do menu fica em `front/src/financeiro/estado.svelte.ts` (o mesmo ponto em que o ramo
 dos centros de custo vai mexer em dezembro).
 
-**Perguntas antes de construir** (o modelo da 204 já pode começar: o estorno está decidido; estas mudam a rota ou a tela):
+**As respostas de 26/11/2026** (da conversa principal; todas para conferir com ele):
 
-1. **Como se estorna na tela.** A regra já está escrita (seção 2: "o erro se corrige com estorno", com o motivo; nada se apaga). Falta
-   o gesto, que o desenho não tem: a tesoureira salvou a 70.161 com R$ 250,00 e era R$ 205,00. Onde ela pede o estorno (na própria linha
-   da planilha?) e como a folha volta a ser lançada com o valor certo (a linha estornada fica visível, riscada, com o motivo)?
-2. **A procura do dizimista.** A irmã Ana, de Cidade Jardim, deixou o dízimo em Vila Nova. A tesoureira de Vila Nova acha a Ana na
-   procura (a Igreja inteira, só o nome e o número) ou só os membros de Vila Nova, e a Ana entra como nome digitado?
-3. **O dia do lançamento.** Até quando se lança num mês que passou? Proposta: só o mês atual e o anterior, nunca depois de hoje, até o
-   fechamento (que vem com o desenho dele).
-4. **A folha arrancada ou cancelada na planilha.** O desenho mostra "Arrancada · motivo" na linha. A tesoureira marca ali mesmo (como
-   na aba Folhas do bloco) ou a planilha só mostra o que já foi marcado nas Folhas?
-
-E, para a conversa principal (não é regra de negócio):
-
-- (5) **O que fica no lugar de "marcada em novembro"** nos 4 pontos do desenho: a coluna "Referente a" (proposta: "—", como as outras
-  linhas), o texto sob "Folha (sozinha)" na linha de lançar (proposta: nada), o "6. Referente a" travado (proposta: "dezembro") e o
-  selo do cartão do celular (proposta: nada). O fundo azul da linha sai também?
-- (6) **O quadro "Pré-repasse de dezembro"** (planilha) e a coluna **"Entrega"** (área) são do repasse (incremento 5, desenho da 27):
-  ficam fora até lá, ou mostram só o lançado?
-- (7) **O seletor "Lançando por / Trocar"** (r20 `r20-seletor`) não existe em `front/src/comum/` (nem no ramo do Membros); o plano o deu
-  ao agente de Membros. Sem ele, a Geral não lança por uma congregação. Quem o faz?
+1. **A correção** segue a regra da r27: nada de estorno com nota nova; a linha muda e a trilha guarda o valor antigo, o novo, o motivo
+   e quem. Na linha da planilha, "Corrigir" pede o motivo (obrigatório); o histórico da linha mostra o antigo, o novo, o motivo, quem e
+   quando, como o histórico da folha na r30. Nada se apaga. Com a nota já conferida pelo Conselho (auditoria, 2ª leva), "Corrigir" vira
+   "Pedir correção": fica só o ponto de encaixe. A correção alcança o tipo, a forma, o valor, a voluntária e quem deu; o dia e o
+   "Referente a" não mudam (para conferir).
+2. **A procura do dizimista** cobre a Igreja inteira e mostra só o nome, o número e a congregação (a Ana de Cidade Jardim aparece em
+   Vila Nova; nada mais da ficha).
+3. **O dia do lançamento:** só o mês de agora e o anterior, nunca depois de hoje; o anterior só enquanto a congregação não mandou
+   aquele relatório (o envio vem com o desenho dele; a 204 deixa o ponto de encaixe, `FinRelatoriosMes`).
+4. **A folha arrancada ou cancelada:** a planilha só mostra ("Arrancada · motivo"); marcar é na aba Folhas (r30), com um atalho da
+   linha até lá.
+5. **"Marcada em novembro" sai** dos 4 pontos ("—" na coluna "Referente a", nada sob "Folha (sozinha)", "dezembro" no "6. Referente a"
+   travado, nada no cartão do celular), e o tom azul da linha também, como no mural.
+6. **O "Pré-repasse" e a coluna "Entrega" da área:** até o incremento 5, só o que foi lançado, sem número de repasse inventado.
+7. **O seletor "Lançando por / Trocar"** é uma peça de `front/src/comum/`, do r20-seletor aprovado, para o Membros usar depois.

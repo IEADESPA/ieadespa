@@ -27,6 +27,12 @@ const { dataISOValida } = require("../shared/escopoFichas");
 const STATUS_TERMINAIS = ["DESLIGADO", "FALECIDO"];
 const DIAS_ANTECEDENCIA = 90;
 
+// Uma licença aberta por pessoa (decisão de 25/11/2026): a rota confere antes do nível do cargo e de novo dentro da transação, sob a trava da escada; o índice
+// único filtrado UX_LicencasCandidatura_Aberta (migração 301, o mesmo filtro desta consulta) recusa a que escapar, e o erro de chave repetida vira a mesma mensagem.
+const SQL_LICENCA_ABERTA = (dica) => `SELECT TOP 1 LicencaId FROM LicencasCandidatura${dica} WHERE MembroId = @id AND Status = 'EM_LICENCA'`;
+const MSG_JA_EM_LICENCA = "Esta pessoa já tem uma licença por candidatura aberta: registre a decisão do retorno dela antes de abrir outra.";
+const ehChaveRepetida = (e) => !!e && (e.number === 2601 || e.number === 2627);
+
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
   if (!usuario) return;
@@ -93,6 +99,13 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // Já em licença: a mensagem clara, antes de pedir a confirmação recente para um pedido que seria recusado (quem chega aqui alcança a pessoa e já vê a lista
+    // das licenças dela).
+    if ((await pool.request().input("id", sql.Int, membroId).query(SQL_LICENCA_ABERTA(""))).recordset.length > 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: MSG_JA_EM_LICENCA } };
+      return;
+    }
+
     const dataInicio = new Date(dataPleito);
     dataInicio.setDate(dataInicio.getDate() - DIAS_ANTECEDENCIA);
     const dataInicioLicenca = dataInicio.toISOString().slice(0, 10);
@@ -102,31 +115,42 @@ module.exports = async function (context, req) {
 
     // A licença, o status, a vacância (assentos, liderança, cargo, delegações, sessões) e a trilha numa transação só: ou tudo vale, ou nada muda e o pedido pode
     // ser repetido. A trava da escada põe em fila com a cerimônia de consagração da mesma pessoa (como no desligamento).
-    const desfecho = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
-      if (!(await obterTrava(rq, `escada_${membroId}`))) { await desistir(); return { situacao: "OCUPADA" }; }
-      const status = await rq().input("id", sql.Int, membroId)
-        .query(`UPDATE MembroReferencia SET Status = 'LICENCA_CANDIDATURA' WHERE MembroId = @id AND Status NOT IN ('DESLIGADO', 'FALECIDO')`);
-      if (!((status.rowsAffected && status.rowsAffected[0]) || 0)) { await desistir(); return { situacao: "SAIU" }; }
-      const result = await rq()
-        .input("membroId", sql.Int, membroId)
-        .input("dataPleito", sql.Date, dataPleito)
-        .input("dataInicioLicenca", sql.Date, dataInicioLicenca)
-        .input("criadoPor", sql.Int, usuario.membroId)
-        .query(`
-          INSERT INTO LicencasCandidatura (MembroId, DataPleito, DataInicioLicenca, CriadoPor)
-          OUTPUT INSERTED.LicencaId
-          VALUES (@membroId, @dataPleito, @dataInicioLicenca, @criadoPor)`);
-      const licencaId = result.recordset[0].LicencaId;
-      await vacancia.encerrarVinculos(executor, sql, membroId, "LICENCA_CANDIDATURA");
-      await registrarAuditoriaNaTransacao(transacao, {
-        tabela: "LicencasCandidatura",
-        registroId: licencaId,
-        acao: "Registrou licença por candidatura política",
-        usuarioId: usuario.membroId,
-        dadosDepois: { membroId, dataPleito, dataInicioLicenca }
+    let desfecho;
+    try {
+      desfecho = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
+        if (!(await obterTrava(rq, `escada_${membroId}`))) { await desistir(); return { situacao: "OCUPADA" }; }
+        if ((await rq().input("id", sql.Int, membroId).query(SQL_LICENCA_ABERTA(" WITH (UPDLOCK, HOLDLOCK)"))).recordset.length > 0) { await desistir(); return { situacao: "JA_ABERTA" }; }
+        const status = await rq().input("id", sql.Int, membroId)
+          .query(`UPDATE MembroReferencia SET Status = 'LICENCA_CANDIDATURA' WHERE MembroId = @id AND Status NOT IN ('DESLIGADO', 'FALECIDO')`);
+        if (!((status.rowsAffected && status.rowsAffected[0]) || 0)) { await desistir(); return { situacao: "SAIU" }; }
+        const result = await rq()
+          .input("membroId", sql.Int, membroId)
+          .input("dataPleito", sql.Date, dataPleito)
+          .input("dataInicioLicenca", sql.Date, dataInicioLicenca)
+          .input("criadoPor", sql.Int, usuario.membroId)
+          .query(`
+            INSERT INTO LicencasCandidatura (MembroId, DataPleito, DataInicioLicenca, CriadoPor)
+            OUTPUT INSERTED.LicencaId
+            VALUES (@membroId, @dataPleito, @dataInicioLicenca, @criadoPor)`);
+        const licencaId = result.recordset[0].LicencaId;
+        await vacancia.encerrarVinculos(executor, sql, membroId, "LICENCA_CANDIDATURA");
+        await registrarAuditoriaNaTransacao(transacao, {
+          tabela: "LicencasCandidatura",
+          registroId: licencaId,
+          acao: "Registrou licença por candidatura política",
+          usuarioId: usuario.membroId,
+          dadosDepois: { membroId, dataPleito, dataInicioLicenca }
+        });
+        return { situacao: "GRAVOU", licencaId };
       });
-      return { situacao: "GRAVOU", licencaId };
-    });
+    } catch (e) {
+      if (!ehChaveRepetida(e)) throw e;
+      desfecho = { situacao: "JA_ABERTA" };   // o índice único recusou: outra licença aberta entrou ao mesmo tempo (a transação já foi desfeita)
+    }
+    if (desfecho.situacao === "JA_ABERTA") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: MSG_JA_EM_LICENCA } };
+      return;
+    }
     if (desfecho.situacao === "OCUPADA") {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração desta pessoa está em andamento. Tente de novo em instantes." } };
       return;
@@ -174,41 +198,56 @@ module.exports = async function (context, req) {
     // em fila com a ficha e o desligamento da mesma pessoa. Só vence quem ainda encontra a licença EM_LICENCA: duas decisões ao mesmo tempo não se atropelam.
     // Cargo e Assentos não voltam sozinhos: a reatribuição é manual na tela de Pessoas, igual a qualquer pessoa reativada. Só muda a situação de quem ainda está
     // em licença: quem foi desligado ou faleceu nesse meio-tempo não volta por aqui.
+    // A situação no rol só muda de quem ainda está em licença por candidatura; se não estava mais (a ficha mudou nesse meio-tempo), a decisão fica registrada e a
+    // resposta e a trilha dizem a situação REAL, lida na mesma transação.
     const desfecho = await emTransacao(pool, async ({ rq, transacao, desistir }) => {
-      if (!(await obterTrava(rq, `escada_${membroId}`))) { await desistir(); return "OCUPADA"; }
+      if (!(await obterTrava(rq, `escada_${membroId}`))) { await desistir(); return { situacao: "OCUPADA" }; }
       const upd = await rq()
         .input("id", sql.Int, idRota)
         .input("status", sql.NVarChar(20), statusFinal)
         .input("dataRetornoDecidida", sql.Date, hojeISO)
         .input("observacao", sql.NVarChar(300), observacao ? String(observacao).slice(0, 300) : null)
         .query(`UPDATE LicencasCandidatura SET Status = @status, DataRetornoDecidida = @dataRetornoDecidida, ObservacaoRetorno = @observacao WHERE LicencaId = @id AND Status = 'EM_LICENCA'`);
-      if (!((upd.rowsAffected && upd.rowsAffected[0]) || 0)) { await desistir(); return "JA_DECIDIDA"; }
-      await rq().input("id", sql.Int, membroId)
+      if (!((upd.rowsAffected && upd.rowsAffected[0]) || 0)) { await desistir(); return { situacao: "JA_DECIDIDA" }; }
+      const situacaoNova = retornou ? "ATIVO" : "INATIVO";
+      const mudou = await rq().input("id", sql.Int, membroId)
         .query(retornou
           ? `UPDATE MembroReferencia SET Status = 'ATIVO' WHERE MembroId = @id AND Status = 'LICENCA_CANDIDATURA'`
           : `UPDATE MembroReferencia SET Status = 'INATIVO' WHERE MembroId = @id AND Status = 'LICENCA_CANDIDATURA'`);
+      const situacaoMudou = ((mudou.rowsAffected && mudou.rowsAffected[0]) || 0) > 0;
+      let situacaoNoRol = situacaoNova;
+      let nomeDaSituacao = situacaoNova;
+      if (!situacaoMudou) {
+        const atual = (await rq().input("id", sql.Int, membroId)
+          .query(`SELECT m.Status, s.Nome FROM MembroReferencia m LEFT JOIN StatusMembro s ON s.Sigla = m.Status WHERE m.MembroId = @id`)).recordset[0] || {};
+        situacaoNoRol = atual.Status || null;
+        nomeDaSituacao = atual.Nome || atual.Status || "sem situação";
+      }
       await registrarAuditoriaNaTransacao(transacao, {
         tabela: "LicencasCandidatura",
         registroId: Number(idRota),
         acao: retornou ? "Registrou retorno de licença por candidatura" : "Registrou não retorno de licença por candidatura",
         usuarioId: usuario.membroId,
-        dadosDepois: { retornou, observacao, membroId, situacaoNoRol: retornou ? "ATIVO" : "INATIVO" }
+        dadosDepois: { retornou, observacao, membroId, situacaoNoRol, situacaoMudou }
       });
-      return "GRAVOU";
+      return { situacao: "GRAVOU", situacaoMudou, nomeDaSituacao };
     });
-    if (desfecho === "OCUPADA") {
+    if (desfecho.situacao === "OCUPADA") {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração desta pessoa está em andamento. Tente de novo em instantes." } };
       return;
     }
-    if (desfecho === "JA_DECIDIDA") {
+    if (desfecho.situacao === "JA_DECIDIDA") {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Esta licença já teve o retorno registrado." } };
       return;
     }
 
+    const decisao = retornou ? "✅ Retorno registrado" : "✅ Registrado: a pessoa não retornou";
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json" },
-      body: { sucesso: true, mensagem: retornou ? "✅ Retorno registrado — status voltou para ATIVO." : "✅ Registrado: a pessoa não retornou e fica INATIVO no rol." }
+      body: { sucesso: true, mensagem: desfecho.situacaoMudou
+        ? (retornou ? "✅ Retorno registrado — status voltou para ATIVO." : "✅ Registrado: a pessoa não retornou e fica INATIVO no rol.")
+        : `${decisao}. A situação dela no rol não mudou: ela já não estava em licença por candidatura e continua como ${desfecho.nomeDaSituacao}.` }
     };
     return;
   }

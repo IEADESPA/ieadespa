@@ -1671,7 +1671,8 @@ async function excluirApresentacaoCriancaAcao(apresentacaoId) {
 }
 
 // ---- LICENÇA POR CANDIDATURA (v1.9 — Reg. Art. 157 §2º) ----
-const ROTULO_STATUS_LICENCA = { EM_LICENCA: "Em licença", RETORNOU: "Retornou", NAO_RETORNOU: "Não retornou" };
+// DUPLICADA: a segunda licença aberta da mesma pessoa, fechada pela migração 301 (uma licença aberta por pessoa, decisão de 25/11/2026).
+const ROTULO_STATUS_LICENCA = { EM_LICENCA: "Em licença", RETORNOU: "Retornou", NAO_RETORNOU: "Não retornou", DUPLICADA: "Duplicada (fechada)" };
 
 async function carregarLicencasCandidatura(membroId) {
   const container = document.getElementById("resultadoListaLicencasCandidatura");
@@ -1727,9 +1728,9 @@ function pedirDecisaoRetornoLicenca() {
     const caixa = document.getElementById("modalCaixa");
     caixa.innerHTML = `
       <h3>Registrar retorno da Licença por Candidatura</h3>
-      <p class="subtitle">Decisão da Diretoria após o pleito. Se retornou, o status do membro volta pra ATIVO
-        (Cargo/Assentos precisam ser reatribuídos manualmente). Se não retornou, o status do membro não muda
-        sozinho — o próximo passo (ex: desligamento) fica por conta de quem está operando.</p>
+      <p class="subtitle">Decisão da Diretoria após o pleito. Se retornou, o status do membro volta para ATIVO
+        (Cargo/Assentos precisam ser reatribuídos manualmente). Se não retornou, a pessoa fica INATIVO no rol
+        (o desligamento, se for o caso, é feito depois, pelo botão Desligar).</p>
       <div class="modal-acoes">
         <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
         <button class="btn-confirmar btn-perigo" id="modalNaoRetornou">Não retornou</button>

@@ -181,3 +181,95 @@ describe("o retorno da licença numa transação só", () => {
     expect(rodou(/UPDATE MembroReferencia SET Status/)).toHaveLength(0);
   });
 });
+
+// Uma licença por candidatura aberta por pessoa (revisão de fora, 25/11/2026: L2/E1). A segunda é recusada com a mensagem clara: antes do nível do cargo e do 428
+// (não se pede confirmação para o que vai ser recusado), de novo dentro da transação (sob a trava da escada) e, por último, pelo índice único filtrado do banco
+// (migração 301): o erro de chave repetida vira a mesma mensagem.
+describe("uma licença aberta por pessoa", () => {
+  const ABERTA = /FROM LicencasCandidatura( WITH \(UPDLOCK, HOLDLOCK\))? WHERE MembroId = @id AND Status = 'EM_LICENCA'/;
+
+  test("a pessoa já tem licença aberta: recusa com a mensagem clara, antes do nível do cargo e do 428, sem transação nem gravação", async () => {
+    cargo = { EscopoTipo: "AREA", EscopoId: 3 };
+    quando(ABERTA, [{ LicencaId: 3 }]);
+    const r = await criar(local({ fator: { via: "NENHUM", em: Date.now() } }));
+    expect(r.status).toBe(200);
+    expect(r.body.sucesso).toBe(false);
+    expect(r.body.mensagem).toMatch(/já tem uma licença por candidatura aberta/);
+    expect(mockTransacoes).toHaveLength(0);
+    expect(escritas()).toHaveLength(0);
+    expect(vacancia.encerrarVinculos).not.toHaveBeenCalled();
+    expect(rodou(ABERTA)[0].inputs.id).toBe(10);
+  });
+
+  test("a licença aberta aparece entre a conferência e a transação: a conferência de dentro (com a trava) recusa, nada fica", async () => {
+    let vez = 0;
+    quando(ABERTA, () => (++vez === 1 ? [] : [{ LicencaId: 3 }]));
+    const r = await criar(local());
+    expect(r.body.sucesso).toBe(false);
+    expect(r.body.mensagem).toMatch(/já tem uma licença por candidatura aberta/);
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["desfeita"]);
+    const dentro = rodou(ABERTA).find((c) => c.transacao === 1);
+    expect(dentro.sql).toMatch(/WITH \(UPDLOCK, HOLDLOCK\)/);
+    expect(rodou(/INSERT INTO LicencasCandidatura/)).toHaveLength(0);
+    expect(rodou(/UPDATE MembroReferencia SET Status = 'LICENCA_CANDIDATURA'/)).toHaveLength(0);
+    expect(vacancia.encerrarVinculos).not.toHaveBeenCalled();
+  });
+
+  test.each([2601, 2627])("o índice único recusa a segunda (erro %i): a mesma mensagem, tudo desfeito", async (numero) => {
+    mockRegras = mockRegras.filter(([padrao]) => !padrao.test("INSERT INTO LicencasCandidatura"));
+    quando(/INSERT INTO LicencasCandidatura/, () => { const e = new Error("Cannot insert duplicate key row"); e.number = numero; throw e; });
+    const r = await criar(local());
+    expect(r.status).toBe(200);
+    expect(r.body.sucesso).toBe(false);
+    expect(r.body.mensagem).toMatch(/já tem uma licença por candidatura aberta/);
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["desfeita"]);
+  });
+
+  test("outro erro do banco no INSERT não vira a mensagem da licença aberta: sobe, tudo desfeito", async () => {
+    mockRegras = mockRegras.filter(([padrao]) => !padrao.test("INSERT INTO LicencasCandidatura"));
+    quando(/INSERT INTO LicencasCandidatura/, () => { const e = new Error("deadlock"); e.number = 1205; throw e; });
+    await expect(criar(local())).rejects.toThrow("deadlock");
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["desfeita"]);
+  });
+
+  test("sem licença aberta: registra como sempre (a conferência roda fora e dentro da transação)", async () => {
+    const r = await criar(local());
+    expect(r.status).toBe(201);
+    expect(rodou(ABERTA).map((c) => c.transacao)).toEqual([null, 1]);
+  });
+});
+
+// O retorno responde e registra a VERDADE (revisão de fora, 25/11/2026: E1): se a pessoa não estava mais em licença por candidatura no rol, a situação dela não
+// muda; a decisão fica registrada, mas a resposta e a trilha dizem a situação real, sem anunciar "voltou para ATIVO" nem "fica INATIVO".
+describe("o retorno diz a situação real da pessoa", () => {
+  async function decidir(retornou) {
+    const context = { bindingData: { id: "5" }, log: { error() {}, info() {}, warn() {}, verbose() {} } };
+    await hLicencas(context, { method: "POST", query: {}, body: { retornou }, headers: { "x-auth-token": sessao(1), "x-forwarded-for": "177.40.1.2:5000, 40.70.146.136:6000" } });
+    return context.res;
+  }
+  beforeEach(() => {
+    quando(/SELECT MembroId, Status FROM LicencasCandidatura WHERE LicencaId = @id/, [{ MembroId: 10, Status: "EM_LICENCA" }]);
+    quando(/UPDATE LicencasCandidatura SET Status = @status/, [], 1);
+  });
+
+  test.each([[true, "ATIVO"], [false, "INATIVO"]])("retornou=%s, mas a pessoa já não estava em licença no rol (está Afastado): a resposta e a trilha dizem Afastado", async (retornou, alvo) => {
+    quando(new RegExp(`UPDATE MembroReferencia SET Status = '${alvo}'`), [], 0);
+    quando(/SELECT m\.Status, s\.Nome FROM MembroReferencia m/, [{ Status: "AFASTADO", Nome: "Afastado" }]);
+    const r = await decidir(retornou);
+    expect(r.body.sucesso).toBe(true);
+    expect(r.body.mensagem).not.toMatch(/voltou para ATIVO|fica INATIVO/);
+    expect(r.body.mensagem).toMatch(/não mudou/);
+    expect(r.body.mensagem).toMatch(/Afastado/);
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["confirmada"]);
+    const trilha = registrarAuditoriaNaTransacao.mock.calls[0][1];
+    expect(trilha.dadosDepois).toMatchObject({ retornou, situacaoNoRol: "AFASTADO", situacaoMudou: false });
+    expect(rodou(/SELECT m\.Status, s\.Nome FROM MembroReferencia m/)[0].transacao).toBe(1);
+  });
+
+  test("a situação mudou de verdade: a resposta de sempre e a trilha com a situação nova", async () => {
+    quando(/UPDATE MembroReferencia SET Status = 'INATIVO'/, [], 1);
+    const r = await decidir(false);
+    expect(r.body.mensagem).toBe("✅ Registrado: a pessoa não retornou e fica INATIVO no rol.");
+    expect(registrarAuditoriaNaTransacao.mock.calls[0][1].dadosDepois).toMatchObject({ situacaoNoRol: "INATIVO", situacaoMudou: true });
+  });
+});

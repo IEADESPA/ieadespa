@@ -170,7 +170,7 @@ async function alternarMeusDadosLGPD() {
 
   const m = data.membro;
   const ROTULO_MODALIDADE = { CIVIL_E_RELIGIOSO: "Civil e Religioso", SOMENTE_RELIGIOSO: "Somente Religioso" };
-  const ROTULO_STATUS_LIC = { EM_LICENCA: "Em licença", RETORNOU: "Retornou", NAO_RETORNOU: "Não retornou" };
+  const ROTULO_STATUS_LIC = { EM_LICENCA: "Em licença", RETORNOU: "Retornou", NAO_RETORNOU: "Não retornou", DUPLICADA: "Duplicada (fechada)" };
 
   caixa.innerHTML = `
     <div class="cartao-perfil">

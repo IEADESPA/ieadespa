@@ -357,6 +357,26 @@ const opcoes = (amb) => amb.e("consagracaoModalidade").options;
   ok(emitir(72), "Carta de Mudança confirmada pelo membro: o botão Emitir aparece");
   ok(emitir(73), "Carta de Recomendação pedida: o botão Emitir continua");
 
+  // Decisão de 25/11/2026: uma licença por candidatura aberta por pessoa; a migração 301 fecha as duplicadas antigas com a marca DUPLICADA. Quem não retorna fica
+  // INATIVO no rol (resposta do responsável, 25/11/2026): o aviso do modal diz isso.
+  console.log("== licença por candidatura: a marca DUPLICADA e o aviso do retorno ==");
+  const lc = montar({ geral: true });
+  lc.ev(extrair("modulos/pessoas.js", ["ROTULO_STATUS_LICENCA", "carregarLicencasCandidatura", "pedirDecisaoRetornoLicenca"]), "pessoas.js(licenca)");
+  lc.api.rotas["GET licencas-candidatura"] = { corpo: [
+    { licencaId: 81, membroId: 601, nome: "Pessoa de Teste", dataPleito: "2026-10-04", dataInicioLicenca: "2026-07-06", status: "EM_LICENCA" },
+    { licencaId: 82, membroId: 601, nome: "Pessoa de Teste", dataPleito: "2026-10-04", dataInicioLicenca: "2026-07-06", status: "DUPLICADA" }
+  ] };
+  await lc.g("carregarLicencasCandidatura")(601);
+  const linhasLic = lc.e("resultadoListaLicencasCandidatura").innerHTML.split("<tr>").filter((l) => l.includes("2026-10-04"));
+  ok(linhasLic.length === 2 && /Em licença/.test(linhasLic[0]) && /Registrar retorno/.test(linhasLic[0]), "a licença aberta: 'Em licença' e o botão do retorno", linhasLic[0]);
+  ok(/Duplicada \(fechada\)/.test(linhasLic[1]) && !/DUPLICADA/.test(linhasLic[1]) && !/Registrar retorno/.test(linhasLic[1]),
+    "a duplicada fechada pela migração: o rótulo em português e sem o botão do retorno", linhasLic[1]);
+  lc.g("pedirDecisaoRetornoLicenca")();
+  const aviso = lc.e("modalCaixa").textContent.replace(/\s+/g, " ");
+  ok(/não retornou, a pessoa fica INATIVO no rol/.test(aviso) && !/não muda sozinho/.test(aviso), "o aviso do retorno diz que quem não retorna fica INATIVO", aviso);
+  lc.e("modalCancelar").onclick();
+  ok(/const ROTULO_STATUS_LIC = \{[^}]*DUPLICADA: "Duplicada \(fechada\)"/.test(lerApp("modulos/meu-painel.js")), "Meus Dados (o próprio membro): a duplicada com o mesmo rótulo");
+
   console.log("== Meus Dados: data pura sem o dia a menos ==");
   ok(amb.g("formatarValorLgpd")("2026-10-28", "data") === "28/10/2026", "2026-10-28 aparece 28/10/2026");
   ok(amb.g("formatarValorLgpd")(null, "data") === "-", "sem data: '-'");

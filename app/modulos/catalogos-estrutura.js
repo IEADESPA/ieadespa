@@ -466,9 +466,11 @@ async function salvarAssentoCLI() {
 }
 
 async function encerrarAssentoCLIAcao(assentoId) {
-  if (!(await confirmarAcao("Encerrar esta cadeira?", "Encerrar"))) return;
+  // volta 10: encerrar pede o motivo (vai para a cadeira e para a trilha; o servidor recusa sem ele); sem motivo, nada se encerra
+  const motivo = await pedirTexto("Encerrar esta cadeira: qual o motivo?", "Ex.: fim do mandato, ou ainda não é membro (congregado)", "", { botao: "Encerrar", maximo: 200 });
+  if (!motivo) return;
   const res = await fetchProtegido(`${API_BASE}/assentos/${assentoId}/encerrar`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivoEncerramento: motivo })
   });
   const data = await res.json();
   avisarResultado(data);
@@ -497,7 +499,7 @@ function tabelaComissaoCalculada(lista, siglaCadastroManual) {
 
 async function removerMembroComissaoAcao(sigla, comissaoMembroId) {
   // volta 9: encerrar a vaga pede o motivo (vai para a vaga e para a trilha); sem motivo, nada se encerra
-  const motivo = await pedirTexto(`Remover este membro da ${sigla.toUpperCase()}: qual o motivo?`, "Ex.: ainda não é membro (congregado)", "");
+  const motivo = await pedirTexto(`Remover este membro da ${sigla.toUpperCase()}: qual o motivo?`, "Ex.: ainda não é membro (congregado)", "", { botao: "Remover", maximo: 200 });
   if (!motivo) return;
   const res = await fetchProtegido(`${API_BASE}/comissoes/${sigla}/${comissaoMembroId}/encerrar`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivoEncerramento: motivo })

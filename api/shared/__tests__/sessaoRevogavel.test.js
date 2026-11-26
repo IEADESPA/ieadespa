@@ -3,15 +3,18 @@
 // cargo alterado/removido (e os delegados dele), "Derrubar acessos desta pessoa agora", "Minhas sessões", saída do rol (vacância).
 let mockRegras = [];
 let mockConsultas = [];
-jest.mock("../db", () => ({
-  getPool: async () => ({ request: () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
+jest.mock("../db", () => {
+  const novaRequisicao = () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
     mockConsultas.push({ sql: texto, inputs: { ...inputs } });
     for (const [padrao, valor] of mockRegras) if (padrao.test(texto)) return { recordset: typeof valor === "function" ? valor(inputs) : valor, rowsAffected: [1] };
     return { recordset: [], rowsAffected: [0] };
-  } }; return r; } }),
-  sql: new Proxy({}, { get: () => () => undefined })
-}));
-jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), sha256: () => "" }));
+  } }; return r; };
+  // as rotas que gravam em vários passos usam uma transação (shared/transacaoCurta.js): aqui ela só repassa os pedidos
+  class Transaction { async begin() {} async commit() {} async rollback() {} }
+  class Request { constructor() { return novaRequisicao(); } }
+  return { getPool: async () => ({ request: novaRequisicao }), sql: new Proxy({ Transaction, Request }, { get: (alvo, prop) => (prop in alvo ? alvo[prop] : () => undefined) }) };
+});
+jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => true), sha256: () => "" }));
 jest.mock("../trilhas", () => ({ avaliarRequisitos: jest.fn(async () => ({ bloqueado: false })) }));
 jest.mock("../canaisDb", () => ({ sincronizarSucessoes: jest.fn(async () => ({})) }));
 jest.mock("../notificacaoEmail", () => ({ enviarEmailNotificacao: jest.fn(async () => {}) }));
@@ -321,6 +324,7 @@ describe("eventos que derrubam sessões", () => {
   test("GestaoPessoas: quem sai do rol ativo (ATIVO -> INATIVO) perde as sessões; editar sem mudar o status não derruba", async () => {
     const existente = (status) => [{ MembroId: 40, Status: status, CongregacaoNome: "Central", ExtensaoNome: null, EmailAnterior: null }];
     quando(/FROM Congregacoes WHERE CongregacaoId = @id|SELECT Nome FROM Congregacoes/, [{ Nome: "Central", CongregacaoId: 1 }]);
+    quando(/FROM StatusMembro WHERE Sigla = @sigla/, (i) => [{ Sigla: i.sigla, Ativa: 1 }]);   // a situação nova está no catálogo
     quando(REVOGA_DO_MEMBRO, abertasPorMembro({ 40: [SID.alvo] }));
     quando(/UPDATE MembroReferencia SET Nome/, []);   // v8.2: o UPDATE confere o cargo lido (aqui ele não mudou: 1 linha)
     const tk = sessaoDe(5, SID.atual, { permissoes: ["pessoas"] });
@@ -343,6 +347,7 @@ describe("eventos que derrubam sessões", () => {
   test.each(["INATIVO", "LICENÇA"])("GestaoPessoas: quem sai do rol ativo (ATIVO -> %s) leva junto as delegações; as sessões de quem as recebeu caem", async (statusNovo) => {
     const existente = [{ MembroId: 40, Status: "ATIVO", CongregacaoNome: "Central", ExtensaoNome: null, EmailAnterior: null }];
     quando(/FROM Congregacoes WHERE CongregacaoId = @id|SELECT Nome FROM Congregacoes/, [{ Nome: "Central", CongregacaoId: 1 }]);
+    quando(/FROM StatusMembro WHERE Sigla = @sigla/, (i) => [{ Sigla: i.sigla, Ativa: 1 }]);   // a situação nova está no catálogo
     quando(/UPDATE DelegacoesAcesso SET Status = 'CANCELADA'[\s\S]*OUTPUT INSERTED\.DelegadoMembroId/, [{ DelegadoMembroId: 77 }]);
     quando(REVOGA_DO_MEMBRO, abertasPorMembro({ 40: [SID.alvo], 77: [SID.delegado] }));
     quando(/UPDATE MembroReferencia SET Nome/, []);

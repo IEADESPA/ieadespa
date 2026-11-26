@@ -3,17 +3,21 @@
 // ponta (tools/e2e-localdb/e2e-85-ficha-cpf-matricula.js).
 let mockRegras = [];
 let mockConsultas = [];
-jest.mock("../db", () => ({
-  getPool: async () => ({ request: () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
+// A gravação da ficha vai numa transação (shared/transacaoCurta.js, do acesso parte 3): a transação simulada usa as mesmas regras por texto.
+jest.mock("../db", () => {
+  const novaRequisicao = () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
     mockConsultas.push({ sql: texto, inputs: { ...inputs } });
     for (const [padrao, valor] of mockRegras) if (padrao.test(texto)) return typeof valor === "function" ? valor(inputs) : valor;
     return { recordset: [], recordsets: [[]], rowsAffected: [0] };
-  } }; return r; } }),
-  sql: new Proxy({}, { get: () => () => undefined })
-}));
+  } }; return r; };
+  class Transaction { async begin() {} async commit() {} async rollback() {} }
+  class Request { constructor() { return novaRequisicao(); } }
+  const sql = new Proxy({ Transaction, Request }, { get: (alvo, prop) => (prop in alvo ? alvo[prop] : () => undefined) });
+  return { getPool: async () => ({ request: novaRequisicao }), sql };
+});
 const mockAuditoria = jest.fn(async () => true);
-jest.mock("../auditoria", () => ({ registrarAuditoria: (...a) => mockAuditoria(...a), sha256: () => "" }));
-jest.mock("../notificacaoEmail", () => ({ enviarEmailNotificacao: jest.fn(async () => {}) }));
+jest.mock("../auditoria", () => ({ registrarAuditoria: (...a) => mockAuditoria(...a), registrarAuditoriaNaTransacao: (_t, d) => mockAuditoria(d), sha256: () => "" }));
+jest.mock("../notificacaoEmail", () => ({ enviarEmailNotificacao: jest.fn(async () => true) }));
 jest.mock("../vacancia", () => ({ encerrarVinculos: jest.fn(async () => {}) }));
 jest.mock("../storage", () => ({ urlComSas: (u) => u, urlDocumentoComSas: (u) => u, salvarFoto: jest.fn(), salvarDocumento: jest.fn() }));
 
@@ -43,6 +47,8 @@ beforeEach(() => {
   mockRegras = []; mockConsultas = []; mockAuditoria.mockClear();
   // o mundo depois da importação do sistema pago (a trava das matrículas solta; a trava ligada tem os testes dela em travaMatriculas.test.js)
   quando(/FROM ImportacoesMembros WHERE Situacao = N'CONCLUIDA'/, { recordset: [{ liberadas: 1 }] });
+  // a situação no rol conferida no catálogo (acesso parte 3): ATIVO existe e está ativa
+  quando(/FROM StatusMembro WHERE Sigla = @sigla/, (i) => ({ recordset: i.sigla === "ATIVO" ? [{ Sigla: "ATIVO", Ativa: 1 }] : [] }));
   quando(/SELECT CongregacaoId, Nome FROM Congregacoes/, { recordset: [{ CongregacaoId: 1, Nome: "Central" }, { CongregacaoId: 2, Nome: "Vila Nova" }] });
   quando(/SELECT TOP 1 Nome FROM Congregacoes/, { recordset: [{ Nome: "Vila Nova" }] });
   quando(/UPDATE MembroReferencia SET Nome/, { recordset: [], rowsAffected: [1] });

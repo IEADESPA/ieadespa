@@ -132,6 +132,44 @@ describe("o lote", () => {
   });
 });
 
+// O ORÇAMENTO DE TEMPO DE CADA CHAMADA (missão C, o ensaio de 26/11/2026 no LocalDB): o lote de 200 faz ~609 idas ao banco (3 por linha). Na nuvem, cada ida
+// custa a distância entre a API e o banco; com ~74 ms por ida, o lote passaria dos 45 s do limite da chamada. A chamada para de pegar linhas quando o tempo
+// acaba, grava as que entraram e devolve as restantes (a tela já repete até concluir). Sempre ao menos uma linha por chamada (a importação anda).
+describe("o orçamento de tempo de cada chamada", () => {
+  // o relógio de mentira: cada linha gravada "custa" `custo` ms
+  function comRelogio(linhas, custo) {
+    let t = 0;
+    cenario({ linhas, gravar: () => { t += custo; return { ocupada: false, donoCpf: null }; } });
+    return () => t;
+  }
+  const tres = () => [linha({ Nome: "P2" }), linha({ Linha: 3, MatriculaArquivo: "501", Matricula: 501, Nome: "P3" }), linha({ Linha: 4, MatriculaArquivo: "502", Matricula: 502, Nome: "P4" })];
+  const tentadas = () => mockConsultas.filter((c) => /DECLARE @ocupada/.test(c.sql)).map((c) => c.inputs.nome);
+  test("o tempo acabou no meio: para de pegar linhas, grava as que entraram (com a trilha) e devolve as restantes", async () => {
+    const agora = comRelogio(tres(), 6000);
+    const r = await db.importarLote(POOL, QUEM, 7, { orcamentoMs: 10000, agora });
+    expect(tentadas()).toEqual(["P2", "P3"]);
+    expect(r).toEqual({ sucesso: true, importacaoId: 7, importadas: 2, fora: 0, restantes: 5, concluida: false });
+    expect(mockTx).toEqual(["begin", "commit"]);
+    expect(registrarAuditoriaEmLoteNaTransacao.mock.calls[0][2].map((t) => t.registroId)).toEqual([500, 501]);
+  });
+  test("com tempo de sobra, o lote vai até o fim das linhas (o TOP de sempre)", async () => {
+    const agora = comRelogio(tres(), 10);
+    const r = await db.importarLote(POOL, QUEM, 7, { orcamentoMs: 10000, agora });
+    expect(tentadas()).toEqual(["P2", "P3", "P4"]);
+    expect(r).toMatchObject({ importadas: 3, concluida: false });
+  });
+  test("ao menos uma linha por chamada, mesmo sem tempo nenhum (a importação sempre anda)", async () => {
+    const agora = comRelogio(tres(), 6000);
+    const r = await db.importarLote(POOL, QUEM, 7, { orcamentoMs: 0, agora });
+    expect(tentadas()).toEqual(["P2"]);
+    expect(r).toMatchObject({ importadas: 1, concluida: false });
+  });
+  test("o orçamento de sempre fica bem abaixo dos 45 s da chamada", () => {
+    expect(db.ORCAMENTO_LOTE_MS).toBeGreaterThanOrEqual(5000);
+    expect(db.ORCAMENTO_LOTE_MS).toBeLessThanOrEqual(15000);
+  });
+});
+
 // revisão de 23/11 (a saída do IMPORTANDO): cada lote é uma transação própria e a tela continua de onde parou; mas a linha que o banco recusa SEMPRE (um erro de
 // dado: CHECK, chave, tamanho, conversão) desfazia o lote inteiro a cada chamada, e a importação ficava presa (com as matrículas novas travadas no sistema todo).
 // Regra: a linha recusada fica de fora COMO PROBLEMA (na lista e no CSV, ninguém some calado), provada sozinha (o lote refeito sem ela, com UMA linha depois dela
@@ -243,6 +281,15 @@ describe("a linha que o banco recusa (a saída do IMPORTANDO)", () => {
     expect(r).toMatchObject({ sucesso: true, importadas: 0, fora: 1, restantes: 0, concluida: true, resultado: expect.objectContaining({ importadas: 3, fora: 1 }) });
     expect(mockConsultas.some((c) => /SET Situacao = N'CONCLUIDA'/.test(c.sql))).toBe(true);
     expect(mockTx).toEqual(["begin", "rollback", "begin", "commit"]);
+  });
+  // o orçamento de tempo (missão C, 26/11/2026) não corta a prova: o lote refeito vai até a linha depois da recusada, mesmo com o tempo acabado; senão a
+  // recusada ficaria de fora sem a prova de que é a linha, e não o banco
+  test("o orçamento de tempo não corta a prova da recusada: o lote refeito vai até a linha depois dela", async () => {
+    let t = 0;
+    cenarioRecusa({ linhas: tres(), recusar: (i) => { t += 6000; return i.nome === "Recusada"; } });
+    const r = await db.importarLote(POOL, QUEM, 7, { orcamentoMs: 10000, agora: () => t });
+    expect(tentadas()).toEqual(["Pessoa 2", "Recusada", "Pessoa 2", "Pessoa 4"]);
+    expect(r).toEqual({ sucesso: true, importacaoId: 7, importadas: 2, fora: 1, restantes: 5, concluida: false });
   });
 });
 

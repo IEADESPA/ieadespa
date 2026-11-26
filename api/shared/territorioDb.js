@@ -107,18 +107,22 @@ async function prepararEnderecoMembro(rq, dados, { membroId = null } = {}) {
 // Revisão de 06/11/2026 — a ficha que grava um bairro da lista o trava antes de gravar a pessoa (Bairros, depois MembroReferencia: a mesma ordem do editar e do
 // juntar, então os dois não se travam um ao outro) e relê o nome, a cidade e a UF sob a trava (a linha única nunca sai com o nome de antes de uma renomeação).
 // `fazer(rq)` grava a pessoa com as Requests da transação; devolve o que ele devolver (`{ desfazer: true }` desfaz).
+// O bairro da lista lido com trava, dentro da transação de quem chama, e a linha única refeita com ele (a gravação vem logo depois, na mesma transação).
+async function travarBairroDaFicha(rq, prep) {
+  if (!(prep && prep.partes && prep.partes.bairroId)) return;
+  const b = await lerBairro(rq, prep.partes.bairroId, { travar: true });
+  if (b) {
+    prep.partes = tr.aplicarBairro(prep.partes, b);
+    prep.endereco = tr.montarLinhaEndereco(prep.partes, b.nome);
+  }
+}
+
 async function gravarComBairroTravado(pool, prep, fazer) {
   const t = new sql.Transaction(pool);
   await t.begin();
   const rq = () => new sql.Request(t);
   try {
-    if (prep && prep.partes && prep.partes.bairroId) {
-      const b = await lerBairro(rq, prep.partes.bairroId, { travar: true });
-      if (b) {
-        prep.partes = tr.aplicarBairro(prep.partes, b);
-        prep.endereco = tr.montarLinhaEndereco(prep.partes, b.nome);
-      }
-    }
+    await travarBairroDaFicha(rq, prep);
     const r = await fazer(rq, t);   // v10.1b passo 5: a transação vai junto (a trilha gravada dentro dela)
     if (r && r.desfazer) await t.rollback(); else await t.commit();
     return r;
@@ -596,7 +600,9 @@ async function simulacao(pool, { alcance, hoje = hojeBrasilia() }) {
     criterios: criterios.filter((c) => c.ativo),
     extensoes: extensoes.map((e) => {
       const m = medidas.get(e.extensaoId) || {};
-      const avaliacao = tr.avaliarExtensao(criterios, m);
+      // o critério do Encarregado em comunhão: só quem cuida da Mãe (o Dirigente, a CME da própria área) e o nível geral o veem (shared/territorio.js)
+      const cuidaDaMae = !!cobre(alcance, e.maeNome);
+      const avaliacao = tr.avaliarExtensaoParaQuemVe(criterios, m, { cuidaDaMae });
       // só o que os critérios ativos usam sai da resposta (o resto nem é preciso para a tela); o dízimo médio de menos de 3 dizimistas sai sem o valor
       const ativos = new Set(avaliacao.itens.map((i) => i.indicador));
       const ocultarDizimo = (Number(m.DIZIMISTAS_12M) || 0) < MINIMO_DIZIMISTAS_PARA_MOSTRAR;
@@ -606,11 +612,17 @@ async function simulacao(pool, { alcance, hoje = hojeBrasilia() }) {
       return {
         extensaoId: e.extensaoId, nome: e.nome, maeNome: e.maeNome, abertaEm: e.abertaEm, medidas: visiveis, avaliacao, pedidoEmAndamento: e.pedidoEmAndamento,
         // o atalho para o pedido de emancipação da v9.2: quem cuida da Mãe (o Dirigente, o Pastor da Área) ou o nível geral, e sem pedido já correndo
-        podePedir: avaliacao.situacao === "ATENDE_TUDO" && !e.pedidoEmAndamento && cobre(alcance, e.maeNome)
+        podePedir: avaliacao.situacao === "ATENDE_TUDO" && !e.pedidoEmAndamento && cuidaDaMae
       };
-    }).sort((a, b) => (Number(b.avaliacao.situacao === "ATENDE_TUDO") - Number(a.avaliacao.situacao === "ATENDE_TUDO")) || (b.avaliacao.atendidos - a.avaliacao.atendidos)
-      || a.maeNome.localeCompare(b.maeNome, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR"))
+    }).sort(ordemDaSimulacao)
   };
+}
+// A ordem da simulação: quem atende tudo primeiro, depois quem atende mais; as que não dá para avaliar daqui vão por último; no empate, pela Mãe e pelo nome.
+function ordemDaSimulacao(a, b) {
+  const fim = (x) => Number(x.avaliacao.situacao === "NAO_AVALIAVEL");
+  const tudo = (x) => Number(x.avaliacao.situacao === "ATENDE_TUDO");
+  return (fim(a) - fim(b)) || (tudo(b) - tudo(a)) || ((b.avaliacao.atendidos || 0) - (a.avaliacao.atendidos || 0))
+    || a.maeNome.localeCompare(b.maeNome, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR");
 }
 
 async function listarCriterios(pool) {
@@ -652,7 +664,7 @@ async function bairrosParaEscolher(pool) {
 }
 
 module.exports = {
-  SELECT_PARTES_MEUS: SELECT_PARTES, bairrosParaEscolher, gravarComBairroTravado, SO_MEMBROS, MINIMO_DIZIMISTAS_PARA_MOSTRAR,
+  SELECT_PARTES_MEUS: SELECT_PARTES, bairrosParaEscolher, gravarComBairroTravado, travarBairroDaFicha, SO_MEMBROS, MINIMO_DIZIMISTAS_PARA_MOSTRAR,
   SO_GERAL, catalogos, mapa, listarBairros, criarBairro, editarBairro, ativarBairro, juntarBairros, marcarPontoExtensao, extensoesDoMapa, mudarRaio,
   listarCriterios, criarCriterio, editarCriterio, apagarCriterio, simulacao, medidasDasExtensoes, dadosDoTitular, atosDoTitular,
   prepararEnderecoMembro, entradasEndereco, linhasDiantedaLinhaLegada, SET_ENDERECO, COLUNAS_ENDERECO, VALORES_ENDERECO, partesDaLinha, iso

@@ -9,7 +9,7 @@
 // GET  /api/importacao-membros/lista.csv?importacaoId=  -> a lista dos que não entram ou entram com aviso, para abrir no Excel
 // POST /api/importacao-membros/descartar                -> { importacaoId } — a prévia sai (os dados pessoais das linhas também)
 // POST /api/importacao-membros/confirmar                -> { importacaoId } — confirmação reforçada (428): a prévia vira a importação; daqui não volta
-// POST /api/importacao-membros/lote                     -> { importacaoId } — importa o próximo lote (até 200); a tela chama até "concluida"
+// POST /api/importacao-membros/lote                     -> { importacaoId } — importa o próximo lote (até 200, ou o que couber em ~10 s); a tela chama até "concluida"
 // Regras (decisões do responsável, 18/11 e 22/11/2026): uma vez só; colunas extras aceitas; a matrícula que já é de uma ficha do sistema fica de fora (a rodada
 // 28); matrícula repetida no arquivo ou zerada entra com a próxima do sistema e a pendência NUMERO; possível repetida, a pendência REPETIDA; a linha sem congregação ("IEADESPA - GERAL" ou vazia) fica de fora (G3, 24/11); todo importado em "Arrolamento a completar" (sem voto) com a
 // pendência ARROLAMENTO (shared/importacaoMembros.js e shared/importacaoMembrosDb.js).

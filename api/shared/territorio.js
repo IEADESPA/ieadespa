@@ -275,6 +275,19 @@ function avaliarExtensao(criterios, medidas) {
   else if (itens.some((i) => i.resultado === "SEM_DADO")) situacao = "SEM_DADO";
   return { situacao, itens, atendidos: itens.filter((i) => i.resultado === "ATENDE").length, total: itens.length };
 }
+// O critério "Encarregado em comunhão" diz algo da pessoa dele: só quem cuida da Congregação-Mãe (o Dirigente, a CME da própria área) e o nível geral o veem
+// (regra de 25/11/2026, a mesma da pendência do Encarregado na v9.2). Para os outros, o critério sai antes da avaliação e a Extensão fica NAO_AVALIAVEL
+// ("não dá para avaliar daqui"), sem a contagem. Com o critério desligado ou apagado, a avaliação é a de sempre para todos. Sem dizer quem vê, fecha.
+const INDICADORES_DA_PESSOA = ["ENCARREGADO_EM_COMUNHAO"];
+function avaliarExtensaoParaQuemVe(criterios, medidas, { cuidaDaMae = false } = {}) {
+  const lista = criterios || [];
+  const daPessoa = (c) => INDICADORES_DA_PESSOA.includes(c.indicador);
+  if (cuidaDaMae === true || !lista.some((c) => c.ativo && daPessoa(c))) return avaliarExtensao(lista, medidas);
+  const semPessoa = { ...(medidas || {}) };
+  for (const k of INDICADORES_DA_PESSOA) delete semPessoa[k];
+  const { itens } = avaliarExtensao(lista.filter((c) => !daPessoa(c)), semPessoa);
+  return { situacao: "NAO_AVALIAVEL", itens, atendidos: null, total: null };
+}
 
 // ---------------------------------------------------------------- datas ----------------------------------------------------------------
 // Meses completos entre a abertura e hoje (a abertura em 15/03 faz 1 mês em 15/04).
@@ -297,5 +310,5 @@ module.exports = {
   CAMPOS_ENDERECO, LIMITES_ENDERECO, LIMPAR_ENDERECO_LINHAS, UFS, RAIO_PADRAO_KM, INDICADORES, OPERADORES,
   normalizarCep, validarEnderecoPartes, aplicarBairro, montarLinhaEndereco, enderecoVazio: vazio,
   validarPonto, interpretarPonto, distanciaKm, validarBairro, validarRaio, cobertura, densidadePorUnidade, maisPerto,
-  validarCriterio, avaliarCriterio, avaliarExtensao, mesesEntre, janela12Meses
+  validarCriterio, avaliarCriterio, avaliarExtensao, avaliarExtensaoParaQuemVe, mesesEntre, janela12Meses
 };

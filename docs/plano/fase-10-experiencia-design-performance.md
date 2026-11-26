@@ -1057,6 +1057,7 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
   O código já faz assim.
 - **"Descartar a prévia" e a guarda dos dados da importação, respostas dele (23/11/2026, à noite), que substituem o "não
   precisa de botão":**
+  - Subir a planilha certa substitui a prévia; além disso, a tela ganha o botão "Descartar".
   - A prévia que não foi confirmada (com CPF, celular, mãe e pai) **se apaga sozinha em 7 dias**. A tela ganha um botão
     **"Descartar"** para apagar na hora.
   - A lista dos que ficaram de fora (nome e motivo) **fica 90 dias depois de a importação terminar** e depois se apaga

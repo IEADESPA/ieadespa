@@ -169,3 +169,22 @@ describe("GET /api/pessoas?pagina=N — a lista em páginas", () => {
     expect(listaDoCadastro()).toHaveLength(0);
   });
 });
+
+// A ficha só restringe a situação de quem está com a licença por candidatura ABERTA (decisão de 25/11/2026): a lista diz quem está nela (licencaAberta).
+describe("GET /api/pessoas: licencaAberta", () => {
+  const geral = () => tokenDe({ nivel: "GLOBAL", escopoCongregacoes: "TODAS" });
+  test("em LICENCA_CANDIDATURA com a licença aberta: true; com a licença já encerrada e fora da licença: false", async () => {
+    quando(/FROM MembroReferencia m/, { recordset: [pessoa(7, "Ana", "Central", { status: "LICENCA_CANDIDATURA" }), pessoa(8, "Bia", "Central", { status: "LICENCA_CANDIDATURA" }),
+      pessoa(9, "Cida", "Central")] });
+    quando(/SELECT MembroId FROM LicencasCandidatura WHERE Status = 'EM_LICENCA'/, { recordset: [{ MembroId: 7 }, { MembroId: 9 }] });
+    const r = await listar(geral());
+    expect(r.status).toBe(200);
+    expect(r.body.map((p) => [p.membroId, p.licencaAberta])).toEqual([[7, true], [8, false], [9, false]]);
+  });
+  test("ninguém em licença na lista: nenhuma consulta às licenças", async () => {
+    quando(/FROM MembroReferencia m/, { recordset: [pessoa(7, "Ana", "Central")] });
+    const r = await listar(geral());
+    expect(r.body[0].licencaAberta).toBe(false);
+    expect(rodou(/LicencasCandidatura/)).toHaveLength(0);
+  });
+});

@@ -17,7 +17,8 @@ jest.mock("../db", () => {
     for (const [padrao, valor, afetadas] of mockRegras) {
       if (padrao.test(texto)) return { recordset: typeof valor === "function" ? valor(inputs) : valor, rowsAffected: [afetadas === undefined ? 1 : afetadas] };
     }
-    return { recordset: [], rowsAffected: [/^\s*(UPDATE|DELETE)\b/i.test(texto) ? 1 : 0] };
+    // o pedido dentro da transação vem com "SET XACT_ABORT ON;" na frente (shared/transacaoCurta.js)
+    return { recordset: [], rowsAffected: [/^\s*(SET XACT_ABORT ON;\s*)?(UPDATE|DELETE)\b/i.test(texto) ? 1 : 0] };
   };
   const novaRequisicao = () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: (texto) => rodar(texto, inputs) }; return r; };
   class Transaction { async begin() { mockTransacao.begin++; } async commit() { mockTransacao.commit++; } async rollback() { mockTransacao.rollback++; } }
@@ -87,6 +88,8 @@ describe("a trava em si (shared/matriculaNova.js)", () => {
 describe("o \"Cadastrar\" (GestaoPessoas)", () => {
   const novo = (extra = {}) => ({ nome: "Pessoa Nova", congregacaoId: 2, status: "ATIVO", dataNascimento: "2000-01-01", gerarMatricula: true, ...extra });
   beforeEach(() => {
+    // a situação no rol conferida no catálogo (acesso parte 3): ATIVO existe e está ativa
+    quando(/FROM StatusMembro WHERE Sigla = @sigla/, (i) => (i.sigla === "ATIVO" ? [{ Sigla: "ATIVO", Ativa: 1 }] : []));
     quando(/SELECT TOP 1 Nome FROM Congregacoes/, [{ Nome: "Vila Nova" }]);
     quando(/AS cpfMascarado[\s\S]*WHERE m\.MembroId = @id/, (i) => [linhaFicha(i.id)]);
   });

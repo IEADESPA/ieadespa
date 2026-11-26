@@ -12,7 +12,7 @@ const { sql } = require("./db");
 const regra = require("./credencial");
 const certificados = require("./certificados");
 const { obterTrava } = require("./financeiroSeguro");
-const { registrarAuditoria } = require("./auditoria");
+const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("./auditoria");
 const { violouUnicidade } = require("./violacaoUnica");
 
 const NAO_EXISTE = { sucesso: false, naoExiste: true };
@@ -187,14 +187,17 @@ async function cancelar(pool, { membroId, motivo, por }) {
 }
 
 // Desligamento e minimização (o recolhimento do Art. 95 §2º, IV, a): a credencial válida é cancelada junto.
-async function cancelarNoDesligamento(pool, membroId, motivo, por = null) {
+// `transacao` (opcional): a transação de quem chama (a minimização); a trilha vai nela, junto com o cancelamento.
+async function cancelarNoDesligamento(pool, membroId, motivo, por = null, transacao = null) {
   const r = await pool.request().input("m", sql.Int, Number(membroId)).input("motivo", sql.NVarChar(300), motivo || "Desligamento").input("por", sql.Int, por)
     .query(`UPDATE CredenciaisEclesiasticas SET Situacao = N'CANCELADA', EncerradaEm = SYSUTCDATETIME(), EncerradaPor = @por, MotivoEncerramento = @motivo
             OUTPUT INSERTED.CredencialId
             WHERE MembroId = @m AND Situacao = N'VALIDA'`);
   const cancelada = r && r.recordset && r.recordset[0];
   if (cancelada) {
-    await registrarAuditoria({ tabela: "CredenciaisEclesiasticas", registroId: cancelada.CredencialId, acao: "CREDENCIAL_RECOLHIDA", usuarioId: por, dadosDepois: { membroId: Number(membroId), motivo: motivo || "Desligamento" } });
+    const registro = { tabela: "CredenciaisEclesiasticas", registroId: cancelada.CredencialId, acao: "CREDENCIAL_RECOLHIDA", usuarioId: por, dadosDepois: { membroId: Number(membroId), motivo: motivo || "Desligamento" } };
+    if (transacao) await registrarAuditoriaNaTransacao(transacao, registro);
+    else await registrarAuditoria(registro);
   }
 }
 

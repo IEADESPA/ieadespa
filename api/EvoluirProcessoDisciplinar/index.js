@@ -15,15 +15,21 @@
 // Exige a permissão "disciplina" (HOMOLOGAR_EXCLUSAO exige também "cei").
 // POST /api/processos-disciplinares/{processoId}/evoluir
 const auth = require("../shared/auth");
-const { registrarAuditoria } = require("../shared/auditoria");
+const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const { emTransacao } = require("../shared/transacaoCurta");
+const { obterTrava } = require("../shared/financeiroSeguro");
 const vacancia = require("../shared/vacancia");
+const licencaCandidatura = require("../shared/licencaCandidatura");
+const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { existeParentescoAte2Grau } = require("../shared/parentesco");
 const { selectProcessoComInfracoes, validarOrgaoProcesso, SIGLAS_QUE_PODEM_RECORRER } = require("../shared/disciplinar");
 const { membroAutorizadoNoOrgaoLocal, ancestraisTerritoriais } = require("../shared/escopo");
 const { ehGeral, pessoaAlcancavel } = require("../shared/escopoRotas");
 
 const RESULTADOS_VALIDOS = ["ARQUIVADO", "SANCAO", "EXCLUSAO"];
+// As fases em que o processo ainda pode ser julgado (antes do julgamento; o EM_RECURSO se julga no processo novo da instância de cima).
+const FASES_DE_JULGAMENTO = ["EM_ANDAMENTO", "AFASTAMENTO_CAUTELAR"];
 const CANAIS_CITACAO_VALIDOS = ["WHATSAPP", "CARTA_REGISTRADA"];
 
 module.exports = async function (context, req) {
@@ -309,22 +315,33 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'homologado' (true ou false)." } };
       return;
     }
-    const gravou = await pool.request().input("id", sql.Int, processoId).input("valor", sql.Bit, homologado)
-      .query(`UPDATE ProcessosDisciplinares SET HomologadoPeloCEI = @valor, CEIRecusouEm = CASE WHEN @valor = 0 THEN SYSUTCDATETIME() ELSE NULL END
-              WHERE ProcessoId = @id AND HomologadoPeloCEI = 0 AND CEIRecusouEm IS NULL`);
-    if (!((gravou.rowsAffected && gravou.rowsAffected[0]) || 0)) {
+    // A homologação, a vacância e a trilha numa transação só: ou tudo vale, ou nada muda e o CEI pode homologar de novo. A trava da escada põe em fila com a
+    // cerimônia de consagração da mesma pessoa (como no abandono e no desligamento).
+    const desfecho = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
+      if (homologado && !(await obterTrava(rq, `escada_${atual.MembroId}`))) { await desistir(); return "OCUPADA"; }
+      const gravou = await rq().input("id", sql.Int, processoId).input("valor", sql.Bit, homologado)
+        .query(`UPDATE ProcessosDisciplinares SET HomologadoPeloCEI = @valor, CEIRecusouEm = CASE WHEN @valor = 0 THEN SYSUTCDATETIME() ELSE NULL END
+                WHERE ProcessoId = @id AND HomologadoPeloCEI = 0 AND CEIRecusouEm IS NULL`);
+      if (!((gravou.rowsAffected && gravou.rowsAffected[0]) || 0)) { await desistir(); return "MUDOU"; }
+      if (homologado) await vacancia.encerrarVinculos(executor, sql, atual.MembroId, "DISCIPLINA");
+      // a exclusão homologada fecha a licença por candidatura aberta (decisão de 25/11/2026), com o motivo neutro
+      if (homologado && atual.Resultado === "EXCLUSAO") await licencaCandidatura.encerrarLicencaAberta(executor, sql, atual.MembroId, licencaCandidatura.MOTIVO_SAIDA_DO_ROL, hojeBrasilia());
+      await registrarAuditoriaNaTransacao(transacao, {
+        tabela: "ProcessosDisciplinares", registroId: Number(processoId), acao: homologado ? "Homologou exclusão/disciplina rigorosa (CEI)" : "Não homologou (CEI)",
+        usuarioId: usuario.membroId, dadosDepois: { homologado }
+      });
+      return "GRAVOU";
+    });
+    if (desfecho === "OCUPADA") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração desta pessoa está em andamento. Tente de novo em instantes." } };
+      return;
+    }
+    if (desfecho === "MUDOU") {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Este processo não está mais pendente de homologação (outra decisão chegou antes)." } };
       return;
     }
-    if (homologado) {
-      await vacancia.encerrarVinculos(pool, sql, atual.MembroId, "DISCIPLINA");
-      // v8.4 — exclusão homologada: a credencial é recolhida (Regimento Art. 95 §2º, IV, a). Na Disciplina Rigorosa ela só fica "inativa" no QR, enquanto durar.
-      if (atual.Resultado === "EXCLUSAO") await require("../shared/credencialDb").recolherSemFalhar(pool, atual.MembroId, "Exclusão (Regimento, Art. 95 §2º, IV, a)", usuario.membroId);
-    }
-    await registrarAuditoria({
-      tabela: "ProcessosDisciplinares", registroId: Number(processoId), acao: homologado ? "Homologou exclusão/disciplina rigorosa (CEI)" : "Não homologou (CEI)",
-      usuarioId: usuario.membroId, dadosDepois: { homologado }
-    });
+    // v8.4 — exclusão homologada: a credencial é recolhida (Regimento Art. 95 §2º, IV, a), depois do commit. Na Disciplina Rigorosa ela só fica "inativa" no QR.
+    if (homologado && atual.Resultado === "EXCLUSAO") await require("../shared/credencialDb").recolherSemFalhar(pool, atual.MembroId, "Exclusão (Regimento, Art. 95 §2º, IV, a)", usuario.membroId);
     const processo = await selectProcessoComInfracoes(pool, sql, processoId);
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: homologado ? "✅ Homologado — vínculos encerrados." : "Registrado como não homologado.", processo } };
     return;
@@ -332,8 +349,12 @@ module.exports = async function (context, req) {
 
   // ---- JULGAR: encerra a fase de instrução com um resultado ----
   if (acao === "JULGAR") {
-    if (atual.Status === "JULGADO") {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Este processo já foi julgado." } };
+    // Só na fase de julgamento. O processo EM_RECURSO tem o recurso julgado no processo NOVO da instância de cima (o RECORRER nunca reabre o mesmo registro):
+    // a instância de origem não troca a própria decisão por cima dele (portão de 26/11/2026). O mesmo filtro vai no WHERE da gravação.
+    if (!FASES_DE_JULGAMENTO.includes(atual.Status)) {
+      const mensagem = atual.Status === "EM_RECURSO" ? "Este processo está em recurso: o recurso é julgado no processo da instância de cima, não neste."
+        : atual.Status === "JULGADO" ? "Este processo já foi julgado." : "Este processo não está na fase de julgamento.";
+      context.res = { status: 200, body: { sucesso: false, mensagem } };
       return;
     }
     const { resultado, diasSancao } = req.body || {};
@@ -388,38 +409,52 @@ module.exports = async function (context, req) {
     // homologação do CEI (Art. 94, II / 126-C) — a vacância fica pendente.
     const pendenteDeHomologacao = implicaVacancia && orgaoAtual.sigla === "TER";
 
-    await pool.request()
-      .input("id", sql.Int, processoId)
-      .input("resultado", sql.NVarChar(30), resultado)
-      .input("diasSancao", sql.Int, diasSancaoFinal)
-      .input("penalidadeId", sql.Int, penalidadeId || null)
-      .input("homologadoPeloCei", sql.Bit, pendenteDeHomologacao ? 0 : null)
-      .query(`
-        UPDATE ProcessosDisciplinares SET
-          Status = 'JULGADO', Resultado = @resultado, DiasSancao = @diasSancao, PenalidadeId = @penalidadeId,
-          HomologadoPeloCEI = @homologadoPeloCei,
-          DataTerminoPrevisao = CASE WHEN @diasSancao IS NOT NULL THEN DATEADD(day, @diasSancao, DataAbertura) ELSE NULL END,
-          DataConclusao = CAST(SYSUTCDATETIME() AS DATE)
-        WHERE ProcessoId = @id`);
-
     // Exclusão e Disciplina Rigorosa implicam perda de mandato (Art. 95 §2º,
     // III-IV) — encerram Assentos, Liderança e Cargo Ministerial/Departamento
     // (shared/vacancia.js). Advertência e Suspensão Temporária não perdem o
     // mandato — só ficam sem capacidade eleitoral enquanto durar a sanção
     // (shared/disciplina.js), sem tocar em Assentos/Liderança. Quando o
     // julgamento é do TER, a vacância só acontece na homologação do CEI.
-    if (implicaVacancia && !pendenteDeHomologacao) {
-      await vacancia.encerrarVinculos(pool, sql, atual.MembroId, "DISCIPLINA");
-      if (resultado === "EXCLUSAO") await require("../shared/credencialDb").recolherSemFalhar(pool, atual.MembroId, "Exclusão (Regimento, Art. 95 §2º, IV, a)", usuario.membroId);   // v8.4
-    }
-
-    await registrarAuditoria({
-      tabela: "ProcessosDisciplinares",
-      registroId: Number(processoId),
-      acao: `Julgou processo: ${resultado}${penalidadeCodigo ? ` (${penalidadeCodigo})` : ""}`,
-      usuarioId: usuario.membroId,
-      dadosDepois: { resultado, penalidadeId: penalidadeId || null, diasSancao: diasSancaoFinal, pendenteDeHomologacao }
+    const vacanciaAgora = implicaVacancia && !pendenteDeHomologacao;
+    // O julgamento, a vacância e a trilha numa transação só: ou tudo vale, ou nada muda e o julgamento pode ser repetido. O estado vai no WHERE (dois
+    // julgamentos ao mesmo tempo: só o primeiro grava).
+    const desfecho = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
+      if (vacanciaAgora && !(await obterTrava(rq, `escada_${atual.MembroId}`))) { await desistir(); return "OCUPADA"; }
+      const julgou = await rq()
+        .input("id", sql.Int, processoId)
+        .input("resultado", sql.NVarChar(30), resultado)
+        .input("diasSancao", sql.Int, diasSancaoFinal)
+        .input("penalidadeId", sql.Int, penalidadeId || null)
+        .input("homologadoPeloCei", sql.Bit, pendenteDeHomologacao ? 0 : null)
+        .query(`
+          UPDATE ProcessosDisciplinares SET
+            Status = 'JULGADO', Resultado = @resultado, DiasSancao = @diasSancao, PenalidadeId = @penalidadeId,
+            HomologadoPeloCEI = @homologadoPeloCei,
+            DataTerminoPrevisao = CASE WHEN @diasSancao IS NOT NULL THEN DATEADD(day, @diasSancao, DataAbertura) ELSE NULL END,
+            DataConclusao = CAST(SYSUTCDATETIME() AS DATE)
+          WHERE ProcessoId = @id AND Status IN ('EM_ANDAMENTO', 'AFASTAMENTO_CAUTELAR')`);
+      if (!((julgou.rowsAffected && julgou.rowsAffected[0]) || 0)) { await desistir(); return "JA_JULGADO"; }
+      if (vacanciaAgora) await vacancia.encerrarVinculos(executor, sql, atual.MembroId, "DISCIPLINA");
+      // a exclusão com efeito já fecha a licença por candidatura aberta (decisão de 25/11/2026), com o motivo neutro
+      if (vacanciaAgora && resultado === "EXCLUSAO") await licencaCandidatura.encerrarLicencaAberta(executor, sql, atual.MembroId, licencaCandidatura.MOTIVO_SAIDA_DO_ROL, hojeBrasilia());
+      await registrarAuditoriaNaTransacao(transacao, {
+        tabela: "ProcessosDisciplinares",
+        registroId: Number(processoId),
+        acao: `Julgou processo: ${resultado}${penalidadeCodigo ? ` (${penalidadeCodigo})` : ""}`,
+        usuarioId: usuario.membroId,
+        dadosDepois: { resultado, penalidadeId: penalidadeId || null, diasSancao: diasSancaoFinal, pendenteDeHomologacao }
+      });
+      return "JULGOU";
     });
+    if (desfecho === "OCUPADA") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração desta pessoa está em andamento. Tente de novo em instantes." } };
+      return;
+    }
+    if (desfecho === "JA_JULGADO") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Este processo já foi julgado." } };
+      return;
+    }
+    if (vacanciaAgora && resultado === "EXCLUSAO") await require("../shared/credencialDb").recolherSemFalhar(pool, atual.MembroId, "Exclusão (Regimento, Art. 95 §2º, IV, a)", usuario.membroId);   // v8.4, depois do commit
 
     const processo = await selectProcessoComInfracoes(pool, sql, processoId);
     context.res = {

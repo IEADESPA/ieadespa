@@ -242,6 +242,32 @@ describe("EdicaoFicha — a secretaria, campo a campo", () => {
     expect(r.body).not.toHaveProperty("emailAnterior");
     expect(enviarEmailNotificacao.mock.calls[0][0].email).toBe("ana@exemplo.org");
   });
+  // A mescla do acesso parte 3 (26/11/2026; regra do responsável de 25 e 26/11): trocar ou apagar o e-mail de quem tem cargo vigente é da secretaria do nível
+  // do cargo (ou de cima), com a confirmação recente: o e-mail é por onde chega o código de acesso. A mesma régua do cadastro completo (GestaoPessoas).
+  test("o e-mail de quem tem cargo geral: a secretaria local não troca (403); a Geral troca só com a confirmação recente (428 sem ela)", async () => {
+    quando(/FROM Lideranca l WHERE l\.MembroId = @id/, (i) => (Number(i.id) === 10 ? [{ EscopoTipo: "GLOBAL", EscopoId: null }] : []));
+    const local = await campo(LOCAL(), 10, { campo: "email", valor: "nova@exemplo.org", valorLido: "ana@exemplo.org" });
+    expect(local.status).toBe(403);
+    expect(local.body.mensagem).toMatch(/troca ou apaga o e-mail/);
+    const apagar = await campo(LOCAL(), 10, { campo: "email", valor: "", valorLido: "ana@exemplo.org" });
+    expect(apagar.status).toBe(403);
+    const geralSemFator = await campo(tokenDe(1, { via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["pessoas"] }), 10,
+      { campo: "email", valor: "nova@exemplo.org", valorLido: "ana@exemplo.org" });
+    expect(geralSemFator.status).toBe(428);
+    expect(rodou(/UPDATE MembroReferencia/)).toHaveLength(0);
+    expect(enviarEmailNotificacao).not.toHaveBeenCalled();
+    const geral = await campo(GERAL(), 10, { campo: "email", valor: "nova@exemplo.org", valorLido: "ana@exemplo.org" });
+    expect(geral.body.sucesso).toBe(true);
+  });
+  test("sem cargo vigente, ou com o e-mail igual, o e-mail segue sem a confirmação recente", async () => {
+    const semFator = tokenDe(5, { via: "SENHA", nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], permissoes: ["pessoas"] });
+    expect((await campo(semFator, 10, { campo: "email", valor: "nova@exemplo.org", valorLido: "ana@exemplo.org" })).body.sucesso).toBe(true);
+    quando(/FROM Lideranca l WHERE l\.MembroId = @id/, (i) => (Number(i.id) === 10 ? [{ EscopoTipo: "GLOBAL", EscopoId: null }] : []));
+    mockConsultas = [];
+    const igual = await campo(semFator, 10, { campo: "email", valor: "ANA@exemplo.org ", valorLido: "ana@exemplo.org" });
+    expect(igual.status).not.toBe(428);
+    expect(igual.status).not.toBe(403);
+  });
   test("GET campos: cada campo com o valor (CPF mascarado), pode/motivo pelo papel, e a tabela de quem muda o quê", async () => {
     FICHAS[10].Cpf = "52998224725";
     const r = await chamar(hFicha, { token: LOCAL(), ligado: { membroId: "10", acao: "campos" } });

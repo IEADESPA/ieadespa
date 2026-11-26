@@ -7,12 +7,13 @@
 // ESCOPO: só abre quem tem "pessoas" e alcança a congregação da pessoa (shared/escopoRotas.js); fora do escopo (ou matrícula malformada) a resposta é a mesma de
 // "Matrícula não encontrada". O motivo de uma saída disciplinar, no histórico, só para quem tem "disciplina" com a pessoa no escopo DESSA permissão.
 const auth = require("../shared/auth");
-const { getPool } = require("../shared/db");
+const { getPool, sql } = require("../shared/db");
 const { pessoaAlcancavel, noEscopoDaPessoa } = require("../shared/escopoRotas");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { enviarEmailNotificacao } = require("../shared/notificacaoEmail");
 const regras = require("../shared/edicaoFicha");
 const db = require("../shared/edicaoFichaDb");
+const nivelDoCargo = require("../shared/nivelDoCargo");
 
 const NAO_ENCONTRADA = { sucesso: false, mensagem: "Matrícula não encontrada." };
 const POR_PAGINA_MAX = 100;
@@ -59,6 +60,14 @@ module.exports = async function (context, req) {
       return;
     }
     const valorLido = Object.prototype.hasOwnProperty.call(corpo, "valorLido") ? corpo.valorLido : undefined;
+    // O e-mail é por onde chega o código de acesso: trocar ou apagar o de quem tem cargo vigente é da secretaria do nível do cargo (ou de cima), com a
+    // confirmação recente (428). A mesma régua do cadastro completo (GestaoPessoas; regra do responsável de 25 e 26/11/2026, na mescla do acesso parte 3).
+    if (chave === "email") {
+      const ficha = await db.lerFicha(() => pool.request(), membroId);
+      const atual = ficha ? String(ficha.valores.email || "").trim().toLowerCase() : "";
+      const novo = typeof corpo.valor === "string" ? corpo.valor.trim().toLowerCase() : "";
+      if (atual !== novo && !(await nivelDoCargo.conferirTrocaDeEmailDeLideranca(pool, sql, req, context, usuario, membroId))) return;
+    }
     const r = await db.gravarCampoSecretaria(pool, { visao: usuario, membroId, chave, valor: corpo.valor, valorLido, hoje: hojeBrasilia() });
     const { status, emailAnterior, ...corpoResposta } = r;
     // o e-mail é por onde chega o código de acesso: quem perdeu o endereço antigo precisa saber que ele mudou (a mesma regra do cadastro completo)

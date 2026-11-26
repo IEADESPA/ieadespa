@@ -213,6 +213,29 @@ describe("MinhaLinhaDoTempo (a própria pessoa)", () => {
     expect(c.res.body.eventos.some((e) => e.categoria === "DISCIPLINA")).toBe(false);
     expect(mockConsultas.some((q) => /ProcessosDisciplinares/.test(q.sql))).toBe(false);
   });
+  test("volta 10 (menor 8 do portão v9): quem está em arrolamento não vê 'membro desde' nem a entrada no rol com a data do sistema pago", async () => {
+    mockRegras = [];
+    mockRegras.push([/FROM MembroReferencia WHERE MembroId = @id;/, () => {
+      const f = FONTES();
+      f.membro = { ...f.membro, SituacaoMembro: "ARROLAMENTO", FormaAdmissao: null, DataAdmissao: "2012-05-05" };
+      const rs = [[f.membro], f.consagracoes, f.cartas, f.marcos, f.cargos, f.casamentos, f.apresentacoes, f.batismo, f.oficiantes, f.credenciais, f.licencas];
+      return { recordsets: rs, recordset: rs[0] };
+    }]);
+    const t = auth.reassinarSessao({ membroId: 101, via: "PIN", termosPendentes: [] });
+    const c = contexto({ matricula: "101" });
+    await hMinha(c, pedido(t));
+    expect(c.res.body.sucesso).toBe(true);
+    expect(c.res.body.situacao).toBe("ARROLAMENTO");
+    expect(c.res.body.dataAdmissao).toBeNull();
+    expect(c.res.body.eventos.some((e) => e.tipo === "ADMISSAO" || e.tipo === "READMISSAO")).toBe(false);
+    expect(c.res.body.eventos.some((e) => e.tipo === "BATISMO_AGUAS")).toBe(true);   // o resto da linha continua
+    // controle: a mesma ficha em comunhão mostra a data e a entrada
+    mockRegras = []; bancoDaPessoa();
+    const d = contexto({ matricula: "101" });
+    await hMinha(d, pedido(t));
+    expect(d.res.body.dataAdmissao).toBe("2015-04-12");
+    expect(d.res.body.eventos.some((e) => e.tipo === "ADMISSAO")).toBe(true);
+  });
   test("a de outra pessoa: 403; sem sessão: 401", async () => {
     const t = auth.reassinarSessao({ membroId: 102, via: "PIN", termosPendentes: [] });
     const c = contexto({ matricula: "101" }); await hMinha(c, pedido(t)); expect(c.res.status).toBe(403);

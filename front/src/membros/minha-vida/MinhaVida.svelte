@@ -107,6 +107,8 @@
   const pendentes = $derived(sugs.reduce((n, s) => n + s.campos.filter((c) => c.status === "PENDENTE").length, 0));
   const ve = $derived(linha?.vidaEspiritual ?? null);
   const sit = $derived(linha ? situacaoDe({ status: linha.status, situacaoMembro: linha.situacao }) : null);
+  // volta 10 (menor 8 do portão v9): a ficha em arrolamento não mostra "membro desde" (a data veio do sistema pago; o servidor já não a manda na linha do tempo)
+  const dataDeEntrada = $derived(linha?.situacao === "ARROLAMENTO" ? null : (linha?.dataAdmissao ?? dados.dataAdmissao ?? null));
   const eventos = $derived(linha?.eventos ?? []);
 
   // ---- o que ele muda sozinho (o contato, o endereço e o que estiver vazio): edição na hora ----
@@ -340,7 +342,7 @@
     <Cartao titulo="Na igreja" icone="igreja" pad="justo">
       <div class="lista">
         <Dado rotulo="Congregação" valor={linha?.congregacao ?? transf?.congregacaoAtual ?? ""}>{#snippet acao()}<button type="button" class="acao" onclick={() => irParte("transferencias")}>Pedir transferência</button>{/snippet}</Dado>
-        <Dado rotulo="Membro desde" valor={dataBr(linha?.dataAdmissao ?? dados.dataAdmissao)} vazio="não informado">{#snippet acao()}{@render acaoCampo("dataAdmissao", "Completar")}{/snippet}</Dado>
+        <Dado rotulo="Membro desde" valor={dataBr(dataDeEntrada)} vazio="não informado">{#snippet acao()}{@render acaoCampo("dataAdmissao", "Completar")}{/snippet}</Dado>
         <Dado rotulo="Como entrou" valor={textoDoValor("formaAdmissao", dados.formaAdmissao ?? null)} vazio="não informado">{#snippet acao()}{@render acaoCampo("formaAdmissao", "Completar")}{/snippet}</Dado>
         <Dado rotulo="Situação" valor={sit?.rotulo ?? ""} sub="a secretaria cuida" />
       </div>

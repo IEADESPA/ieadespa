@@ -103,13 +103,17 @@ describe("textos e dias", () => {
 
 // ---- a trava do cadastro: GestaoPessoas não troca mais a congregação de quem já tem uma ----
 let mockRegras = [];
-jest.mock("../db", () => ({
-  getPool: async () => ({ request: () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
+// a gravação da ficha vai numa transação (shared/transacaoCurta.js, do acesso parte 3): a transação simulada usa as mesmas regras por texto
+jest.mock("../db", () => {
+  const novaRequisicao = () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
     for (const [padrao, valor] of mockRegras) if (padrao.test(texto)) return typeof valor === "function" ? valor(inputs) : valor;
     return { recordset: [], recordsets: [[]], rowsAffected: [1] };
-  } }; return r; } }),
-  sql: new Proxy({}, { get: () => () => undefined })
-}));
+  } }; return r; };
+  class Transaction { async begin() {} async commit() {} async rollback() {} }
+  class Request { constructor() { return novaRequisicao(); } }
+  const sql = new Proxy({ Transaction, Request }, { get: (alvo, prop) => (prop in alvo ? alvo[prop] : () => undefined) });
+  return { getPool: async () => ({ request: novaRequisicao }), sql };
+});
 jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => true), sha256: () => "" }));
 jest.mock("../notificacaoEmail", () => ({ enviarEmailNotificacao: jest.fn(async () => {}) }));
 jest.mock("../vacancia", () => ({ encerrarVinculos: jest.fn(async () => {}) }));

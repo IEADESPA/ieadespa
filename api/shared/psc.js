@@ -321,12 +321,15 @@ function proximaLetraLivre(codigosExistentes, prefixo) {
   return null;
 }
 
+// Número vindo da tela ou da chamada: só número ou texto com número (vazio, nulo e verdadeiro/falso não viram 0 ou 1).
+const numeroInformado = (v) => (typeof v === "number" || (typeof v === "string" && v.trim() !== "") ? Number(v) : NaN);
+
 function validarParametros({ primeiroExercicio, prazoEnvioDias, exerciciosParaReclassificacao } = {}) {
-  const primeiro = Number(primeiroExercicio);
+  const primeiro = numeroInformado(primeiroExercicio);
   if (!Number.isInteger(primeiro) || primeiro < 2000 || primeiro > 2200) return { valido: false, mensagem: "O primeiro exercício deve ser um ano entre 2000 e 2200." };
-  const prazo = Number(prazoEnvioDias);
+  const prazo = numeroInformado(prazoEnvioDias);
   if (!Number.isInteger(prazo) || prazo < 0 || prazo > 365) return { valido: false, mensagem: "O prazo de envio deve ser de 0 a 365 dias depois de 31/12." };
-  const exercicios = Number(exerciciosParaReclassificacao);
+  const exercicios = numeroInformado(exerciciosParaReclassificacao);
   if (!Number.isInteger(exercicios) || exercicios < 1 || exercicios > 10) return { valido: false, mensagem: "Os exercícios seguidos para a reclassificação devem ser de 1 a 10 (o Regimento diz 2)." };
   return { valido: true, dados: { primeiroExercicio: primeiro, prazoEnvioDias: prazo, exerciciosParaReclassificacao: exercicios } };
 }
@@ -512,14 +515,21 @@ async function criarCriterio(pool, { dados, membroId }) {
   if (!letra) return { sucesso: false, mensagem: "Este degrau já tem 26 critérios — é o máximo." };
   const ordem = existentes.reduce((m, e) => Math.max(m, e.Ordem), 0) + 1;
   const codigo = `${prefixo}.${letra}`;
-  const inserido = await pool.request()
-    .input("sinalId", sql.Int, dados.sinalId).input("nivel", sql.TinyInt, dados.nivel).input("codigo", sql.NVarChar(20), codigo)
-    .input("texto", sql.NVarChar(600), dados.texto).input("orientacao", sql.NVarChar(500), dados.orientacao).input("ordem", sql.Int, ordem)
-    .query(`
-      INSERT INTO PscCriterios (SinalId, Nivel, Codigo, Texto, Orientacao, ArtigoRef, Ordem)
-      OUTPUT INSERTED.CriterioId
-      VALUES (@sinalId, @nivel, @codigo, @texto, @orientacao, N'Acréscimo da CLI', @ordem)
-    `);
+  let inserido;
+  try {
+    inserido = await pool.request()
+      .input("sinalId", sql.Int, dados.sinalId).input("nivel", sql.TinyInt, dados.nivel).input("codigo", sql.NVarChar(20), codigo)
+      .input("texto", sql.NVarChar(600), dados.texto).input("orientacao", sql.NVarChar(500), dados.orientacao).input("ordem", sql.Int, ordem)
+      .query(`
+        INSERT INTO PscCriterios (SinalId, Nivel, Codigo, Texto, Orientacao, ArtigoRef, Ordem)
+        OUTPUT INSERTED.CriterioId
+        VALUES (@sinalId, @nivel, @codigo, @texto, @orientacao, N'Acréscimo da CLI', @ordem)
+      `);
+  } catch (e) {
+    // outro critério do mesmo degrau gravado no mesmo instante ficou com este código
+    if (e && (e.number === 2627 || e.number === 2601)) return { sucesso: false, mensagem: "Outro critério foi criado neste degrau ao mesmo tempo. Tente de novo." };
+    throw e;
+  }
   const criterioId = inserido.recordset[0].CriterioId;
   await registrarAuditoria({ tabela: "PscCriterios", registroId: criterioId, acao: "CRITERIO_CRIADO", usuarioId: membroId, dadosAntes: null, dadosDepois: { codigo, ...dados } });
   return { sucesso: true, mensagem: `Critério ${codigo} criado. Vale para as avaliações abertas daqui em diante.`, criterioId, codigo };
@@ -791,7 +801,7 @@ async function reabrirAvaliacao(pool, { avaliacao, motivo, membroId }) {
   const m = validarTextoObrigatorio(motivo, "o motivo da reabertura", 10, 500);
   if (!m.valido) return { sucesso: false, mensagem: m.mensagem };
   if (await exercicioSustentaReclassificacao(pool, { congregacaoId: avaliacao.congregacaoId, ano: avaliacao.ano })) {
-    return { sucesso: false, mensagem: "Este exercício sustenta uma reclassificação (proposta, decretada ou revertida). Arquive a proposta antes — um decreto não se apoia em avaliação que pode mudar." };
+    return { sucesso: false, mensagem: "Este exercício sustenta uma reclassificação: se ela ainda é proposta, arquive a proposta antes; decretada ou revertida, a avaliação fica travada — um decreto não se apoia em avaliação que pode mudar." };
   }
   const feito = await mudarEstado(pool, {
     avaliacao, acao: "reabrir", membroId,
@@ -881,7 +891,7 @@ async function proporReclassificacaoSeCabivel(pool, { avaliacao, reprovadaNivel1
   const avaliacaoGatilho = historico.find(h => h.ano === gatilho.anoFinal);
   const ja = await pool.request().input("av", sql.Int, avaliacaoGatilho.avaliacaoId).input("c", sql.Int, avaliacao.congregacaoId).query(`
     SELECT TOP 1 ReclassificacaoId FROM PscReclassificacoes
-    WHERE AvaliacaoGatilhoId = @av OR (CongregacaoId = @c AND Status IN ('PROPOSTA', 'DECRETADA'))
+    WHERE (AvaliacaoGatilhoId = @av AND Status <> 'ARQUIVADA') OR (CongregacaoId = @c AND Status IN ('PROPOSTA', 'DECRETADA'))
   `);
   if (ja.recordset.length > 0) return null;
   let reclassificacaoId;
@@ -964,16 +974,16 @@ async function decretarReclassificacao(pool, { reclassificacao, dados, membroId 
   if (!congregacao) return { sucesso: false, mensagem: "Congregação não encontrada." };
   if (congregacao.Categoria !== "CONGREGACAO") return { sucesso: false, mensagem: "Esta unidade já não é uma Congregação." };
 
-  const encarregado = (await pool.request().input("id", sql.Int, dados.encarregadoMembroId).query(`SELECT MembroId, Nome, Status, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id`)).recordset[0];
-  if (!encarregado) return { sucesso: false, mensagem: "Encarregado não encontrado — confira a matrícula." };
-  // Quem assume a gestão da unidade tem de ser membro ativo e em comunhão (não desligado, falecido, em licença ou sem comunhão).
-  if (encarregado.Status !== "ATIVO" || encarregado.SituacaoMembro !== "EM_COMUNHAO") {
-    return { sucesso: false, mensagem: "O encarregado precisa ser membro ativo e em comunhão — confira a situação dessa matrícula." };
-  }
   if (dados.congregacaoMaeId != null) {
     const mae = await buscarCongregacao(pool, dados.congregacaoMaeId);
     if (!mae || !mae.Ativa) return { sucesso: false, mensagem: "Congregação-Mãe não encontrada ou desativada." };
     if (mae.Categoria !== "CONGREGACAO") return { sucesso: false, mensagem: "A tutela só pode ser assumida por uma Congregação (não por outra Extensão da Tenda)." };
+  }
+  // Quem assume a gestão da unidade tem de ser membro ativo e em comunhão (não desligado, falecido, em licença ou sem comunhão). A matrícula que não existe
+  // recebe a mesma resposta: a mensagem não diz se a pessoa tem cadastro.
+  const encarregado = (await pool.request().input("id", sql.Int, dados.encarregadoMembroId).query(`SELECT MembroId, Nome, Status, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id`)).recordset[0];
+  if (!encarregado || encarregado.Status !== "ATIVO" || encarregado.SituacaoMembro !== "EM_COMUNHAO") {
+    return { sucesso: false, mensagem: "O encarregado precisa ser membro ativo e em comunhão — confira a matrícula." };
   }
   // O encarregado não pode ser quem está sendo destituído. "Hoje" é o de Brasília, a régua do login (shared/dataBrasilia.js).
   const hoje = hojeBrasilia();
@@ -1122,11 +1132,19 @@ async function consultarTutela(pool, congregacaoId) {
 // Banco — visão geral, histórico e destinatários
 // ---------------------------------------------------------------
 
+// O exercício @ano só é cobrado da unidade que o passou inteiro como congregação: nem o ano da fundação (ou da emancipação), nem os anos sob tutela, do
+// decreto ao restabelecimento, contam (regra do responsável, 25/11/2026). As datas do decreto e do restabelecimento ficam em UTC; o ano é o de Brasília.
+const condicaoAnoCobravel = (c) => `(${c}.FundacaoAno IS NULL OR @ano > ${c}.FundacaoAno)
+      AND NOT EXISTS (SELECT 1 FROM PscReclassificacoes rt WHERE rt.CongregacaoId = ${c}.CongregacaoId AND rt.Status = 'REVERTIDA'
+        AND rt.DecididaEm IS NOT NULL AND rt.RestabelecidaEm IS NOT NULL
+        AND @ano BETWEEN YEAR(DATEADD(hour, -3, rt.DecididaEm)) AND YEAR(DATEADD(hour, -3, rt.RestabelecidaEm)))`;
+
 async function montarPainel(pool, { ano, nomesCongregacoesPermitidas, hoje = hojeBrasilia() }) {
   const parametros = await lerParametros(pool);
   const anoNum = Number(ano);
-  const congregacoes = (await pool.request().query(`
-    SELECT c.CongregacaoId, c.Nome, c.Categoria, c.AreaId, a.Nome AS AreaNome
+  const congregacoes = (await pool.request().input("ano", sql.SmallInt, anoNum).query(`
+    SELECT c.CongregacaoId, c.Nome, c.Categoria, c.AreaId, a.Nome AS AreaNome,
+           CASE WHEN ${condicaoAnoCobravel("c")} THEN 1 ELSE 0 END AS Cobravel
     FROM Congregacoes c LEFT JOIN Areas a ON a.AreaId = c.AreaId
     WHERE c.Ativa = 1 ORDER BY c.Nome
   `)).recordset.filter(c => !nomesCongregacoesPermitidas || nomesCongregacoesPermitidas.includes(c.Nome));
@@ -1184,8 +1202,9 @@ async function montarPainel(pool, { ano, nomesCongregacoesPermitidas, hoje = hoj
     const status = a ? a.Status : null;
     let prazo = situacaoPrazo({ ano: anoNum, status, hoje, prazoDias: parametros.prazoEnvioDias, primeiroExercicio: parametros.primeiroExercicio });
     // Unidade já rebaixada a Extensão da Tenda não tem avaliação a entregar (só avalia se quiser provar a recuperação):
-    // o painel concorda com os avisos, que também a deixam de fora.
-    if (!a && c.Categoria !== "CONGREGACAO") prazo = { ...prazo, situacao: "NAO_SE_APLICA" };
+    // o painel concorda com os avisos, que também a deixam de fora. O mesmo para o ano que não conta (fundação ou tutela).
+    // A avaliação só em rascunho (aberta para provar a recuperação) também não tem prazo a cumprir.
+    if ((!a || a.Status === "RASCUNHO") && (c.Categoria !== "CONGREGACAO" || !Number(c.Cobravel))) prazo = { ...prazo, situacao: "NAO_SE_APLICA" };
     const reclass = reclassificacaoPorCongregacao.get(c.CongregacaoId) || null;
     return {
       congregacaoId: c.CongregacaoId, congregacaoNome: c.Nome, areaNome: c.AreaNome || null, categoria: c.Categoria,
@@ -1238,8 +1257,10 @@ async function historicoDaCongregacao(pool, congregacaoId) {
 async function resolverDestinatariosDaCongregacao(pool, { permissao, congregacaoId }) {
   const escopo = require("./escopo");
   const { areaId, regiaoId, quadranteId, distritoId } = await escopo.ancestraisTerritoriais(pool, sql, 1, congregacaoId);
+  // Só quem entra no sistema com a permissão recebe (a régua do login): rol ATIVO, cargo vigente pelo dia de Brasília e a recertificação da permissão em dia.
   const r = await pool.request()
-    .input("permissao", sql.NVarChar(60), `%,${permissao},%`).input("congregacaoId", sql.Int, congregacaoId)
+    .input("permissao", sql.NVarChar(60), `%,${permissao},%`).input("permissaoNome", sql.NVarChar(60), permissao).input("congregacaoId", sql.Int, congregacaoId)
+    .input("hoje", sql.Date, hojeBrasilia())
     .input("areaId", sql.Int, areaId).input("regiaoId", sql.Int, regiaoId).input("quadranteId", sql.Int, quadranteId).input("distritoId", sql.Int, distritoId)
     .query(`
       SELECT DISTINCT m.MembroId AS membroId, m.Nome AS nome, m.Email AS email
@@ -1247,9 +1268,13 @@ async function resolverDestinatariosDaCongregacao(pool, { permissao, congregacao
       JOIN Papeis p ON p.PapelId = l.PapelId
       JOIN MembroReferencia m ON m.MembroId = l.MembroId
       WHERE (',' + p.Permissoes + ',') LIKE @permissao
-        AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))
+        AND m.Status = 'ATIVO'
+        AND (l.AtivoAte IS NULL OR l.AtivoAte >= @hoje)
+        AND NOT EXISTS (SELECT 1 FROM RecertificacoesAcesso r
+                        WHERE r.MembroId = l.MembroId AND r.Permissao = @permissaoNome AND r.Status = 'EXPIRADA'
+                          AND r.RecertificacaoId = (SELECT MAX(r2.RecertificacaoId) FROM RecertificacoesAcesso r2 WHERE r2.MembroId = l.MembroId AND r2.Permissao = @permissaoNome))
         AND (
-          l.EscopoTipo IN ('GLOBAL', 'DEPARTAMENTO')
+          ISNULL(l.EscopoTipo, '') IN ('', 'GLOBAL', 'DEPARTAMENTO')   -- o escopo vazio vale como o de todas as congregações, como no login
           OR (l.EscopoTipo = 'CONGREGACAO' AND l.EscopoId = @congregacaoId)
           OR (l.EscopoTipo = 'AREA' AND l.EscopoId = @areaId)
           OR (l.EscopoTipo = 'REGIAO' AND l.EscopoId = @regiaoId)
@@ -1261,8 +1286,8 @@ async function resolverDestinatariosDaCongregacao(pool, { permissao, congregacao
 }
 
 // Fatos para o motor de notificações (vB.2) — ver shared/notificacaoDetectores.js.
-// Chave de deduplicação inteira: congregação * 10000 + ano (um aviso por
-// exercício e congregação, por mais que a rotina diária rode).
+// Chave de deduplicação inteira do aviso de pendência: congregação * 10000 + ano enquanto o exercício nunca foi enviado (um aviso por exercício e
+// congregação, por mais que a rotina diária rode) e, a cada volta para correção, uma chave nova com o ciclo (ver chaveDaPendencia).
 // Cada congregação é resolvida uma vez por rodada (a escada territorial custa 5 consultas) e não uma vez por exercício pendente.
 function destinatariosEmCache(pool, permissao) {
   const cache = new Map();
@@ -1271,6 +1296,12 @@ function destinatariosEmCache(pool, permissao) {
     return cache.get(congregacaoId);
   };
 }
+
+// O ciclo (quantas vezes a avaliação foi enviada) entra na casa das centenas de milhões, com teto de 20: não colide com a chave de sempre (que fica abaixo de
+// 100 milhões para congregações de número menor que 9.998) e cabe no INT do banco.
+const TETO_CICLO_NA_CHAVE = 20;
+const chaveDaPendencia = (congregacaoId, ano, ciclo) =>
+  Number(congregacaoId) * 10000 + Number(ano) + Math.min(Math.max(Number(ciclo) || 0, 0), TETO_CICLO_NA_CHAVE) * 100000000;
 
 async function detectarAvaliacoesPendentes(pool, { hoje = hojeBrasilia() } = {}) {
   const parametros = await lerParametros(pool);
@@ -1283,17 +1314,24 @@ async function detectarAvaliacoesPendentes(pool, { hoje = hojeBrasilia() } = {})
     const prazo = prazoEnvio(ano, parametros.prazoEnvioDias);
     if (hoje <= prazo) continue;
     const pendentes = (await pool.request().input("ano", sql.SmallInt, ano).query(`
-      SELECT c.CongregacaoId, c.Nome FROM Congregacoes c
+      SELECT c.CongregacaoId, c.Nome,
+             (SELECT MAX(av.Ciclo) FROM PscAvaliacoes av WHERE av.CongregacaoId = c.CongregacaoId AND av.Ano = @ano) AS CicloAtual
+      FROM Congregacoes c
       WHERE c.Ativa = 1 AND c.Categoria = 'CONGREGACAO' AND NOT EXISTS (
         SELECT 1 FROM PscAvaliacoes a WHERE a.CongregacaoId = c.CongregacaoId AND a.Ano = @ano AND a.Status IN ('ENVIADA', 'VALIDADA', 'HOMOLOGADA')
       )
+      AND ${condicaoAnoCobravel("c")}
     `)).recordset;
     for (const c of pendentes) {
       const destinatarios = await destinatariosDe(c.CongregacaoId);
       if (destinatarios.length === 0) continue;
+      // Ciclo = quantas vezes a avaliação foi enviada: a que já foi enviada e voltou (devolvida ou reaberta) não "deixou de ser enviada".
+      const voltouParaCorrecao = Number(c.CicloAtual) > 0;
       fatos.push({
-        referenciaId: c.CongregacaoId * 10000 + ano, destinatarios,
-        fatoGerador: `A avaliação do PSC ${ano} de ${c.Nome} não foi enviada até ${formatarDataBr(prazo)}. A avaliação anual é obrigatória (Regimento Art. 127).`
+        referenciaId: chaveDaPendencia(c.CongregacaoId, ano, c.CicloAtual), destinatarios,
+        fatoGerador: voltouParaCorrecao
+          ? `A avaliação do PSC ${ano} de ${c.Nome} voltou para correção e ainda não foi reenviada (o prazo de envio era ${formatarDataBr(prazo)}). A avaliação anual é obrigatória (Regimento Art. 127).`
+          : `A avaliação do PSC ${ano} de ${c.Nome} não foi enviada até ${formatarDataBr(prazo)}. A avaliação anual é obrigatória (Regimento Art. 127).`
       });
     }
   }
@@ -1318,22 +1356,37 @@ async function detectarAvaliacoesParaValidar(pool) {
   return fatos;
 }
 
+// Os avisos da CLI vão a quem tem a permissão de homologar E alcança a congregação (a mesma lista que a tela do PSC mostra a essa pessoa).
 async function detectarAvaliacoesParaHomologar(pool) {
   const r = await pool.request().query(`
-    SELECT a.AvaliacaoId, a.Ano, a.Ciclo, c.Nome FROM PscAvaliacoes a JOIN Congregacoes c ON c.CongregacaoId = a.CongregacaoId WHERE a.Status = 'VALIDADA'
+    SELECT a.AvaliacaoId, a.CongregacaoId, a.Ano, a.Ciclo, c.Nome FROM PscAvaliacoes a JOIN Congregacoes c ON c.CongregacaoId = a.CongregacaoId WHERE a.Status = 'VALIDADA'
   `);
-  return r.recordset.map(a => ({ referenciaId: chaveDoCiclo(a.AvaliacaoId, a.Ciclo), fatoGerador: `A avaliação do PSC ${a.Ano} de ${a.Nome} foi validada e aguarda a homologação da CLI.` }));
+  const destinatariosDe = destinatariosEmCache(pool, "psc_homologacao");
+  const fatos = [];
+  for (const a of r.recordset) {
+    const destinatarios = await destinatariosDe(a.CongregacaoId);
+    if (destinatarios.length === 0) continue;
+    fatos.push({ referenciaId: chaveDoCiclo(a.AvaliacaoId, a.Ciclo), destinatarios, fatoGerador: `A avaliação do PSC ${a.Ano} de ${a.Nome} foi validada e aguarda a homologação da CLI.` });
+  }
+  return fatos;
 }
 
 async function detectarReclassificacoesPropostas(pool) {
   const r = await pool.request().query(`
-    SELECT r.ReclassificacaoId, r.AnoInicial, r.AnoFinal, r.ExerciciosConsecutivos, c.Nome
+    SELECT r.ReclassificacaoId, r.CongregacaoId, r.AnoInicial, r.AnoFinal, r.ExerciciosConsecutivos, c.Nome
     FROM PscReclassificacoes r JOIN Congregacoes c ON c.CongregacaoId = r.CongregacaoId WHERE r.Status = 'PROPOSTA'
   `);
-  return r.recordset.map(x => ({
-    referenciaId: x.ReclassificacaoId,
-    fatoGerador: `${x.Nome} foi reprovada no Nível 1 do PSC por ${x.ExerciciosConsecutivos} exercícios seguidos (${x.AnoInicial} a ${x.AnoFinal}). A reclassificação compulsória (Regimento Art. 129 §2º) aguarda a decisão da CLI.`
-  }));
+  const destinatariosDe = destinatariosEmCache(pool, "psc_homologacao");
+  const fatos = [];
+  for (const x of r.recordset) {
+    const destinatarios = await destinatariosDe(x.CongregacaoId);
+    if (destinatarios.length === 0) continue;
+    fatos.push({
+      referenciaId: x.ReclassificacaoId, destinatarios,
+      fatoGerador: `${x.Nome} foi reprovada no Nível 1 do PSC por ${x.ExerciciosConsecutivos} exercícios seguidos (${x.AnoInicial} a ${x.AnoFinal}). A reclassificação compulsória (Regimento Art. 129 §2º) aguarda a decisão da CLI.`
+    });
+  }
+  return fatos;
 }
 
 module.exports = {
@@ -1348,7 +1401,7 @@ module.exports = {
   // banco
   lerParametros, atualizarParametros, listarCatalogo, criarCriterio, atualizarCriterio,
   buscarCongregacao, abrirAvaliacao, buscarAvaliacao, detalharAvaliacao, listarAvaliacoes, salvarRespostas,
-  enviarAvaliacao, validarAvaliacao, devolverAvaliacao, reabrirAvaliacao, homologarAvaliacao,
+  enviarAvaliacao, validarAvaliacao, devolverAvaliacao, reabrirAvaliacao, homologarAvaliacao, proporReclassificacaoSeCabivel,
   buscarReclassificacao, listarReclassificacoes, decretarReclassificacao, arquivarReclassificacao, restabelecerReclassificacao, consultarTutela,
   montarPainel, historicoDaCongregacao, resolverDestinatariosDaCongregacao,
   detectarAvaliacoesPendentes, detectarAvaliacoesParaValidar, detectarAvaliacoesParaHomologar, detectarReclassificacoesPropostas

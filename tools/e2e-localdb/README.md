@@ -238,6 +238,11 @@ Cada versão parte da base da anterior (`BASE=...`):
   de Membros da Geral traz as cadeiras e as vagas de comissão antigas de quem não é membro (as contas e até 3 nomes; a local e a área não recebem), a Geral
   encerra com o motivo (na cadeira e na trilha) e ela sai do aviso; a conversão lançada e corrigida à mão vem antes do batismo e nunca no futuro; a
   Minha carteirinha e a página pública do QR de quem está em arrolamento dizem "ficha em atualização", só com o nome, e o botão da ficha não imprime).
+  `e2e-103` (volta 10, o portão v9): quem está em arrolamento entra pelo PIN, pede a Carta de Recomendação e o Atestado Supletivo e recebe a recusa
+  neutra, sem carta gravada; o PDF de uma carta antiga dele é 422 para ele e para a secretaria, sem gastar protocolo (em comunhão e congregado
+  continuam); "Encerrar" a cadeira e a vaga de comissão sem motivo, com só espaços, nulo, número ou com mais de 200 letras é 400 e nada muda, nem a
+  trilha; a local recebe 403; com o motivo, a Geral encerra e o motivo vai sem os espaços das pontas para a cadeira, a vaga e a trilha; a Minha vida de
+  quem está em arrolamento não traz o "membro desde" nem a entrada no rol com a data do sistema pago).
 - **FASE 10, a importação parada e a do resto** (G2, decisão dele de 24/11/2026; migração 187), base `cenario-187` (`bash rodar.sh preparar-187`: a
   `cenario-186` com a 187 aplicada duas vezes). Os roteiros da importação (`e2e-96`, `e2e-97`, `e2e-99`, `e2e-100` e `e2e-102`) rodam nela, porque a
   importação lê e grava o último lote (o `e2e-102` também confere o índice da chave `RestoDe`). Rode um roteiro por vez, cada um com a base restaurada (`bash rodar.sh roteiro` restaura uma vez só, antes do
@@ -265,6 +270,11 @@ Cada versão parte da base da anterior (`BASE=...`):
   quem marcou e quem desfez, no escopo de cada nível, a saída da r30 (as congregações ativas com a área, a liderança da escolhida, o rastreio
   do bloco que nunca saiu e a linha do livro com a primeira folha do bloco), a devolução da r30 (quem trouxe, a primeira em branco que já
   tem destino, as usadas da entrega na linha do livro e as inexistentes da entrega no rastreio) e a 203 rodada de novo sobre dados).
+- **FASE 10, o ensaio da importação no tamanho real** (missão C, 26/11/2026; migração 188), base `cenario-188` (`bash rodar.sh preparar-188`: a
+  `cenario-187` com a 188, o índice do nascimento das fichas, aplicada duas vezes). O ensaio (`../ensaio-importacao/ensaio-localdb.js`, ver o
+  [README dele](../ensaio-importacao/README.md)) importa 6 mil pessoas fictícias pela rota e confere o gabarito, o tempo de cada lote, as idas ao
+  banco e que nenhuma consulta lê mais de 100 mil páginas numa execução (sem a 188 e com poucas fichas no banco, a procura do mesmo nome e nascimento
+  da prévia relia o arquivo inteiro para cada ficha: 1,47 milhão de páginas).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

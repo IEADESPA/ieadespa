@@ -22,6 +22,11 @@ const { hojeBrasilia } = require("./dataBrasilia");
 
 const TRAVA = "importacao-membros";
 const TAMANHO_LOTE = 200;
+// O ORÇAMENTO DE TEMPO de cada chamada do lote (missão C, o ensaio de 26/11/2026 no LocalDB): o lote de 200 faz ~609 idas ao banco (3 por linha: a ficha, a
+// pendência do arrolamento e a marca da linha). Na nuvem, cada ida custa a distância entre a API (o Static Web App, fora do Brasil) e o banco (Brazil
+// South): com ~74 ms por ida, o lote passaria dos 45 s do limite da chamada. Passado o orçamento, a chamada para de pegar linhas, grava as que entraram e
+// devolve as restantes; a tela já repete até concluir. Sempre ao menos uma linha por chamada (a importação anda), e a prova da linha recusada não é cortada.
+const ORCAMENTO_LOTE_MS = 10000;
 const SEGUIDAS_MAX = 5;   // 5 recusadas seguidas (sem nenhuma entrar entre elas) é o banco, não a linha: a importação para, sem ninguém de fora
 const BLOCO_GRAVACAO = 400;   // linhas por INSERT da prévia (OPENJSON)
 const POR_PAGINA = 100;
@@ -514,7 +519,7 @@ async function abrirPendencia(rq, { membroId, tipo, outro = null, detalhe, por }
         INSERT INTO FichasPendencias (MembroId, Tipo, OutroMembroId, Detalhe, Origem, AbertaPor) VALUES (@m, @t, @o, @d, N'IMPORTACAO', @por)`);
 }
 
-// Importa até `tamanho` linhas pendentes, numa transação. Primeiro as que têm a matrícula do arquivo (na ordem do arquivo), depois as de número novo (que
+// Importa até `tamanho` linhas pendentes, numa transação (menos, quando o orçamento de tempo da chamada acaba antes: ORCAMENTO_LOTE_MS). Primeiro as que têm a matrícula do arquivo (na ordem do arquivo), depois as de número novo (que
 // recebem a próxima do sistema DEPOIS de todas as do arquivo estarem no lugar). Cada linha é conferida de novo contra o banco de agora: a matrícula que
 // alguém usou depois da prévia vira número novo (NUMERO) e vai para o fim da fila; o CPF que alguém gravou depois entra sem o CPF, como possível repetida.
 // Cada lote é uma transação própria: o que entrou fica, e a chamada seguinte continua da primeira linha pendente. A linha que o banco RECUSA SEMPRE (um erro de
@@ -524,15 +529,16 @@ async function abrirPendencia(rq, { membroId, tipo, outro = null, detalhe, por }
 // e a tela ganha a saída (A6 da revisão de 24/11/2026: antes, só mexendo no banco à mão): com `deixarDeFora` (a Secretaria Geral confirma na tela), a chamada
 // tenta de novo do mesmo ponto e, se as mesmas 5 recusarem outra vez, deixa SÓ essas de fora (as que o servidor acabou de ver recusar; nenhum número vem do
 // cliente), numa transação que não grava mais ninguém; a próxima chamada segue como sempre. Se elas entrarem (era passageiro), ninguém fica de fora.
-async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOTE, deixarDeFora = false } = {}) {
+async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOTE, deixarDeFora = false, orcamentoMs = ORCAMENTO_LOTE_MS, agora = Date.now } = {}) {
   const id = idValido(importacaoId);
   if (!id) return { sucesso: false, status: 400, mensagem: "Informe a importação." };
   let n = Math.max(1, Math.min(TAMANHO_LOTE, Math.floor(Number(tamanho) || TAMANHO_LOTE)));
   const por = Number(usuario.membroId);
   const fora = [];   // as recusadas desta chamada, ainda sem uma linha depois delas que tenha entrado: { linha, erro } (o número do erro, nunca a mensagem)
+  const prazo = agora() + Math.max(0, Number(orcamentoMs) || 0);   // o orçamento de tempo vale para a chamada inteira (ORCAMENTO_LOTE_MS)
   for (;;) {
     try {
-      return await emTransacao(pool, (t, rq) => gravarLote(t, rq, { id, n, por, fora }));
+      return await emTransacao(pool, (t, rq) => gravarLote(t, rq, { id, n, por, fora, prazo, agora }));
     } catch (e) {
       if (!recusaDaLinha(e)) throw e;
       fora.push({ linha: e.linhaImportacao, erro: e.number });
@@ -556,7 +562,7 @@ async function nomesDasLinhas(pool, id, linhas) {
   return new Map(r.recordset.map((l) => [Number(l.Linha), l.Nome || ""]));
 }
 
-async function gravarLote(t, rq, { id, n, por, fora, confirmadoNaTela = false }) {
+async function gravarLote(t, rq, { id, n, por, fora, confirmadoNaTela = false, prazo = Infinity, agora = Date.now }) {
   const imp = (await rq().input("id", sql.Int, id).query("SELECT ImportacaoId, Situacao, Resumo FROM ImportacoesMembros WITH (UPDLOCK) WHERE ImportacaoId = @id")).recordset[0];
   if (!imp) return { sucesso: false, status: 404, mensagem: MSG.NAO_EXISTE };
   if (imp.Situacao === "CONCLUIDA") return { sucesso: true, importacaoId: id, importadas: 0, fora: 0, restantes: 0, concluida: true };
@@ -580,6 +586,9 @@ async function gravarLote(t, rq, { id, n, por, fora, confirmadoNaTela = false })
     FROM ImportacoesMembrosLinhas WITH (UPDLOCK) WHERE ImportacaoId = @id AND Acao = N'NOVA' AND Estado = N'PENDENTE' ORDER BY NumeroNovo, Linha`)).recordset;
   const trilha = [];
   for (const [i, l] of linhas.entries()) {
+    // o orçamento de tempo acabou: as linhas que faltam ficam para a próxima chamada (ao menos uma linha por chamada). No lote refeito depois de uma
+    // recusada (fora), não corta: ele vai até a linha da prova (n = as que entraram antes dela + 1), e já cabia no tempo da primeira tentativa
+    if (i > 0 && !fora.length && agora() >= prazo) break;
     let feita;
     try {
       feita = await gravarLinha(rq, id, l, por);
@@ -795,5 +804,5 @@ async function aplicarRetencao(pool) {
   return { previasDescartadas: r.previasDescartadas, linhasForaApagadas: r.linhasForaApagadas, linhasLimpas: r.linhasLimpas, diasPrevia, diasFora };
 }
 
-module.exports = { TRAVA, TAMANHO_LOTE, POR_PAGINA, MSG, POLITICA_PREVIA, POLITICA_FORA, estado, criarPrevia, descartar, descartarParada, listar, csv, confirmar, importarLote,
+module.exports = { TRAVA, TAMANHO_LOTE, ORCAMENTO_LOTE_MS, POR_PAGINA, MSG, POLITICA_PREVIA, POLITICA_FORA, estado, criarPrevia, descartar, descartarParada, listar, csv, confirmar, importarLote,
   aplicarRetencao };

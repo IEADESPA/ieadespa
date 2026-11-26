@@ -234,4 +234,4 @@ async function principal() {
   ok((await escalar("SELECT COUNT(*) FROM AuditLog WHERE RegistroId IS NULL AND DataHora >= DATEADD(MINUTE, -30, SYSUTCDATETIME())")) === 0, "a trilha nunca grava RegistroId nulo");
 }
 
-principal().then(fim).catch((e) => { console.error("ERRO NO ROTEIRO:", e); fim(); process.exitCode = 1; });
+principal().then(() => fim("e2e-151 (acesso, parte 2)")).catch((e) => { console.error(e); ok(false, "o roteiro quebrou: " + (e && e.message)); fim("e2e-151 (acesso, parte 2)"); });

@@ -19,14 +19,18 @@ module.exports = async function (context, req) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
     return;
   }
-  const { vidaEspiritual, eventos } = linha.montarLinhaDoTempo(fontes, { disciplina: false });
+  const { vidaEspiritual, eventos: todos } = linha.montarLinhaDoTempo(fontes, { disciplina: false });
+  // volta 10 do Membros (menor 8 do portão v9): quem está em arrolamento (a ficha a completar) não vê "membro desde" nem a entrada no rol: a data veio do sistema
+  // pago, com sentido desconhecido, e a carteirinha já não a mostra. A ficha da secretaria (LinhaDoTempoMembro) continua com ela, para completar.
+  const emArrolamento = fontes.membro.SituacaoMembro === "ARROLAMENTO";
+  const eventos = emArrolamento ? todos.filter((e) => e.tipo !== "ADMISSAO" && e.tipo !== "READMISSAO") : todos;
   const pagina = linha.paginar(eventos, (req && req.query) || {});
   context.res = {
     status: 200,
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
     // FASE 10 (19/11/2026): o cabeçalho da Minha vida (a congregação, a situação e o "membro desde" da própria pessoa)
     body: { sucesso: true, nome: fontes.membro.Nome, situacao: fontes.membro.SituacaoMembro || null, status: fontes.membro.Status || null,
-      congregacao: fontes.membro.CongregacaoNome || null, dataAdmissao: fontes.membro.DataAdmissao || null,
+      congregacao: fontes.membro.CongregacaoNome || null, dataAdmissao: emArrolamento ? null : (fontes.membro.DataAdmissao || null),
       vidaEspiritual, eventos: pagina.itens, total: pagina.total, pagina: pagina.pagina, porPagina: pagina.porPagina }
   };
 };

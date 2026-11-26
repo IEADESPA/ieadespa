@@ -112,6 +112,11 @@ for a distância. O próprio ensaio mede a distância: ela é cerca de 10 s ÷ (
    ORDER BY rs.max_logical_io_reads DESC;
    ```
 
+   Antes, confirme que o Query Store está gravando: `SELECT actual_state_desc FROM sys.database_query_store_options`
+   deve dizer `READ_WRITE` (no Azure ele vem ligado). Ele captura no modo `AUTO`: a consulta barata que roda poucas vezes
+   pode não aparecer, e não aparecer quer dizer que ela foi leve. A consulta acima foi conferida no LocalDB em 26/11/2026:
+   roda e tem as colunas certas (lá o Query Store fica desligado, então não volta linha).
+
    A procura do mesmo nome e nascimento da prévia (a do índice da 188) e o `SELECT TOP` das linhas de cada lote são as que
    o ensaio do computador mais vigiou.
 9. **A prova da permissão de ALTER** (juntar fichas, item 6).

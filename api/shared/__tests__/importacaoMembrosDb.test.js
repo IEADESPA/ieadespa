@@ -326,6 +326,15 @@ describe("a linha que o banco recusa (a saída do IMPORTANDO)", () => {
     expect(r2).toMatchObject({ sucesso: false, status: 409, mensagem: db.MSG.RECUSADAS(5), podeDeixarDeFora: true });
     expect(mockTx.filter((x) => x === "commit")).toHaveLength(0);
   });
+  test("com o 'deixar de fora' e a recusa tarde: a chamada grava as de antes e ninguém fica de fora; as recusadas voltam ao 409 em primeiro na seguinte", async () => {
+    const linhas = [2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => linha({ Linha: n, MatriculaArquivo: String(500 + n), Matricula: 500 + n, Nome: n >= 5 ? `Recusada ${n}` : `Pessoa ${n}` }));
+    let t = 0;
+    cenarioRecusa({ linhas, recusar: (i) => { t += 3000; return /^Recusada/.test(i.nome); } });
+    const r = await db.importarLote(POOL, QUEM, 7, { deixarDeFora: true, orcamentoMs: 10000, agora: () => t });
+    // a confirmação da tela não deixa ninguém de fora sem a prova desta chamada: as recusadas ficam para a seguinte, onde a tela mostra de novo quais são
+    expect(r).toMatchObject({ sucesso: true, importadas: 3, fora: 0 });
+    expect(marcas()).toHaveLength(0);
+  });
 });
 
 // O QUE FICA NAS LINHAS QUANDO A IMPORTAÇÃO TERMINA (24/11/2026, decisão da sessão a partir da regra dele — "a lista dos de fora: nome e motivo" — e da LGPD):

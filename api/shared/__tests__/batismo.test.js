@@ -123,22 +123,7 @@ describe("calcularAptidaoBatismo — item IV verificado por trilha de formação
 });
 
 describe("efetivarTurma (Art. 7º, II — efetivação automática)", () => {
-  test("efetiva só os APROVADOS da turma, nunca os pendentes/reprovados", async () => {
-    const { pool, chamadas } = criarPoolFalso([
-      [{ DataBatismo: "2026-05-16" }], // turma
-      [{ CandidatoId: 1, MembroId: 10 }, { CandidatoId: 2, MembroId: 11 }], // aprovados (2)
-      [], // update MembroReferencia #1
-      [], // update CandidatosBatismo #1
-      [], // update MembroReferencia #2
-      []  // update CandidatosBatismo #2
-    ]);
-    const total = await batismo.efetivarTurma(pool, 1);
-    expect(total).toBe(2);
-    expect(chamadas).toHaveLength(6);
-    expect(chamadas[2].sql).toMatch(/SituacaoMembro = 'EM_COMUNHAO'/);
-    expect(chamadas[2].inputs.dataBatismo).toBe("2026-05-16");
-  });
-
+  // a efetivação de cada candidato (a transação, a data de entrada pelo batismo, a pendência do arrolamento e a trilha): batismoEntrada.test.js
   test("turma inexistente não efetiva nada", async () => {
     const { pool, chamadas } = criarPoolFalso([[]]);
     const total = await batismo.efetivarTurma(pool, 999);

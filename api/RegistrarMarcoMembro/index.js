@@ -13,6 +13,7 @@ const { pessoaAlcancavel, exigirGeral } = require("../shared/escopoRotas");
 const { dataISOValida } = require("../shared/escopoFichas");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
 const discipuladoDb = require("../shared/discipuladoDb");
+const { recusaDaConversao } = require("../shared/batismo");
 
 // ESCOPO: o marco entra na linha do tempo de uma PESSOA — só lança quem alcança a congregação dela (shared/escopoRotas.js); fora do escopo vale a mesma resposta de
 // "Matrícula não encontrada".
@@ -57,6 +58,17 @@ module.exports = async function (context, req) {
   if (daEscada && Number(membroId) === Number(usuario.membroId)) {
     context.res = { status: 422, body: { sucesso: false, mensagem: `Ninguém lança em si mesmo o marco "${tipoCat.nome}" (só do nível geral; o batismo no Espírito Santo conta para a escada ministerial): peça a outra pessoa do nível geral.` } };
     return;
+  }
+
+  // volta 9 (decisão de 25/11): a conversão vem antes do batismo (no mesmo dia vale) e nunca no futuro — a mesma regra do batismo (shared/batismo.js)
+  if (tipoCat.codigo === "CONVERSAO" && dataMarco) {
+    const f = (await pool.request().input("m", sql.Int, membroId)
+      .query(`SELECT CONVERT(varchar(10), DataBatismo, 120) AS DataBatismo FROM MembroReferencia WHERE MembroId = @m`)).recordset[0];
+    const recusa = recusaDaConversao(dataMarco, f && f.DataBatismo, hojeBrasilia());
+    if (recusa) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: recusa } };
+      return;
+    }
   }
 
   // O "único" se confere dentro de uma transação com trava de faixa: dois cliques ao mesmo tempo não lançam duas conversões.

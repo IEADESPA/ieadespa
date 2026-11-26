@@ -29,7 +29,11 @@ function montar({ geral = true, gerais } = {}) {
   ev(extrair("script.js", ["jsonDaTela", "avisarResultado", "pedirTexto", "geralPara"]), "script.js(extra)");
   // v8.2: o login diz em quais permissões a sessão é do nível geral (o prelude do ambiente não conhece esta variável)
   ev(`var authPermissoesGerais = ${JSON.stringify(gerais || (geral ? ["afm", "consagracoes", "pessoas"] : []))};`, "permissoes-gerais");
-  ev(extrair("modulos/pessoas.js", ["editarPessoa", "salvarPessoa", "limparFormPessoa", "travarCamposDoGeralPessoa", "mudouCargoPessoaAcao", "nomeCargoPorSigla"]), "pessoas.js(extraido)");
+  ev(extrair("modulos/pessoas.js", ["editarPessoa", "salvarPessoa", "limparFormPessoa", "travarCamposDoGeralPessoa", "mudouCargoPessoaAcao", "nomeCargoPorSigla",
+    "STATUS_LICENCA_CANDIDATURA", "STATUS_FALECIDO", "preencherSituacaoFichaPessoa"]), "pessoas.js(extraido)");
+  // v10.1: as listas do formulário carregam por conta própria; aqui já estão prontas (o formulário não espera nada)
+  ev("var opcoesFormPessoaCarregando = null, opcoesFormPessoaProntas = true, opcoesFormPessoaFalha = '';", "listas-prontas");
+  ev("function endPreencher() {} function endLimpar() {} function endLerParaEnviar() { return {}; }", "stub: o endereço em linhas (v9.5) não é desta prova");
   ev("async function carregarPessoas() {}", "stub: a lista de pessoas não é desta prova");
   ev(extrair("modulos/meu-painel.js", ["formatarValorLgpd"]), "meu-painel.js(extraido)");
   ev(lerApp("modulos/consagracoes.js"), "consagracoes.js");
@@ -295,6 +299,83 @@ const opcoes = (amb) => amb.e("consagracaoModalidade").options;
   finCad.ev(`window._pessoasCache = ${JSON.stringify([{ ...R.pessoa }])}; window._cargosCache = [];`);
   finCad.g("editarPessoa")(R.pessoa.membroId);
   ok(finCad.e("pessoaCargoMinisterial").disabled && finCad.e("pessoaDizimista").disabled, "geral só no financeiro: cargo e dízimo travados no cadastro");
+
+  console.log("== cadastro: em licença por candidatura, só o falecimento pela ficha ==");
+  ok(/\.filter\(s => s\.ativa !== false && s\.sigla !== STATUS_LICENCA_CANDIDATURA\)/.test(lerApp("modulos/pessoas.js")), "a lista de situações da ficha não oferece a licença por candidatura");
+  const lic = montar({ geral: true });
+  lic.ev(`window._pessoasCache = ${JSON.stringify([{ ...R.pessoa, status: "LICENCA_CANDIDATURA" }, { ...R.pessoa, membroId: R.pessoa.membroId + 1, status: "ATIVO" }])}; window._cargosCache = [];`);
+  lic.ev(`document.getElementById("pessoaStatus").innerHTML = '<option value="ATIVO">ATIVO</option><option value="INATIVO">INATIVO</option><option value="FALECIDO">Falecido</option>';`);
+  const escolhiveis = (amb) => [...amb.e("pessoaStatus").options].filter((o) => !o.disabled && !o.hidden).map((o) => o.value).sort();
+  lic.g("editarPessoa")(R.pessoa.membroId);
+  ok(lic.e("pessoaStatus").value === "LICENCA_CANDIDATURA" && !lic.e("pessoaStatus").disabled && JSON.stringify(escolhiveis(lic)) === JSON.stringify(["FALECIDO", "LICENCA_CANDIDATURA"])
+    && /Falecido/.test(lic.e("pessoaStatusDica").textContent) && /Desligar/.test(lic.e("pessoaStatusDica").textContent),
+  "em licença: só a licença e o falecimento à escolha, e a dica diz os dois caminhos (Falecido aqui, Desligar no botão)", escolhiveis(lic));
+  lic.limparRegistro();
+  lic.g("salvarPessoa")();
+  await lic.ocioso();
+  p = posts(lic, "pessoas");
+  ok(p.length === 1 && p[0].corpo.status === "LICENCA_CANDIDATURA", "salvar sem mudar manda a mesma situação", p[0] && p[0].corpo);
+  lic.g("editarPessoa")(R.pessoa.membroId);
+  lic.doc.escolher(lic.e("pessoaStatus"), "FALECIDO");
+  lic.limparRegistro();
+  lic.g("salvarPessoa")();
+  await lic.ocioso();
+  p = posts(lic, "pessoas");
+  ok(p.length === 1 && p[0].corpo.status === "FALECIDO", "escolher Falecido e salvar manda FALECIDO", p[0] && p[0].corpo);
+  lic.g("editarPessoa")(R.pessoa.membroId + 1);
+  ok(!lic.e("pessoaStatus").disabled && lic.e("pessoaStatus").value === "ATIVO" && JSON.stringify(escolhiveis(lic)) === JSON.stringify(["ATIVO", "FALECIDO", "INATIVO"])
+    && lic.e("pessoaStatusDica").textContent === "", "outra pessoa: a lista inteira de volta, sem a licença", escolhiveis(lic));
+  // em LICENCA_CANDIDATURA, mas a licença já encerrada (licencaAberta false, da API): a lista inteira, e a dica diz que a licença acabou
+  lic.ev(`window._pessoasCache.push(${JSON.stringify({ ...R.pessoa, membroId: R.pessoa.membroId + 2, status: "LICENCA_CANDIDATURA", licencaAberta: false })});`);
+  lic.g("editarPessoa")(R.pessoa.membroId + 2);
+  ok(!lic.e("pessoaStatus").disabled && lic.e("pessoaStatus").value === "LICENCA_CANDIDATURA"
+    && JSON.stringify(escolhiveis(lic)) === JSON.stringify(["ATIVO", "FALECIDO", "INATIVO", "LICENCA_CANDIDATURA"]) && /encerrada/.test(lic.e("pessoaStatusDica").textContent),
+  "licença já encerrada: a lista inteira à escolha, e a dica diz que a licença acabou", escolhiveis(lic));
+  lic.doc.escolher(lic.e("pessoaStatus"), "INATIVO");
+  lic.limparRegistro();
+  lic.g("salvarPessoa")();
+  await lic.ocioso();
+  p = posts(lic, "pessoas");
+  ok(p.length === 1 && p[0].corpo.status === "INATIVO", "licença já encerrada: escolher INATIVO e salvar manda INATIVO", p[0] && p[0].corpo);
+  // sem Falecido na lista (catálogo sem ele): a opção entra só para quem está em licença
+  lic.ev(`document.getElementById("pessoaStatus").innerHTML = '<option value="ATIVO">ATIVO</option>';`);
+  lic.g("editarPessoa")(R.pessoa.membroId);
+  ok(JSON.stringify(escolhiveis(lic)) === JSON.stringify(["FALECIDO", "LICENCA_CANDIDATURA"]), "catálogo sem Falecido: a opção entra para quem está em licença", escolhiveis(lic));
+
+  // Decisão de 25/11/2026: a Carta de Mudança é o desligamento e só sai com a confirmação do próprio membro; a secretaria não a emite enquanto só pedida.
+  console.log("== cartas: o botão Emitir da Carta de Mudança só depois da confirmação do membro ==");
+  const car = montar({ geral: true });
+  car.ev(extrair("modulos/pessoas.js", ["ROTULO_CARTA", "cartasCache", "renderizarCartas"]), "pessoas.js(cartas)");
+  car.ev(`cartasCache = ${JSON.stringify([
+    { cartaId: 71, membroId: 501, nome: "Maria de Teste", tipo: "MUDANCA", status: "SOLICITADA" },
+    { cartaId: 72, membroId: 502, nome: "João de Teste", tipo: "MUDANCA", status: "CONFIRMADA" },
+    { cartaId: 73, membroId: 503, nome: "Ana de Teste", tipo: "RECOMENDACAO", status: "SOLICITADA" }
+  ])}; renderizarCartas();`);
+  const linhaDaCarta = (id) => car.e("resultadoListaCartas").innerHTML.split("<tr>").find((l) => l.includes(`<td>${id}</td>`)) || "";
+  const emitir = (id) => /data-on-click="emitirCarta"/.test(linhaDaCarta(id));
+  ok(!emitir(71), "Carta de Mudança só pedida (SOLICITADA): sem o botão Emitir");
+  ok(emitir(72), "Carta de Mudança confirmada pelo membro: o botão Emitir aparece");
+  ok(emitir(73), "Carta de Recomendação pedida: o botão Emitir continua");
+
+  // Decisão de 25/11/2026: uma licença por candidatura aberta por pessoa; a migração 301 fecha as duplicadas antigas com a marca DUPLICADA. Quem não retorna fica
+  // INATIVO no rol (resposta do responsável, 25/11/2026): o aviso do modal diz isso.
+  console.log("== licença por candidatura: a marca DUPLICADA e o aviso do retorno ==");
+  const lc = montar({ geral: true });
+  lc.ev(extrair("modulos/pessoas.js", ["ROTULO_STATUS_LICENCA", "carregarLicencasCandidatura", "pedirDecisaoRetornoLicenca"]), "pessoas.js(licenca)");
+  lc.api.rotas["GET licencas-candidatura"] = { corpo: [
+    { licencaId: 81, membroId: 601, nome: "Pessoa de Teste", dataPleito: "2026-10-04", dataInicioLicenca: "2026-07-06", status: "EM_LICENCA" },
+    { licencaId: 82, membroId: 601, nome: "Pessoa de Teste", dataPleito: "2026-10-04", dataInicioLicenca: "2026-07-06", status: "DUPLICADA" }
+  ] };
+  await lc.g("carregarLicencasCandidatura")(601);
+  const linhasLic = lc.e("resultadoListaLicencasCandidatura").innerHTML.split("<tr>").filter((l) => l.includes("2026-10-04"));
+  ok(linhasLic.length === 2 && /Em licença/.test(linhasLic[0]) && /Registrar retorno/.test(linhasLic[0]), "a licença aberta: 'Em licença' e o botão do retorno", linhasLic[0]);
+  ok(/Duplicada \(fechada\)/.test(linhasLic[1]) && !/DUPLICADA/.test(linhasLic[1]) && !/Registrar retorno/.test(linhasLic[1]),
+    "a duplicada fechada pela migração: o rótulo em português e sem o botão do retorno", linhasLic[1]);
+  lc.g("pedirDecisaoRetornoLicenca")();
+  const aviso = lc.e("modalCaixa").textContent.replace(/\s+/g, " ");
+  ok(/não retornou, a pessoa fica INATIVO no rol/.test(aviso) && !/não muda sozinho/.test(aviso), "o aviso do retorno diz que quem não retorna fica INATIVO", aviso);
+  lc.e("modalCancelar").onclick();
+  ok(/const ROTULO_STATUS_LIC = \{[^}]*DUPLICADA: "Duplicada \(fechada\)"/.test(lerApp("modulos/meu-painel.js")), "Meus Dados (o próprio membro): a duplicada com o mesmo rótulo");
 
   console.log("== Meus Dados: data pura sem o dia a menos ==");
   ok(amb.g("formatarValorLgpd")("2026-10-28", "data") === "28/10/2026", "2026-10-28 aparece 28/10/2026");

@@ -29,6 +29,7 @@ async function carregarPainelPessoal(matricula) {
       <p class="linha-perfil">${escaparHtmlEbd(data.membro.congregacao) || "sem congregação cadastrada"} · ${badgeStatusPessoa(data.membro.status)}</p>
     </div>`;
 
+  if (typeof guardarMembroCasca === "function") guardarMembroCasca(data.membro);   // FASE 10: a congregação da pessoa no Início, no Meu Perfil e no pé do menu
   if (typeof afmCarregarMinhaSituacao === "function") afmCarregarMinhaSituacao();   // v8.1 — faltas seguidas na CLI e a matrícula da AFM
 
   const orgaosContainer = document.getElementById("cartaoMeusOrgaos");
@@ -170,7 +171,7 @@ async function alternarMeusDadosLGPD() {
 
   const m = data.membro;
   const ROTULO_MODALIDADE = { CIVIL_E_RELIGIOSO: "Civil e Religioso", SOMENTE_RELIGIOSO: "Somente Religioso" };
-  const ROTULO_STATUS_LIC = { EM_LICENCA: "Em licença", RETORNOU: "Retornou", NAO_RETORNOU: "Não retornou" };
+  const ROTULO_STATUS_LIC = { EM_LICENCA: "Em licença", RETORNOU: "Retornou", NAO_RETORNOU: "Não retornou", DUPLICADA: "Duplicada (fechada)" };
 
   caixa.innerHTML = `
     <div class="cartao-perfil">

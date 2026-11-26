@@ -36,7 +36,8 @@ const terReais = (v) => `R$ ${Number(v || 0).toLocaleString("pt-BR", { minimumFr
 const TER_SEM_CONEXAO = "<p class='subtitle'>Sem conexão com o servidor. Tente de novo.</p>";
 const TER_RESULTADO = { ATENDE: "✅ atende", NAO_ATENDE: "❌ não atende", SEM_DADO: "❔ não dá para medir" };
 const TER_SITUACAO = {
-  ATENDE_TUDO: "✅ Atende todos os critérios", NAO_ATENDE: "Ainda não atende", SEM_DADO: "Falta dado para medir", SEM_CRITERIOS: "Nenhum critério ativo"
+  ATENDE_TUDO: "✅ Atende todos os critérios", NAO_ATENDE: "Ainda não atende", SEM_DADO: "Falta dado para medir", SEM_CRITERIOS: "Nenhum critério ativo",
+  NAO_AVALIAVEL: "Não dá para avaliar daqui"
 };
 
 const terDono = () => (authToken ? `${authMatricula}|${typeof sessaoDeLiderancaNaTela === "function" && sessaoDeLiderancaNaTela() ? "senha" : "pin"}` : null);

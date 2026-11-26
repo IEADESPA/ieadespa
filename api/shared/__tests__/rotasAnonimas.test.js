@@ -23,6 +23,8 @@ const PUBLICAS = {
   ConsultarProtocoloOuvidoria: "consulta do próprio protocolo (o código é o segredo)",
   VerificarCertificado: "verificação pública de certificado (o código é o segredo; com limitador)",
   VerificarCredencial: "v8.4: leitura pública do QR da credencial (Regimento Art. 76 §1º; o código é o segredo; só o mínimo — nome, membro/obreiro, congregação, ativa/inativa; com limitador)",
+  ConferirCarteirinha: "FASE 10, passo 8: leitura pública do QR fixo da carteirinha (o código é o segredo; só o mínimo — nome, situação calculada agora e, de quem está no rol, a foto; do membro em comunhão, cargo, função, congregação; com limitador)",
+  CompletarCadastro: "FASE 10, as sobras: a própria pessoa completa o pré-cadastro pelo link do e-mail (o código é o segredo, vale 7 dias e uma vez só; só o primeiro nome e o que falta; a resposta não revela se já é da Igreja; com limitador)",
   VerificarContaMembro: "chamada servidor a servidor do site; só devolve um booleano; limitador por origem + chave combinada com o site (CHAVE_SITE_SISTEMA, ver chaveSiteSistema.test.js)",
   LoginSecretaria: "porta de entrada da liderança (senha + bloqueio)",
   SegundoFator: "segunda etapa do login da liderança (vD.4): só com o bilhete assinado que a senha certa abriu; limitador + bloqueio por pessoa",
@@ -36,7 +38,8 @@ const PUBLICAS = {
   GestaoTextoMestre: "GET sem login devolve só a versão vigente do texto mestre (normativo público)",
   CuidadoPastoralSite: "v7.11.1: o mural de oração do site, servidor a servidor; FALHA FECHADA sem a chave combinada CHAVE_SITE_SISTEMA (401), limitador por origem e teto por hora no banco; só guarda o confidencial e o com sinal de risco e devolve só sim/não",
   ComunicacaoSair: "v7.12: o link \"não quero mais receber\" do e-mail de comunicado, sem login por desenho (a saída tem de ser fácil, LGPD art. 8º, § 5º): o link assinado (HMAC, por pessoa e categoria) é a prova; GET só lê, POST grava o não; limitador por origem",
-  ProtecaoAjuda: "v7.8: canal de ajuda da criança e do adolescente — SEM login por desenho (a criança pode não ter conta); só grava um pedido de ajuda, sem perguntas, sem IP guardado; limitador por origem (5/hora) e teto global (40/hora) no banco",
+  PreCadastroSite: "v10.1b passo 4: o \"Quero me cadastrar\" do site, servidor a servidor; FALHA FECHADA sem a chave combinada CHAVE_SITE_SISTEMA (401); limitador por origem, 3 por hora por visitante e 200 por hora no total (no banco); resposta sempre igual para um envio válido (nunca revela se o CPF já tem cadastro)",
+  ProtecaoAjuda:"v7.8: canal de ajuda da criança e do adolescente — SEM login por desenho (a criança pode não ter conta); só grava um pedido de ajuda, sem perguntas, sem IP guardado; limitador por origem (5/hora) e teto global (40/hora) no banco",
   Saude: "vD.5: 'está no ar?' para o teste de disponibilidade (GitHub Actions a cada 5 min); não toca no banco e só devolve ok + hora"
 };
 // Rotinas agendadas: protegidas por segredo (x-cron-secret), não por sessão.

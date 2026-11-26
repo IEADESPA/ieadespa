@@ -13,7 +13,7 @@ jest.mock("../db", () => {
       if (padrao.test(texto)) return { recordset: typeof valor === "function" ? valor(inputs) : valor, rowsAffected: [afetadas === undefined ? 1 : afetadas] };
     }
     // Sem regra própria: UPDATE/DELETE "deu certo" (1 linha); consultas voltam vazias.
-    return { recordset: [], rowsAffected: [/^\s*(UPDATE|DELETE)\b/i.test(texto) ? 1 : 0] };
+    return { recordset: [], rowsAffected: [/^\s*(SET XACT_ABORT ON;\s*)?(UPDATE|DELETE)\b/i.test(texto) ? 1 : 0] };   // com ou sem o prefixo da transação curta
   };
   const novaRequisicao = () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: (texto) => rodar(texto, inputs) }; return r; };
   class Transaction { async begin() { mockTransacao.begin++; } async commit() { mockTransacao.commit++; } async rollback() { mockTransacao.rollback++; } }
@@ -22,9 +22,9 @@ jest.mock("../db", () => {
   const sql = new Proxy({ Transaction, Request }, { get: (alvo, prop) => (prop in alvo ? alvo[prop] : (typeof prop === "string" && /^[A-Z]/.test(prop) ? () => undefined : undefined)) });
   return { getPool: async () => ({ request: novaRequisicao }), sql };
 });
-jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), sha256: () => "" }));
+jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => true), sha256: () => "" }));
 jest.mock("../vacancia", () => ({ encerrarVinculos: jest.fn(async () => {}) }));
-jest.mock("../minimizacaoLgpd", () => ({ diasMinimizacaoExMembro: jest.fn(async () => 30), minimizarCamposExMembro: jest.fn(async () => {}) }));
+jest.mock("../minimizacaoLgpd", () => ({ diasMinimizacaoExMembro: jest.fn(async () => 30), prazoMinimizacaoExMembro: jest.fn(async () => ({ dias: 30, padrao: false })), minimizarNaTransacao: jest.fn(async () => ["https://armazem/doc-indicacao"]), excluirDocumentos: jest.fn(async () => []) }));
 jest.mock("../storage", () => ({ urlComSas: (u) => u, salvarFoto: jest.fn(async (id) => `https://armazem/fotos/membro-${id}`), excluirFoto: jest.fn(async () => {}) }));
 jest.mock("../protocolo", () => ({ gerarProtocolo: jest.fn(async () => "APR-2026-0001") }));
 jest.mock("../pdfInstitucional", () => {
@@ -72,7 +72,7 @@ async function chamar(handler, { metodo = "GET", corpo = {}, token, ligado = {},
 }
 const quando = (padrao, valor, afetadas) => mockRegras.push([padrao, valor, afetadas]);
 const rodou = (padrao) => mockConsultas.filter((c) => padrao.test(c.sql));
-const escritas = () => mockConsultas.filter((c) => /^\s*(INSERT|UPDATE|DELETE)\b/i.test(c.sql));
+const escritas = () => mockConsultas.filter((c) => /^\s*(SET XACT_ABORT ON;\s*)?(INSERT|UPDATE|DELETE)\b/i.test(c.sql));
 const tokenDe = (membroId, extra = {}) => auth.reassinarSessao({ membroId, permissoes: [], escopoCongregacoes: [], termosPendentes: [], ...extra });
 // Geral: papel GLOBAL + escopo TODAS. Local: dirigente (membro 5) da congregação Central, a menos que se diga outro escopo.
 const GERAL = (permissoes = ["pessoas"]) => tokenDe(1, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes });
@@ -98,8 +98,10 @@ beforeEach(() => {
   mockConsultas = [];
   mockTransacao = { begin: 0, commit: 0, rollback: 0 };
   registrarAuditoria.mockClear();
+  require("../auditoria").registrarAuditoriaNaTransacao.mockClear();
   vacancia.encerrarVinculos.mockClear();
-  minimizacao.minimizarCamposExMembro.mockClear();
+  minimizacao.minimizarNaTransacao.mockClear();
+  minimizacao.excluirDocumentos.mockClear();
   storage.salvarFoto.mockClear();
   storage.excluirFoto.mockClear();
   global.fetch = jest.fn();
@@ -186,7 +188,7 @@ describe("GestaoMedidasCautelares: Art. 45 é da igreja inteira, só o GERAL", (
     expect(r.status).toBe(201);
     expect(rodou(/INSERT INTO MedidasCautelares/)[0].inputs.motivo).toBe("desvio");
     expect(rodou(/UPDATE Lideranca SET AtivoAte/)).toHaveLength(1);
-    expect(registrarAuditoria).toHaveBeenCalledTimes(1);
+    expect(require("../auditoria").registrarAuditoriaNaTransacao).toHaveBeenCalledTimes(1);   // a trilha vai na transação da medida
   });
   test("geral: um id na rota que não é matrícula canônica nunca vira 'criar medida nova'", async () => {
     // O banco aceitaria a criação (a pessoa existe, há outro com 'permissoes'): se o ramo de criar fosse alcançado, gravaria.
@@ -210,6 +212,8 @@ describe("GestaoMedidasCautelares: Art. 45 é da igreja inteira, só o GERAL", (
 
 describe("ImportarPessoas: importação do rol é do GERAL, com teto e transação", () => {
   const corpo = { linhas: [{ membroId: 100, nome: "Nova" }] };
+  // o mundo depois da importação do sistema pago (a trava das matrículas solta; a trava ligada tem os testes dela em travaMatriculas.test.js)
+  beforeEach(() => quando(/FROM ImportacoesMembros WHERE Situacao = N'CONCLUIDA'/, [{ liberadas: 1 }]));
   test("dirigente local com pessoas: 403 antes de tocar o banco", async () => {
     const r = await chamar(hImportar, { metodo: "POST", token: LOCAL(), corpo });
     expect(r.status).toBe(403);
@@ -576,13 +580,17 @@ describe("GestaoLicencasCandidatura", () => {
   });
 });
 
-describe("GestaoFilaAprovacoes", () => {
+describe("GestaoFilaAprovacoes (a caixa de sugestões, v10.1b passo 5)", () => {
+  const { registrarAuditoriaNaTransacao } = require("../auditoria");
+  const AREA = () => tokenDe(7, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "AREA", escopoCongregacoes: ["Central", "Vila Nova"], permissoes: ["pessoas"] });
+  const congregacoesNoBanco = () => quando(/SELECT CongregacaoId, Nome FROM Congregacoes/, [{ CongregacaoId: 1, Nome: "Central" }, { CongregacaoId: 2, Nome: "Vila Nova" }]);
   const linha = (solicitacaoId, membroId, nome, congregacaoNome, extra = {}) => ({
-    solicitacaoId, membroId, nome, dataSolicitacao: "2026-10-01T10:00:00", status: "PENDENTE",
-    campoId: solicitacaoId * 10, nomeCampo: "dataNascimento", valorAnterior: "1990-01-01", valorProposto: "1991-02-03", statusCampo: "PENDENTE",
-    congregacaoNome, extensaoNome: null, ...extra
+    SolicitacaoId: solicitacaoId, MembroId: membroId, Nome: nome, DataSolicitacao: "2026-10-01T10:00:00", Status: "PENDENTE",
+    CampoId: solicitacaoId * 10, NomeCampo: "dataNascimento", ValorAnterior: "1990-01-01", ValorProposto: "1991-02-03", StatusCampo: "PENDENTE",
+    CongregacaoNome: congregacaoNome, ExtensaoNome: null, EmProcessoDeCargo: 0, TemExclusao: 0, ...extra
   });
   test("lista: só os pedidos de gente do escopo, sem o pedido do próprio usuário e sem as colunas internas", async () => {
+    congregacoesNoBanco();
     quando(/FROM SolicitacoesEdicaoPessoa s/, [
       linha(1, 10, "Ana", "Central"),
       linha(2, 20, "Beto", "Vila Nova"),
@@ -591,28 +599,66 @@ describe("GestaoFilaAprovacoes", () => {
     ]);
     const local = await chamar(hFila, { token: LOCAL() });
     expect(local.body.map((s) => s.solicitacaoId)).toEqual([1]);
-    expect(JSON.stringify(local.body)).not.toMatch(/congregacaoNome|extensaoNome/);
+    expect(JSON.stringify(local.body)).not.toMatch(/congregacaoNome|extensaoNome|EmProcessoDeCargo/);
+    expect(local.body[0].campos[0]).toMatchObject({ podeAplicar: true, podeRecusar: true, rotulo: "Data de nascimento" });
+    // o filtro vai NO BANCO (as congregações do escopo, por id), e a segunda trava em memória
+    expect(rodou(/FROM SolicitacoesEdicaoPessoa s/)[0].sql).toMatch(/OPENJSON/);
     const geral = await chamar(hFila, { token: GERAL() });
-    expect(geral.body.map((s) => s.solicitacaoId)).toEqual([1, 2, 4].concat([3]).sort());
+    expect(geral.body.map((s) => s.solicitacaoId).sort()).toEqual([1, 2, 3, 4]);
   });
+  test("a área ACOMPANHA: vê os pedidos das congregações dela, mas não aplica nem recusa", async () => {
+    congregacoesNoBanco();
+    quando(/FROM SolicitacoesEdicaoPessoa s/, [linha(1, 10, "Ana", "Central"), linha(2, 20, "Beto", "Vila Nova")]);
+    const r = await chamar(hFila, { token: AREA() });
+    expect(r.body.map((s) => s.solicitacaoId)).toEqual([1, 2]);
+    expect(r.body.every((s) => s.podeAplicar === false && s.campos.every((c) => c.podeAplicar === false && c.podeRecusar === false && /área acompanha/.test(c.motivoNaoAplica)))).toBe(true);
+  });
+  test("o CPF sai mascarado para quem não é a Geral; o CPF já gravado só a Geral aplica", async () => {
+    congregacoesNoBanco();
+    quando(/FROM SolicitacoesEdicaoPessoa s/, [linha(1, 10, "Ana", "Central", { NomeCampo: "cpf", ValorAnterior: "52998224725", ValorProposto: "11144477735" })]);
+    const local = await chamar(hFila, { token: LOCAL() });
+    const c = local.body[0].campos[0];
+    expect(c.valorAnterior).toBe("***.982.247-**");
+    expect(c.valorProposto).toBe("***.444.777-**");
+    expect(JSON.stringify(local.body)).not.toMatch(/52998224725|11144477735/);
+    expect(c.podeAplicar).toBe(false);
+    expect(c.podeRecusar).toBe(true);
+    const geral = await chamar(hFila, { token: GERAL() });
+    expect(geral.body[0].campos[0]).toMatchObject({ valorProposto: "11144477735", podeAplicar: true });
+  });
+  test("?situacao=DECIDIDAS mostra as já decididas, com o motivo da recusa e quem decidiu", async () => {
+    congregacoesNoBanco();
+    quando(/FROM SolicitacoesEdicaoPessoa s/, [linha(1, 10, "Ana", "Central", { StatusCampo: "REJEITADO", MotivoDecisao: "a certidão diz outra data", DecididoPor: 5, DecididoPorNome: "Dirigente Central" })]);
+    const r = await chamar(hFila, { token: LOCAL(), query: { situacao: "decididas" } });
+    expect(rodou(/FROM SolicitacoesEdicaoPessoa s/)[0].sql).toMatch(/c\.Status <> N'PENDENTE'/);
+    expect(r.body[0].campos[0]).toMatchObject({ status: "REJEITADO", motivo: "a certidão diz outra data", podeAplicar: false, decididoPor: { matricula: 5 } });
+  });
+
   describe("decidir", () => {
-    const campo = (extra = {}) => ({ CampoId: 10, NomeCampo: "dataNascimento", ValorAnterior: "1990-01-01", ValorProposto: "1991-02-03", Status: "PENDENTE", ...extra });
-    const base = (campos = [campo()], pendentesRestantes = 0) => {
-      quando(/SELECT SolicitacaoId, MembroId, Status FROM SolicitacoesEdicaoPessoa/, (i) => ({ 1: [{ SolicitacaoId: 1, MembroId: 10, Status: "PENDENTE" }], 2: [{ SolicitacaoId: 2, MembroId: 20, Status: "PENDENTE" }], 3: [{ SolicitacaoId: 3, MembroId: 5, Status: "PENDENTE" }] }[i.id] || []));
-      quando(/FROM SolicitacoesEdicaoCampos WHERE CampoId = @id AND SolicitacaoId = @sol/, (i) => campos.filter((c) => c.CampoId === i.id));
-      quando(/COUNT\(\*\) AS total FROM SolicitacoesEdicaoCampos/, [{ total: pendentesRestantes }]);
+    const campo = (extra = {}) => ({ CampoId: 10, NomeCampo: "dataNascimento", ValorAnterior: "1990-01-01", ValorProposto: "1991-02-03", Status: "PENDENTE", MembroId: 10, ...extra });
+    const SOLICITACOES = { 1: 10, 2: 20, 3: 5 };
+    const base = (campos = [campo()], ficha = {}) => {
+      quando(/SELECT SolicitacaoId, MembroId FROM SolicitacoesEdicaoPessoa/, (i) => (SOLICITACOES[i.id] ? [{ SolicitacaoId: i.id, MembroId: SOLICITACOES[i.id] }] : []));
+      quando(/FROM SolicitacoesEdicaoCampos c WITH \(UPDLOCK, ROWLOCK\)/, (i) => campos.filter((c) => c.CampoId === i.c).map((c) => ({ ...c, MembroId: SOLICITACOES[i.s] })));
+      quando(/FROM MembroReferencia m WITH \(UPDLOCK, ROWLOCK\)/, (i) => (PESSOAS[i.id] ? [{ MembroId: i.id, Status: "ATIVO", DataNascimento: new Date("1990-01-01T00:00:00Z"),
+        Cpf: null, CongregacaoNome: PESSOAS[i.id].CongregacaoNome, ExtensaoNome: null, EmProcessoDeCargo: 0, TemExclusao: 0, ...ficha }] : []));
     };
     const decidir = (solicitacaoId, token = LOCAL(), decisoes = [{ campoId: 10, decisao: "APROVADO" }]) =>
       chamar(hFila, { metodo: "POST", token, ligado: { solicitacaoId: String(solicitacaoId), acao: "decidir" }, corpo: { decisoes } });
+    const naFicha = () => rodou(/^\s*UPDATE MembroReferencia SET/);
 
-    test("pedido de pessoa da congregação: aprova, grava na ficha e audita", async () => {
+    test("pedido de pessoa da congregação: aplica na ficha, fecha o pedido e audita na mesma transação", async () => {
       base();
       const r = await decidir(1);
-      expect(r.body.sucesso).toBe(true);
-      const upd = rodou(/UPDATE MembroReferencia SET DataNascimento = @valor WHERE MembroId = @id/);
+      expect(r.body).toMatchObject({ sucesso: true, aplicados: 1, recusados: 0 });
+      const upd = rodou(/UPDATE MembroReferencia SET DataNascimento = @v WHERE MembroId = @id/);
       expect(upd).toHaveLength(1);
-      expect(upd[0].inputs).toMatchObject({ id: 10, valor: "1991-02-03" });
-      expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ registroId: 10, usuarioId: 5 });
+      expect(upd[0].inputs).toMatchObject({ id: 10, v: "1991-02-03" });
+      expect(rodou(/SET Status = N'APROVADO'/)).toHaveLength(1);
+      expect(rodou(/UPDATE SolicitacoesEdicaoPessoa SET Status = N'CONCLUIDA'/)).toHaveLength(1);
+      expect(registrarAuditoriaNaTransacao.mock.calls[0][1]).toMatchObject({ tabela: "MembroReferencia", registroId: 10, usuarioId: 5,
+        dadosAntes: { dataNascimento: "1990-01-01" }, dadosDepois: { dataNascimento: "1991-02-03" } });
+      expect(mockTransacao).toMatchObject({ begin: 1, commit: 1, rollback: 0 });
     });
     test("pedido de pessoa de OUTRA congregação: a mesma resposta de pedido inexistente; a ficha não muda", async () => {
       base();
@@ -635,20 +681,53 @@ describe("GestaoFilaAprovacoes", () => {
       expect((await decidir(2, GERAL(), [{ campoId: 10, decisao: "APROVADO" }])).body.sucesso).toBe(true);
       expect(rodou(/UPDATE MembroReferencia SET DataNascimento/)[0].inputs.id).toBe(20);
     });
-    test("campo fora do mapa ('constructor') ou data inválida: vira REJEITADO, não toca a ficha e não dá 500", async () => {
+    test("a área acompanha: 403 ao aplicar e ao recusar, nada gravado", async () => {
+      base();
+      expect((await decidir(1, AREA())).status).toBe(403);
+      expect((await decidir(1, AREA(), [{ campoId: 10, decisao: "REJEITADO", motivo: "não confere" }])).status).toBe(403);
+      expect(escritas()).toHaveLength(0);
+    });
+    test("recusar exige o motivo; com o motivo, grava REJEITADO e o motivo (a pessoa lê)", async () => {
+      base();
+      const sem = await decidir(1, LOCAL(), [{ campoId: 10, decisao: "REJEITADO", motivo: "   " }]);
+      expect(sem.body.sucesso).toBe(false);
+      expect(sem.body.mensagem).toMatch(/motivo/);
+      expect(escritas()).toHaveLength(0);
+      const com = await decidir(1, LOCAL(), [{ campoId: 10, decisao: "REJEITADO", motivo: "  a certidão  diz outra data " }]);
+      expect(com.body).toMatchObject({ sucesso: true, recusados: 1 });
+      expect(rodou(/SET Status = N'REJEITADO'/)[0].inputs).toMatchObject({ m: "a certidão diz outra data", por: 5 });
+      expect(naFicha()).toHaveLength(0);
+    });
+    test("a ficha mudou depois do pedido: 409, não aplica por cima e desfaz a transação", async () => {
+      base([campo()], { DataNascimento: new Date("1985-05-05T00:00:00Z") });
+      const r = await decidir(1);
+      expect(r.status).toBe(409);
+      expect(r.body.mensagem).toMatch(/mudou depois do pedido/);
+      expect(naFicha()).toHaveLength(0);
+      expect(mockTransacao.rollback).toBe(1);
+    });
+    test("travas da ficha: com processo de cargo, nascimento só a Geral; o nome só a Geral", async () => {
+      base([campo(), campo({ CampoId: 11, NomeCampo: "nome", ValorAnterior: "Ana", ValorProposto: "Ana Maria" })], { EmProcessoDeCargo: 1, Nome: "Ana" });
+      expect((await decidir(1, LOCAL(), [{ campoId: 10, decisao: "APROVADO" }])).status).toBe(403);
+      expect((await decidir(1, LOCAL(), [{ campoId: 11, decisao: "APROVADO" }])).status).toBe(403);
+      expect(naFicha()).toHaveLength(0);
+      expect((await decidir(1, GERAL(), [{ campoId: 11, decisao: "APROVADO" }])).body.sucesso).toBe(true);
+      expect(rodou(/UPDATE MembroReferencia SET Nome = @v/)).toHaveLength(1);
+    });
+    test("campo fora do mapa ('constructor') ou data inválida: não aplica, não toca a ficha e não dá 500", async () => {
       base([campo({ NomeCampo: "constructor" }), campo({ CampoId: 11, ValorProposto: "2026-02-30" })]);
       const r = await decidir(1, LOCAL(), [{ campoId: 10, decisao: "APROVADO" }, { campoId: 11, decisao: "APROVADO" }]);
-      expect(r.body.sucesso).toBe(true);
-      expect(rodou(/UPDATE MembroReferencia/)).toHaveLength(0);
-      const gravados = rodou(/UPDATE SolicitacoesEdicaoCampos SET Status/).map((c) => c.inputs.status);
-      expect(gravados).toEqual(["REJEITADO", "REJEITADO"]);
+      expect(r.status).toBe(200);
+      expect(r.body.sucesso).toBe(false);
+      expect(r.body.erros).toHaveLength(2);
+      expect(naFicha()).toHaveLength(0);
+      expect(rodou(/UPDATE SolicitacoesEdicaoCampos SET Status/)).toHaveLength(0);
     });
-    test("decisões malformadas (id fora do formato, decisão desconhecida, não-objeto) são puladas; lista gigante é recusada", async () => {
-      // O banco devolveria o campo para QUALQUER id (inclusive nulo): só a conferência da rota impede a decisão com id fora do formato.
-      quando(/FROM SolicitacoesEdicaoCampos WHERE CampoId = @id AND SolicitacaoId = @sol/, [campo()]);
-      base([campo()], 1);                                                        // nada foi decidido: o campo segue pendente
+    test("decisões malformadas (id fora do formato, decisão desconhecida, não-objeto) não gravam nada; lista gigante é recusada", async () => {
+      base([campo()]);
       const r = await decidir(1, LOCAL(), [{ campoId: "0xA", decisao: "APROVADO" }, { campoId: 10, decisao: "TALVEZ" }, null, "x", { campoId: 10 }]);
-      expect(r.body.sucesso).toBe(true);
+      expect(r.body.sucesso).toBe(false);
+      expect(r.body.erros).toHaveLength(5);
       expect(escritas()).toHaveLength(0);
       const muitas = Array.from({ length: 51 }, () => ({ campoId: 10, decisao: "APROVADO" }));
       expect((await decidir(1, LOCAL(), muitas)).status).toBe(400);
@@ -682,12 +761,20 @@ describe("GestaoCartas", () => {
       quando(/SELECT Tipo, Status, MembroId FROM CartasTransito WHERE CartaId = @id/, (i) => (cartaDe[i.id] ? [cartaDe[i.id]] : []));
       quando(/SELECT MembroId FROM CartasTransito WHERE CartaId = @id/, (i) => (cartaDe[i.id] ? [{ MembroId: cartaDe[i.id].MembroId }] : []));
     });
-    test("carta de pessoa da congregação: funciona e audita", async () => {
+    test("carta de pessoa da congregação: funciona e audita (o ato e a trilha na mesma transação)", async () => {
       const r = await agir(1);
       expect(r.body.sucesso).toBe(true);
       expect(rodou(padraoUpdate)).toHaveLength(1);
       expect(rodou(padraoUpdate)[0].inputs.id).toBe(1);
-      expect(registrarAuditoria).toHaveBeenCalledTimes(1);
+      expect(rodou(padraoUpdate)[0].sql).toMatch(/^SET XACT_ABORT ON;/);
+      expect(registrarAuditoria).not.toHaveBeenCalled();
+      expect(require("../auditoria").registrarAuditoriaNaTransacao).toHaveBeenCalledTimes(1);
+      expect(mockTransacao).toEqual({ begin: 1, commit: 1, rollback: 0 });
+    });
+    test("a trilha que falha desfaz o ato: nada fica sem registro de quem fez", async () => {
+      require("../auditoria").registrarAuditoriaNaTransacao.mockImplementationOnce(async () => { throw new Error("falha simulada"); });
+      await expect(agir(1)).rejects.toThrow("falha simulada");
+      expect(mockTransacao).toEqual({ begin: 1, commit: 0, rollback: 1 });
     });
     test("carta de OUTRA congregação: a mesma resposta de carta inexistente, nada gravado", async () => {
       const fora = await agir(2);
@@ -704,38 +791,190 @@ describe("GestaoCartas", () => {
     });
   });
   test("emitir: só emite carta ainda SOLICITADA/CONFIRMADA (condição também no UPDATE, contra emissão em duplicidade)", async () => {
-    quando(/SELECT Tipo, Status, MembroId FROM CartasTransito/, [{ Tipo: "MUDANCA", Status: "SOLICITADA", MembroId: 10 }]);
+    quando(/SELECT Tipo, Status, MembroId FROM CartasTransito/, [{ Tipo: "RECOMENDACAO", Status: "SOLICITADA", MembroId: 10 }]);
     quando(/UPDATE CartasTransito SET Status = 'EMITIDA'/, [], 0);
     const r = await chamar(hCartas, { metodo: "POST", token: LOCAL(), ligado: { acao: "emitir" }, corpo: { cartaId: 1 } });
     expect(r.body.sucesso).toBe(false);
-    expect(rodou(/UPDATE CartasTransito SET Status = 'EMITIDA'[\s\S]*Status IN \('SOLICITADA','CONFIRMADA'\)/)).toHaveLength(1);
+    expect(rodou(/UPDATE CartasTransito SET Status = 'EMITIDA'[\s\S]*Status = 'CONFIRMADA' OR \(Status = 'SOLICITADA' AND Tipo <> 'MUDANCA'\)/)).toHaveLength(1);
+    expect(registrarAuditoria).not.toHaveBeenCalled();
+    expect(require("../auditoria").registrarAuditoriaNaTransacao).not.toHaveBeenCalled();
+  });
+  // L5 (revisão de fora): as Functions rodam em UTC; das 21h à meia-noite de Brasília o servidor já está no dia seguinte. A emissão e a validade são do dia de
+  // Brasília.
+  // (o relógio local do teste não muda dentro do jest: a prova de que falha sem a correção roda com TZ=UTC, como as Functions e o CI)
+  test("emitir às 23h30 de Brasília: a data de emissão e a validade da Recomendação são as do dia de Brasília", async () => {
+    jest.useFakeTimers({ now: new Date("2026-11-26T02:30:00Z"), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });
+    try {
+      quando(/SELECT Tipo, Status, MembroId FROM CartasTransito/, [{ Tipo: "RECOMENDACAO", Status: "SOLICITADA", MembroId: 10 }]);
+      const r = await chamar(hCartas, { metodo: "POST", token: LOCAL(), ligado: { acao: "emitir" }, corpo: { cartaId: 1 } });
+      expect(r.body.sucesso).toBe(true);
+      expect(rodou(/UPDATE CartasTransito SET Status = 'EMITIDA'/)[0].inputs).toMatchObject({ hoje: "2026-11-25", validade: "2026-12-25" });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+  // L11: cancelar de novo a carta já cancelada não é um ato novo (nem na trilha).
+  test("cancelar: a carta já CANCELADA não é cancelada de novo e não ganha outra linha na trilha", async () => {
+    quando(/SELECT MembroId FROM CartasTransito WHERE CartaId = @id/, [{ MembroId: 10 }]);
+    quando(/UPDATE CartasTransito SET Status = 'CANCELADA'/, [], 0);
+    const r = await chamar(hCartas, { metodo: "POST", token: LOCAL(), ligado: { acao: "cancelar" }, corpo: { cartaId: 1 } });
+    expect(r.body.sucesso).toBe(false);
+    expect(rodou(/UPDATE CartasTransito SET Status = 'CANCELADA'/)[0].sql).toMatch(/Status NOT IN \('CONCLUIDA','CANCELADA'\)/);
+    expect(require("../auditoria").registrarAuditoriaNaTransacao).not.toHaveBeenCalled();
     expect(registrarAuditoria).not.toHaveBeenCalled();
   });
+  // A Carta de Mudança é o desligamento: só vale com a confirmação do próprio membro (a declaração de ciência). A secretaria não emite a que ele só pediu.
+  test("emitir: a Carta de Mudança só pedida (SOLICITADA, sem a confirmação do membro) é recusada e nada é gravado", async () => {
+    quando(/SELECT Tipo, Status, MembroId FROM CartasTransito/, [{ Tipo: "MUDANCA", Status: "SOLICITADA", MembroId: 10 }]);
+    const r = await chamar(hCartas, { metodo: "POST", token: LOCAL(), ligado: { acao: "emitir" }, corpo: { cartaId: 1 } });
+    expect(r.body.sucesso).toBe(false);
+    expect(r.body.mensagem).toMatch(/só é emitida depois que o próprio membro a confirma/);
+    expect(escritas()).toHaveLength(0);
+  });
+  test("emitir: a Carta de Mudança CONFIRMADA pelo membro é emitida (a condição do tipo vai também no UPDATE)", async () => {
+    quando(/SELECT Tipo, Status, MembroId FROM CartasTransito/, [{ Tipo: "MUDANCA", Status: "CONFIRMADA", MembroId: 10 }]);
+    const r = await chamar(hCartas, { metodo: "POST", token: LOCAL(), ligado: { acao: "emitir" }, corpo: { cartaId: 1 } });
+    expect(r.body.sucesso).toBe(true);
+    const upd = rodou(/UPDATE CartasTransito SET Status = 'EMITIDA'/);
+    expect(upd).toHaveLength(1);
+    expect(upd[0].sql).not.toMatch(/Status IN \('SOLICITADA','CONFIRMADA'\)/);
+  });
   describe("processar (minimização irreversível)", () => {
-    const candidatas = () => quando(/WHERE c\.Tipo = 'MUDANCA' AND c\.Status IN/, [
-      { CartaId: 1, MembroId: 10, MotivoSaida: "Mudança", dataReferencia: diasAtras(60), dataAdmissao: "2010-01-01", congregacaoNome: "Central", extensaoNome: null },
-      { CartaId: 2, MembroId: 20, MotivoSaida: "Mudança", dataReferencia: diasAtras(60), dataAdmissao: "2010-01-01", congregacaoNome: "Vila Nova", extensaoNome: null },
-      { CartaId: 3, MembroId: 11, MotivoSaida: "Mudança", dataReferencia: diasAtras(60), dataAdmissao: diasAtras(10), congregacaoNome: "Central", extensaoNome: null },
-      { CartaId: 4, MembroId: 11, MotivoSaida: "Mudança", dataReferencia: diasAtras(5), dataAdmissao: "2010-01-01", congregacaoNome: "Central", extensaoNome: null }
+    const candidatas = (extra = []) => quando(/WHERE c\.Tipo = 'MUDANCA' AND c\.Status IN/, [
+      { CartaId: 1, MembroId: 10, MotivoSaida: "Mudança", ConfirmadaPeloMembro: 1, dataReferencia: diasAtras(60), dataAdmissao: "2010-01-01", congregacaoNome: "Central", extensaoNome: null },
+      { CartaId: 2, MembroId: 20, MotivoSaida: "Mudança", ConfirmadaPeloMembro: 1, dataReferencia: diasAtras(60), dataAdmissao: "2010-01-01", congregacaoNome: "Vila Nova", extensaoNome: null },
+      { CartaId: 3, MembroId: 11, MotivoSaida: "Mudança", ConfirmadaPeloMembro: 1, dataReferencia: diasAtras(60), dataAdmissao: diasAtras(10), congregacaoNome: "Central", extensaoNome: null },
+      { CartaId: 4, MembroId: 11, MotivoSaida: "Mudança", ConfirmadaPeloMembro: 1, dataReferencia: diasAtras(5), dataAdmissao: "2010-01-01", congregacaoNome: "Central", extensaoNome: null },
+      ...extra
     ]);
     const processar = (token) => chamar(hCartas, { metodo: "POST", token, ligado: { acao: "processar" } });
     test("dirigente: só mexe nas cartas da sua congregação (minimiza a vencida, cancela a de quem voltou, deixa a recente) e deixa trilha de cada ato", async () => {
       candidatas();
       const r = await processar(LOCAL());
       expect(r.body.mensagem).toMatch(/1 saída\(s\) minimizada\(s\), 1 carta\(s\) cancelada\(s\)/);
-      expect(minimizacao.minimizarCamposExMembro.mock.calls.map((c) => c[1])).toEqual([10]);
+      expect(minimizacao.minimizarNaTransacao.mock.calls.map((c) => c[1])).toEqual([10]);
       expect(rodou(/UPDATE CartasTransito SET Status = 'CONCLUIDA'/).map((c) => c.inputs.id)).toEqual([1]);
       expect(rodou(/UPDATE CartasTransito SET Status = 'CANCELADA'/).map((c) => c.inputs.id)).toEqual([3]);
-      const acoes = registrarAuditoria.mock.calls.map((c) => c[0]);
+      const acoes = [...registrarAuditoria.mock.calls.map((c) => c[0]), ...require("../auditoria").registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1])];
       expect(acoes).toHaveLength(2);
+      expect(registrarAuditoria).not.toHaveBeenCalled();   // E5: as duas trilhas na transação do ato
       expect(acoes.find((a) => /Minimizou/.test(a.acao))).toMatchObject({ tabela: "MembroReferencia", registroId: 10, usuarioId: 5, dadosDepois: { cartaId: 1 } });
       expect(acoes.find((a) => /Cancelou carta/.test(a.acao))).toMatchObject({ tabela: "CartasTransito", registroId: 3, usuarioId: 5 });
     });
     test("geral: processa as cartas de todas as congregações", async () => {
       candidatas();
       await processar(GERAL());
-      expect(minimizacao.minimizarCamposExMembro.mock.calls.map((c) => c[1]).sort()).toEqual([10, 20]);
-      expect(registrarAuditoria).toHaveBeenCalledTimes(3);
+      expect(minimizacao.minimizarNaTransacao.mock.calls.map((c) => c[1]).sort()).toEqual([10, 20]);
+      expect(registrarAuditoria).not.toHaveBeenCalled();
+      expect(require("../auditoria").registrarAuditoriaNaTransacao).toHaveBeenCalledTimes(3);
+    });
+    // A carta concluída, a minimização (com a vacância) e a trilha numa transação só; o arquivo do armazenamento, só depois do commit.
+    test("a minimização numa transação: a carta concluída só se ainda estava pendente, a trilha nela, e os arquivos depois do commit", async () => {
+      candidatas();
+      const commitsAoApagar = [];
+      minimizacao.excluirDocumentos.mockImplementationOnce(async () => { commitsAoApagar.push(mockTransacao.commit); return []; });
+      await processar(LOCAL());
+      expect(mockTransacao).toEqual({ begin: 2, commit: 2, rollback: 0 });   // a do cancelamento por retorno e a da minimização
+      expect(rodou(/UPDATE CartasTransito SET Status = 'CONCLUIDA'/)[0].sql).toMatch(/Status IN \('CONFIRMADA','EMITIDA'\)/);
+      expect(rodou(/sp_getapplock/).map((c) => c.inputs.recurso)).toEqual(["escada_10"]);
+      expect(minimizacao.minimizarNaTransacao.mock.calls[0][0].transacao).toBeTruthy();
+      expect(minimizacao.excluirDocumentos.mock.calls).toEqual([[["https://armazem/doc-indicacao"]]]);
+      expect(commitsAoApagar).toEqual([1]);   // a carta 1 (minimização) vem antes da 3 (cancelamento por retorno)
+    });
+    test("a minimização fecha a licença por candidatura aberta na mesma transação, com o motivo da carta", async () => {
+      candidatas();
+      await processar(LOCAL());
+      const fecha = rodou(/UPDATE LicencasCandidatura SET Status = 'NAO_RETORNOU'/);
+      expect(fecha).toHaveLength(1);
+      expect(fecha[0].sql).toMatch(/^SET XACT_ABORT ON;/);
+      expect(fecha[0].inputs).toMatchObject({ m: 10, obs: "Encerrada pela carta de mudança." });
+    });
+    test("a carta que outro processamento já concluiu: nada é minimizado, nenhum arquivo apagado", async () => {
+      candidatas();
+      quando(/UPDATE CartasTransito SET Status = 'CONCLUIDA'/, [], 0);
+      const r = await processar(LOCAL());
+      expect(r.body.mensagem).toMatch(/0 saída\(s\) minimizada\(s\)/);
+      expect(minimizacao.minimizarNaTransacao).not.toHaveBeenCalled();
+      expect(minimizacao.excluirDocumentos).not.toHaveBeenCalled();
+      expect(mockTransacao.rollback).toBe(1);
+    });
+    test("a falha no meio da minimização desfaz a transação e não apaga arquivo nenhum", async () => {
+      candidatas();
+      minimizacao.minimizarNaTransacao.mockImplementationOnce(async () => { throw new Error("falha simulada"); });
+      await expect(processar(LOCAL())).rejects.toThrow("falha simulada");
+      expect(mockTransacao).toEqual({ begin: 1, commit: 0, rollback: 1 });   // a carta 1 é a primeira: o processamento para nela
+      expect(minimizacao.excluirDocumentos).not.toHaveBeenCalled();
+    });
+    // Decisão 2 (25/11/2026): só a Mudança confirmada pelo próprio membro entra, e o prazo conta da confirmação (nunca do pedido).
+    test("o prazo conta só da confirmação do membro: a consulta não cai na data do pedido", async () => {
+      candidatas();
+      await processar(LOCAL());
+      const consulta = rodou(/WHERE c\.Tipo = 'MUDANCA' AND c\.Status IN/)[0].sql;
+      expect(consulta).not.toMatch(/ISNULL\(c\.DataConfirmacao, c\.DataSolicitacao\)/);
+      expect(consulta).toMatch(/c\.DataConfirmacao IS NOT NULL AND c\.DeclaracaoCiencia IS NOT NULL/);
+      expect(rodou(/UPDATE CartasTransito SET Status = 'CONCLUIDA'/)[0].sql).toMatch(/DataConfirmacao IS NOT NULL AND DeclaracaoCiencia IS NOT NULL/);
+    });
+    test("a Mudança EMITIDA sem a confirmação do membro (dado antigo) fica fora do processamento e a resposta diz quantas", async () => {
+      candidatas([{ CartaId: 5, MembroId: 10, MotivoSaida: "Mudança", ConfirmadaPeloMembro: 0, dataReferencia: null, dataAdmissao: "2010-01-01", congregacaoNome: "Central", extensaoNome: null }]);
+      const r = await processar(LOCAL());
+      expect(rodou(/UPDATE CartasTransito SET Status = 'CONCLUIDA'/).map((c) => c.inputs.id)).toEqual([1]);
+      expect(rodou(/UPDATE CartasTransito SET Status = 'CANCELADA'/).map((c) => c.inputs.id)).toEqual([3]);
+      expect(r.body.mensagem).toMatch(/1 carta\(s\) de mudança sem a confirmação do próprio membro/);
+    });
+    // Correção da decisão 1 (25/11/2026): o membro sai sozinho, seja qual for o cargo; a vacância deixa os cargos vagos. Quem era o último que administra os
+    // acessos não barra: a trilha registra.
+    test("quem tem cargo e confirmou a própria carta é minimizado normalmente; sendo o último que administra os acessos, a trilha registra", async () => {
+      candidatas();
+      quando(/AlvoAdministra/, () => [{ TemCargoVigente: 1, AlvoAdministra: 1, Outros: 0 }]);
+      const r = await processar(LOCAL());
+      expect(r.body.mensagem).toMatch(/1 saída\(s\) minimizada\(s\)/);
+      expect(minimizacao.minimizarNaTransacao.mock.calls.map((c) => c[1])).toEqual([10]);
+      const trilha = require("../auditoria").registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1]).find((a) => /Minimizou/.test(a.acao));
+      expect(trilha.dadosDepois).toMatchObject({ cartaId: 1, ultimoAdministrador: true });
+      expect(rodou(/AlvoAdministra/)[0].sql).toMatch(/^SET XACT_ABORT ON;/);   // conferido dentro da transação, sob a trava da escada
+    });
+    // L10 + E5: o cancelamento por retorno numa transação, com a carta ainda pendente no WHERE e a trilha dentro; o que outro processamento já mudou não conta.
+    test("o cancelamento por retorno: o estado da carta no WHERE, a trilha na transação, e o que já mudou não conta nem ganha trilha", async () => {
+      candidatas();
+      quando(/UPDATE CartasTransito SET Status = 'CANCELADA'/, [], 0);
+      const r = await processar(LOCAL());
+      const upd = rodou(/UPDATE CartasTransito SET Status = 'CANCELADA'/);
+      expect(upd).toHaveLength(1);
+      expect(upd[0].sql).toMatch(/^SET XACT_ABORT ON;[\s\S]*Status IN \('CONFIRMADA','EMITIDA'\)/);
+      expect(r.body.mensagem).toMatch(/0 carta\(s\) cancelada\(s\)/);
+      const acoes = require("../auditoria").registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1].acao);
+      expect(acoes.filter((a) => /Cancelou carta/.test(a))).toHaveLength(0);
+    });
+    // E4: a trilha e a resposta dizem qual prazo valeu; o padrão (política inativa ou sem prazo) é dito.
+    test("o prazo aplicado vai para a trilha e para a resposta; o padrão é avisado", async () => {
+      candidatas();
+      minimizacao.prazoMinimizacaoExMembro.mockImplementationOnce(async () => ({ dias: 30, padrao: true }));
+      const r = await processar(LOCAL());
+      const trilha = require("../auditoria").registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1]).find((a) => /Minimizou/.test(a.acao));
+      expect(trilha.dadosDepois).toMatchObject({ prazoDias: 30, prazoPadrao: true });
+      expect(r.body.mensagem).toMatch(/prazo padrão de 30 dias/);
+    });
+    // L6: o motivo livre que o membro escreveu fica na carta; a saída é gravada com a causa da lista (CARTA_MUDANCA), a mesma que a vacância entende.
+    test("a minimização grava a causa CARTA_MUDANCA, não o texto livre da carta", async () => {
+      candidatas();
+      await processar(LOCAL());
+      expect(minimizacao.minimizarNaTransacao.mock.calls[0][2]).toMatchObject({ motivo: "CARTA_MUDANCA" });
+    });
+    // E3: o arquivo que o armazenamento não apagou vai para a trilha (pelo nome, sem dado de pessoa) e a resposta avisa.
+    test("os arquivos que o armazenamento não apagou: a trilha guarda quais e a resposta avisa", async () => {
+      candidatas();
+      minimizacao.excluirDocumentos.mockImplementationOnce(async (urls) => urls);
+      const r = await processar(LOCAL());
+      const pendencia = registrarAuditoria.mock.calls.map((c) => c[0]).find((a) => /não apagados/.test(a.acao));
+      expect(pendencia).toMatchObject({ tabela: "MembroReferencia", registroId: 10, usuarioId: 5, dadosDepois: { cartaId: 1, arquivos: ["doc-indicacao"] } });
+      expect(r.body.mensagem).toMatch(/1 arquivo\(s\) de documentos não puderam ser apagados/);
+    });
+    test("quem não era o último que administra os acessos: a trilha não leva a marca", async () => {
+      candidatas();
+      quando(/AlvoAdministra/, () => [{ TemCargoVigente: 1, AlvoAdministra: 1, Outros: 2 }]);
+      await processar(LOCAL());
+      const trilha = require("../auditoria").registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1]).find((a) => /Minimizou/.test(a.acao));
+      expect(trilha.dadosDepois).not.toHaveProperty("ultimoAdministrador");
     });
   });
 });

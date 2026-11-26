@@ -105,6 +105,25 @@ async function salvarDocumento(bufferArquivo, mimeType) {
   return blob.url;
 }
 
+// FASE 10, passo 8 — a arte de fundo da carteirinha: no mesmo container dos documentos, mas com o nome começando por "cart-" (o salvar do modelo só aceita
+// esses nomes: nunca aponta para um anexo de outro módulo). Guardada como veio, sem reabrir nem recomprimir. Devolve o NOME do blob.
+async function salvarArteCarteirinha(bufferArquivo, mimeType) {
+  const container = getContainerClient(CONTAINER_DOCUMENTOS);
+  await container.createIfNotExists();
+  const nomeBlob = `cart-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  await container.getBlockBlobClient(nomeBlob).uploadData(bufferArquivo, { blobHTTPHeaders: { blobContentType: mimeType } });
+  return nomeBlob;
+}
+
+// FASE 10, as sobras — o anexo da sugestão do membro (a foto do documento): no container privado dos documentos, com o nome começando por "sug-". Devolve o NOME.
+async function salvarAnexoSugestao(bufferArquivo, mimeType) {
+  const container = getContainerClient(CONTAINER_DOCUMENTOS);
+  await container.createIfNotExists();
+  const nomeBlob = `sug-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  await container.getBlockBlobClient(nomeBlob).uploadData(bufferArquivo, { blobHTTPHeaders: { blobContentType: mimeType } });
+  return nomeBlob;
+}
+
 function urlDocumentoComSas(urlBlob) {
   return gerarUrlComSas(CONTAINER_DOCUMENTOS, urlBlob);
 }
@@ -112,12 +131,18 @@ function urlDocumentoComSas(urlBlob) {
 // Best-effort (vB.4, AnexosGenericos): excluir a linha do SQL é o que
 // importa pro controle de acesso parar de valer; o blob órfão não é um
 // problema que deva bloquear a exclusão do anexo.
+// Devolve true quando o arquivo saiu (ou já não existia) e false quando a exclusão falhou: quem precisa registrar a pendência (a minimização da LGPD,
+// shared/minimizacaoLgpd.js) olha o resultado; os outros chamadores seguem ignorando, como sempre.
 async function excluirDocumento(urlBlob) {
   try {
-    const nomeBlob = new URL(urlBlob).pathname.split("/").pop();
+    // o endereço inteiro do blob ou só o nome dele (a arte da carteirinha guarda só o nome)
+    let nomeBlob;
+    try { nomeBlob = new URL(urlBlob).pathname.split("/").pop(); } catch (e) { nomeBlob = String(urlBlob || ""); }
     if (nomeBlob) await getContainerClient(CONTAINER_DOCUMENTOS).getBlockBlobClient(nomeBlob).deleteIfExists();
+    return true;
   } catch (e) {
     console.error("Falha ao excluir documento do Blob Storage (ignorado):", e.message);
+    return false;
   }
 }
 
@@ -162,4 +187,4 @@ async function salvarJsonPrivadoSe(nomeBlob, objeto, etag) {
   }
 }
 
-module.exports = { salvarFoto, excluirFoto, lerFoto, urlComSas, salvarDocumento, urlDocumentoComSas, excluirDocumento, salvarJsonPrivado, lerJsonPrivado, lerJsonPrivadoComVersao, salvarJsonPrivadoSe };
+module.exports = { salvarFoto, excluirFoto, lerFoto, urlComSas, salvarDocumento, salvarArteCarteirinha, salvarAnexoSugestao, urlDocumentoComSas, excluirDocumento, salvarJsonPrivado, lerJsonPrivado, lerJsonPrivadoComVersao, salvarJsonPrivadoSe };

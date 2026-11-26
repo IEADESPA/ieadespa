@@ -85,7 +85,16 @@ function Executar($pedido) {
   $script:ra = New-Object System.Collections.ArrayList
   $script:msgs = New-Object System.Collections.ArrayList
   $cmd.add_StatementCompleted({ param($s, $e) [void]$script:ra.Add([int]$e.RecordCount) })
-  $leitorSql = $cmd.ExecuteReader()
+  # limiteMs: o limite do pedido (o requestTimeout do driver). Com ele, o comando roda no modo assincrono com um cancelamento marcado para o fim do
+  # limite (o SqlClient manda o aviso de cancelar ao banco); o erro volta marcado "tempo" e o shim o entrega com o codigo ETIMEOUT, como o tedious.
+  $script:cts = $null
+  $tok = [System.Threading.CancellationToken]::None
+  if ($pedido.limiteMs -ne $null -and [int]$pedido.limiteMs -gt 0) {
+    $script:cts = New-Object System.Threading.CancellationTokenSource
+    $script:cts.CancelAfter([int]$pedido.limiteMs)
+    $tok = $script:cts.Token
+  }
+  if ($script:cts -ne $null) { $leitorSql = $cmd.ExecuteReaderAsync($tok).GetAwaiter().GetResult() } else { $leitorSql = $cmd.ExecuteReader() }
   $conjuntos = New-Object System.Text.StringBuilder
   [void]$conjuntos.Append('[')
   $primeiro = $true
@@ -103,7 +112,7 @@ function Executar($pedido) {
     for ($i = 0; $i -lt $n; $i++) { if ($i -gt 0) { [void]$conjuntos.Append(',') }; [void]$conjuntos.Append('"' + (Esc $nomes[$i]) + '"') }
     [void]$conjuntos.Append('],"datas":[' + ($datas -join ',') + '],"linhas":[')
     $primeiraLinha = $true
-    while ($leitorSql.Read()) {
+    while ($(if ($script:cts -ne $null) { $leitorSql.ReadAsync($tok).GetAwaiter().GetResult() } else { $leitorSql.Read() })) {
       if (-not $primeiraLinha) { [void]$conjuntos.Append(',') }
       $primeiraLinha = $false
       [void]$conjuntos.Append('[')
@@ -111,9 +120,10 @@ function Executar($pedido) {
       [void]$conjuntos.Append(']')
     }
     [void]$conjuntos.Append(']}')
-  } while ($leitorSql.NextResult())
+  } while ($(if ($script:cts -ne $null) { $leitorSql.NextResultAsync($tok).GetAwaiter().GetResult() } else { $leitorSql.NextResult() }))
   [void]$conjuntos.Append(']')
   $leitorSql.Close()
+  $script:cts = $null
   $mensagens = '[' + (($script:msgs | ForEach-Object { '"' + (Esc $_) + '"' }) -join ',') + ']'
   return '{"ok":true,"conjuntos":' + $conjuntos.ToString() + ',"afetadas":[' + ($script:ra -join ',') + '],"mensagens":' + $mensagens + '}'
 }
@@ -140,7 +150,9 @@ while ($true) {
     $e = $_.Exception
     while ($e.InnerException -ne $null) { $e = $e.InnerException }
     $numero = 0; if ($e -is [System.Data.SqlClient.SqlException]) { $numero = $e.Number }
-    $escritor.WriteLine('{"id":' + $id + ',"ok":false,"erro":{"mensagem":"' + (Esc $e.Message) + '","numero":' + $numero + '}}')
+    $tempo = 'false'; if ($script:cts -ne $null -and $script:cts.IsCancellationRequested) { $tempo = 'true' }
+    $script:cts = $null
+    $escritor.WriteLine('{"id":' + $id + ',"ok":false,"erro":{"mensagem":"' + (Esc $e.Message) + '","numero":' + $numero + ',"tempo":' + $tempo + '}}')
     # Depois de QUALQUER erro de SQL a conexão é reciclada: senão o próximo comando falha com "já existe um DataReader aberto".
     try { Abrir } catch { Start-Sleep -Milliseconds 300; Abrir }
   }

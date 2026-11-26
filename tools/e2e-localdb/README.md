@@ -193,6 +193,88 @@ Cada versão parte da base da anterior (`BASE=...`):
   raio e o escopo do Dirigente; a densidade; os critérios; a simulação com cada indicador medido de verdade; a emancipação levando o ponto; a LGPD; os CHECK;
   lixo em cada campo; `E2E_CONTRATO=1` grava `tools/front-territorio/contrato-real.json`) e `e2e-79` (corridas: o bairro homônimo, a edição com a mesma versão,
   as junções cruzadas, a desativação junto com a gravação de um morador, o raio, o critério editado e apagado, o ponto da Extensão; `E2E_RCSI=1`).
+- **FASE 10, Membros** (migrações 177 a 184; um `preparar-NNN` por migração, cada um a partir da base anterior). O "Quero me cadastrar" do site (migração 184,
+  a chave do envio), base `cenario-184` (`bash rodar.sh preparar-184`: a `cenario-183` com a 184 aplicada duas vezes): `e2e-95` parte 5 (o tempo da
+  resposta medido com e sem ficha, com e sem o tempo fixo; rajadas em vários processos contra os limites; o mesmo envio repetido, em sequência e em
+  quatro processos; a trava do CPF ocupada e o reenvio que avalia; o texto e a versão do consentimento), a parte 6 (22/11/2026: o banco lento, simulado
+  por outro processo que segura a tabela inteira; a resposta nunca passa do tempo fixo, o que não cabe é desfeito) e `e2e-90` (o pré-cadastro e a fila).
+  A ponte aceita o limite por pedido do driver (`requestTimeout`): o comando é cancelado no banco e o erro sai com o código `ETIMEOUT`, como no tedious.
+- **FASE 10, a importação dos membros do sistema pago** (migração 185), base `cenario-185` (`bash rodar.sh preparar-185`: a `cenario-184` com a 185 aplicada
+  duas vezes): `e2e-96` (só a Secretaria Geral; a prévia e a que substitui a anterior; a lista e o CSV sem dado pessoal; a confirmação com o 428; a
+  matrícula e o CPF usados depois da prévia; um lote de 4 e o resto disputado por dois processos; as pendências ARROLAMENTO, NUMERO e REPETIDA; os dados
+  pessoais das linhas apagados no fim; a cadeia da trilha; "uma vez só").
+- **FASE 10, a trava das matrículas** (23/11/2026, sem migração), base `cenario-185`: sem uma importação do sistema pago CONCLUÍDA, nenhum caminho cria ficha
+  nova. `e2e-97` (travada: o "Cadastrar" com a matrícula gerada e a digitada, o importador antigo, o lançar e o aceite da fila e o site recusados com a
+  mesma mensagem, nada gravado, editar continua livre, o 401/403 de sempre antes da trava; a importação de zero pessoas não se confirma; a parada no meio
+  continua travada; a concluída solta sozinha e a matrícula nova vem depois das importadas). Os roteiros que cadastram gente (`e2e-85`, `e2e-90`, `e2e-93` e
+  `e2e-95`) semeiam uma importação concluída no começo (`lib.js` `importacaoConcluida()`) e rodam sobre a `cenario-185`. O `e2e-51` (escada) também
+  roda sobre a `cenario-185`: a ficha nova recusada pela trava (409) e, depois da importação semeada, a regra do cargo (403).
+- **FASE 10, completar o arrolamento** (rodada 28, sem migração), base `cenario-185`: `e2e-98` (o 4º grupo do painel e o andamento de cada nível; a
+  congregação, a área e a Geral completam, cada uma só no seu escopo, e fora dele a mesma resposta de "não encontrada"; ninguém completa a própria ficha; a
+  ficha sem congregação só com a Geral, escolhendo a congregação; em comunhão, congregado e sem comunhão; a função eclesiástica não se grava em nenhum
+  nível (regra dele de 24/11: só a Câmara de liderança e a academia), e a que a ficha já tem aparece para ler; a pendência resolvida e a trilha; lixo e campos trocados; a mesma ficha disputada por 4 processos (uma completa, as outras 409); o cadastro e o
+  importador antigos não põem nem tiram ninguém do arrolamento).
+- **FASE 10, a saída do IMPORTANDO** (revisão de 23/11/2026, sem migração), base `cenario-185`: `e2e-99` (o banco recusa de verdade, com regras CHECK
+  de mentira: a linha recusada sozinha fica de fora como problema e as outras entram na ordem; a última da fila recusada fica de fora e a importação conclui;
+  5 seguidas é o banco, não a linha: 409, ninguém de fora, nada gravado, em andamento e as matrículas travadas; a saída pela tela (A6, 24/11): a Secretaria
+  Geral confirma "deixar essas linhas de fora e continuar", só as 5 ficam de fora (a local não pode) e a importação continua até concluir; a lista,
+  o CSV e o resultado mostram as de fora; a trilha com o número do erro e sem a mensagem do banco; a cadeia de hashes).
+- **FASE 10, a guarda dos dados da importação** (respostas dele de 23/11/2026 e decisões de 24/11; migração 186), base `cenario-186`
+  (`bash rodar.sh preparar-186`: a `cenario-185` com a 186 aplicada duas vezes): `e2e-100` (as duas políticas aparecem na tela de Políticas, com 7 e 90 dias
+  e a base legal; a prévia não confirmada, com o CPF, o celular, a mãe e o pai, fica com 6 dias e sai pela rotina com 8: DESCARTADA, sem as linhas, a trilha
+  sem usuário; o "Descartar" apaga na hora, a liderança local não pode, de novo é 409 e o lixo é 400; o prazo que o Encarregado ajusta vale para o estado e
+  para a rotina, e quem não é Encarregado não ajusta; no fim, a importada fica só com a linha, a matrícula, o nome e a situação e a de fora só com o nome e o
+  motivo, conferido coluna por coluna; a importação que terminou antes desta versão é limpa pela rotina; a lista dos de fora fica com 89 dias e sai com 91,
+  só as linhas de fora: as importadas, o retrato e o número do resultado ficam e o resumo guarda o dia; rodar de novo não faz nada; a NotificacoesAgendador
+  de verdade roda a guarda; a trilha sem dado das linhas e a cadeia de hashes).
+- **FASE 10, a revisão de 24/11/2026 (Membros)**, base `cenario-186`: `e2e-101` (A1: o "apto e em comunhão" e o universo geral, que são os das enquetes e
+  do tema: em arrolamento, congregado e sem comunhão não votam, só em comunhão; desde 25/11, o arrolamento e o congregado também ficam fora da presença e
+  do quórum dos órgãos e da lista montada nome por nome; A2: o batismo admite o convertido com a data do batismo, quem veio de outra igreja fica com a data
+  da chegada e quem já era membro fica com a data dele; a data de antes do congregado vira a conversão (o marco CONVERSAO), nunca por cima de uma que
+  já existe; a pendência fecha como COMPLETADA, com a trilha e a data de antes; as rotas de cadeira e de comissão recusam o congregado e o arrolamento;
+  de novo, nada muda; desde a volta 8: a data de antes depois do batismo ou no futuro não vira conversão; o pedido de cadeira é VÁLIDO para um membro
+  (o mesmo pedido cria a cadeira do membro em comunhão); o ator errado (local, área, PIN) recebe o 403 igual para quem existe e quem não existe, e sem
+  sessão, 401; a composição da CLI não mostra o congregado nem o arrolamento com cadeira antiga, e o sem comunhão continua; desde a volta 9: o painel
+  de Membros da Geral traz as cadeiras e as vagas de comissão antigas de quem não é membro (as contas e até 3 nomes; a local e a área não recebem), a Geral
+  encerra com o motivo (na cadeira e na trilha) e ela sai do aviso; a conversão lançada e corrigida à mão vem antes do batismo e nunca no futuro; a
+  Minha carteirinha e a página pública do QR de quem está em arrolamento dizem "ficha em atualização", só com o nome, e o botão da ficha não imprime).
+  `e2e-103` (volta 10, o portão v9): quem está em arrolamento entra pelo PIN, pede a Carta de Recomendação e o Atestado Supletivo e recebe a recusa
+  neutra, sem carta gravada; o PDF de uma carta antiga dele é 422 para ele e para a secretaria, sem gastar protocolo (em comunhão e congregado
+  continuam); "Encerrar" a cadeira e a vaga de comissão sem motivo, com só espaços, nulo, número ou com mais de 200 letras é 400 e nada muda, nem a
+  trilha; a local recebe 403; com o motivo, a Geral encerra e o motivo vai sem os espaços das pontas para a cadeira, a vaga e a trilha; a Minha vida de
+  quem está em arrolamento não traz o "membro desde" nem a entrada no rol com a data do sistema pago).
+- **FASE 10, a importação parada e a do resto** (G2, decisão dele de 24/11/2026; migração 187), base `cenario-187` (`bash rodar.sh preparar-187`: a
+  `cenario-186` com a 187 aplicada duas vezes). Os roteiros da importação (`e2e-96`, `e2e-97`, `e2e-99`, `e2e-100` e `e2e-102`) rodam nela, porque a
+  importação lê e grava o último lote (o `e2e-102` também confere o índice da chave `RestoDe`). Rode um roteiro por vez, cada um com a base restaurada (`bash rodar.sh roteiro` restaura uma vez só, antes do
+  primeiro): em sequência na mesma base, o `e2e-96` e o `e2e-100` caem depois do `e2e-102`. `e2e-102`: o prazo de 7 dias conta do ÚLTIMO LOTE (sem lote, da confirmação) e o estado diz quantos dias faltam; a
+  parada sem ninguém importado, com 8 dias, é DESCARTADA pela rotina (as linhas saem inteiras, a data da confirmação fica, as matrículas continuam travadas,
+  o lote dela recusa, a tela diz qual foi) e uma importação nova pode começar; descartar à mão pede o 428, a local não pode (403 igual para a que existe e a
+  que não existe), o número errado é 409 e o lixo 400; a parada com gente não se descarta; confirmada há 20 dias e com o lote agora, nada muda; com 8 dias do
+  lote, as que faltavam ficam de fora só com o nome e o motivo e ela conclui; a lista e o CSV com o motivo novo. Depois, a importação SÓ DAS LINHAS QUE
+  FALTARAM (o resto, uma vez): o estado diz quais faltaram; a prévia comum continua recusada; a planilha só com algumas entra pelo nome e avisa quem não
+  foi achado; o arquivo de antes sem a última linha substitui essa prévia e acha três das quatro (a que não veio, avisada); nenhum resumo guarda o nome
+  de quem não veio; a matrícula tomada depois vira número novo (e a mesma pessoa, possível repetida); o lixo, a local, o 428 e o arquivo sem nenhuma delas;
+  importado, a tela volta ao resultado com o que o resto fez (e quantas não vieram), a lista e o CSV de antes dizem de cada linha que faltou se veio no
+  resto ou não, um segundo resto é recusado (e o índice único do banco o impede) e o painel do arrolamento guarda o dia de antes; a trilha sem dado
+  pessoal e a cadeia.
+- **FASE 10, Financeiro** (migrações a partir da 200; roteiros `e2e-200` em diante). Roda numa **instância própria** do LocalDB, para não atropelar
+  quem trabalha no `psc7` ao mesmo tempo: `sqllocaldb create fin` + `start fin`, copie para `bak/` a última base de Membros e use
+  `E2E_INSTANCIA=fin E2E_BANCO=ieadespa_fin E2E_CS='Server=(localdb)\fin;Database=ieadespa_fin;Integrated Security=true'` em todos os comandos
+  (o `bases.ps1` restaura com os arquivos do banco novo). Base `cenario-200` (`bash rodar.sh preparar-200`: a `cenario-184` com a 200, a 201, a
+  202 e a 203 aplicadas duas vezes cada): `e2e-200` (o esquema da 200 com os CHECK e os índices únicos; a 202, com o nome da restrição em cada recusa; os centros de custo da Geral e de cada congregação que nascem uma vez só;
+  a abertura negativa e o estorno único; o lote da gráfica numerado pela primeira folha, o lote que cruza, a chegada e a entrega com as recusas;
+  a lista em páginas de 40 com os filtros, a procura e o quadro da direita; o escopo da Geral, da área e da congregação; lixo em cada campo; e
+  corridas: o mesmo lote, a mesma entrega e lotes que se cruzam, em processos separados); `e2e-201` (as folhas do bloco e o livro: a exceção, o
+  desfazer, a devolução completa e a parcial, o rastreio e as corridas da mesma folha); `e2e-202` (o que a rodada 30 pede ao servidor: a folha
+  inexistente de ponta a ponta, a devolução parcial com ela no fim e no meio, o seletor de bloco e a volta parcial, o histórico da folha com
+  quem marcou e quem desfez, no escopo de cada nível, a saída da r30 (as congregações ativas com a área, a liderança da escolhida, o rastreio
+  do bloco que nunca saiu e a linha do livro com a primeira folha do bloco), a devolução da r30 (quem trouxe, a primeira em branco que já
+  tem destino, as usadas da entrega na linha do livro e as inexistentes da entrega no rastreio) e a 203 rodada de novo sobre dados).
+- **FASE 10, o ensaio da importação no tamanho real** (missão C, 26/11/2026; migração 188), base `cenario-188` (`bash rodar.sh preparar-188`: a
+  `cenario-187` com a 188, o índice do nascimento das fichas, aplicada duas vezes). O ensaio (`../ensaio-importacao/ensaio-localdb.js`, ver o
+  [README dele](../ensaio-importacao/README.md)) importa 6 mil pessoas fictícias pela rota e confere o gabarito, o tempo de cada lote, as idas ao
+  banco e que nenhuma consulta lê mais de 100 mil páginas numa execução (sem a 188 e com poucas fichas no banco, a procura do mesmo nome e nascimento
+  da prévia relia o arquivo inteiro para cada ficha: 1,47 milhão de páginas).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

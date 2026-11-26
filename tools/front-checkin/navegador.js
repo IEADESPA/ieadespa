@@ -438,7 +438,7 @@ async function rodarViewport(nav, nome, viewport) {
     await conferirFoco("chkFiTitulo", "abrir a ficha");
     // sair da aba: a fila, a ficha e o relógio saem
     await abrirMenuCelular();
-    await clicarTexto("button", "Painel Principal", "#sidebar");
+    await clicarTexto("button", "Menu principal", "#sidebar");
     const saida = await page.evaluate(() => ({ fila: document.getElementById("chkAprovacoesLista").innerHTML === "", ficha: document.getElementById("chkFichaCx").innerHTML === "", aba: getComputedStyle(document.getElementById("abaCheckininfantil")).display }));
     if (!saida.fila || !saida.ficha || saida.aba !== "none") problema(`sair da aba devia esvaziar a fila e a ficha: ${JSON.stringify(saida)}`);
   } catch (e) {

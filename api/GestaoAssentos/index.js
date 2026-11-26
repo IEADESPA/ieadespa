@@ -13,7 +13,7 @@
 //
 // GET  /api/assentos?orgaoId=&membroId=&incluirEncerrados=1
 // POST /api/assentos                  body: { membroId, orgaoId, tipoAssento, cargoOuFuncao?, dataInicio?, duracaoMeses? }
-// POST /api/assentos/{id}/encerrar    body: { motivoEncerramento? }
+// POST /api/assentos/{id}/encerrar    body: { motivoEncerramento }  (obrigatório desde a volta 10, até 200 caracteres)
 // ESCOPO: cadeira de órgão central (Diretoria, Conselho Fiscal, CEI, Conselho Consultivo, CLI...) é INSTITUCIONAL e é a âncora de autoridade do sistema (quem é o Presidente,
 // quem está na Diretoria, a composição da CLI e das comissões, o quórum). Criar e encerrar cadeira é só do nível GERAL (papel Global com escopo "TODAS"): a permissão
 // "pessoas" também é do Dirigente, do Pastor de Área e do Líder Geral de Departamento, e com ela dava para se nomear Presidente. Ver a lista continua para quem tem "pessoas".
@@ -24,6 +24,7 @@ const { getPool, sql } = require("../shared/db");
 const { CATALOGOS_CARGOS_POR_ORGAO, ORGAOS_INCOMPATIVEIS, ARTIGOS_VEDACAO_PARENTESCO_DIRETORIA, validarIncompatibilidadeExecutiva, cargoJaOcupado } = require("../shared/diretoria");
 const { existeParentescoAte2Grau } = require("../shared/parentesco");
 const { comConflito } = require("../shared/violacaoUnica");
+const { recusaDeCadeira } = require("../shared/estatuto");
 
 const TIPOS_VALIDOS = ["ORDENACAO", "FUNCAO"];
 
@@ -74,9 +75,12 @@ module.exports = comConflito(async function (context, req) {
   }
 
   if (req.method === "POST" && id && acao === "encerrar") {
-    const { motivoEncerramento } = req.body || {};
-    if (motivoEncerramento != null && (typeof motivoEncerramento !== "string" || motivoEncerramento.length > 200)) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Motivo inválido (texto de até 200 caracteres)." } };
+    // volta 10 (importante 2 do portão v9, decisão do coordenador): encerrar pede o motivo, para todos e em todos os botões; vazio ou só espaços: recusa. O
+    // motivo vai sem os espaços das pontas para a cadeira e para a trilha.
+    const corpoEnc = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+    const motivoEncerramento = typeof corpoEnc.motivoEncerramento === "string" ? corpoEnc.motivoEncerramento.trim() : "";
+    if (!motivoEncerramento || motivoEncerramento.length > 200) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o motivo do encerramento (até 200 caracteres)." } };
       return;
     }
     const assentoId = auth.idDeRota(id);
@@ -91,11 +95,11 @@ module.exports = comConflito(async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Essa cadeira já foi encerrada." } };
       return;
     }
-    await pool.request().input("id", sql.Int, assentoId).input("motivo", sql.NVarChar(200), motivoEncerramento || null)
+    await pool.request().input("id", sql.Int, assentoId).input("motivo", sql.NVarChar(200), motivoEncerramento)
       .query(`UPDATE Assentos SET DataFim = CAST(SYSUTCDATETIME() AS DATE), MotivoEncerramento = @motivo WHERE AssentoId = @id AND DataFim IS NULL`);
     await registrarAuditoria({
       tabela: "Assentos", registroId: assentoId, acao: "Encerrou cadeira", usuarioId: usuario.membroId,
-      dadosAntes: antes.recordset[0], dadosDepois: { motivoEncerramento: motivoEncerramento || null }
+      dadosAntes: antes.recordset[0], dadosDepois: { motivoEncerramento }
     });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Cadeira encerrada." } };
     return;
@@ -132,9 +136,15 @@ module.exports = comConflito(async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Cargo ou função inválido (texto de até 100 caracteres)." } };
       return;
     }
-    const membro =await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
+    const membro = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id`);
     if (membro.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
+      return;
+    }
+    // o congregado e quem está em arrolamento não têm cadeira em órgão nenhum (decisão dele de 25/11/2026)
+    const semCadeira = recusaDeCadeira(membro.recordset[0].SituacaoMembro);
+    if (semCadeira) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: semCadeira } };
       return;
     }
     const orgao = await pool.request().input("id", sql.Int, orgaoId).query(`SELECT OrgaoId, Sigla FROM Orgaos WHERE OrgaoId = @id`);

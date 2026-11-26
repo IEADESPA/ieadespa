@@ -14,31 +14,47 @@ const { CONDICAO_SQL_ATIVO, foraDaReadmissao } = require("./disciplina");
 const estatuto = require("./estatuto");
 const { registrarAuditoria } = require("./auditoria");
 
+// A LISTA_CUSTOM (decisões dele de 24/11/2026 e 25/11/2026): quem está em ARROLAMENTO e o CONGREGADO não votam em nada, nem estando na lista montada nome
+// por nome ("o congregado fica fora de tudo, também das listas de votantes montadas nome por nome"). Conferido na LEITURA (não na criação da enquete): a lista
+// continua como foi feita, e quem completar o arrolamento ou for batizado volta a votar sozinho. SituacaoMembro é NOT NULL (o NOT IN não derruba ninguém por NULL).
+const NA_LISTA_SEM_ARROLAMENTO = `FROM PublicoEnqueteCustom p JOIN MembroReferencia m ON m.MembroId = p.MembroId
+  WHERE p.EnqueteId = @id AND m.SituacaoMembro NOT IN ('ARROLAMENTO', 'CONGREGADO')`;
+
 async function membrosElegiveis(pool, sql, enquete) {
   if (enquete.publicoTipo === "LISTA_CUSTOM") {
     const result = await pool.request().input("id", sql.Int, enquete.enqueteId)
-      .query(`SELECT MembroId AS membroId FROM PublicoEnqueteCustom WHERE EnqueteId = @id`);
+      .query(`SELECT p.MembroId AS membroId ${NA_LISTA_SEM_ARROLAMENTO}`);
     return new Set(result.recordset.map(r => r.membroId));
   }
   const universo = await universoDoOrgao(pool, null);
   return new Set(universo.map(m => m.membroId));
 }
 
-// "Apto e em comunhão" para uma pessoa: o mesmo critério de universoDoOrgao(pool, null) — ATIVO, não SEM_COMUNHAO, sem processo disciplinar ativo.
-async function aptoEmComunhao(pool, membroId, sql = sqlPadrao) {
+// "Apto e em comunhão" para uma pessoa, com o MOTIVO de quem não está: o mesmo critério de universoDoOrgao(pool, null) — ATIVO, sem processo disciplinar
+// ativo, nem SEM_COMUNHAO, nem ARROLAMENTO ("não vota em nada" até completar, decisão dele de 24/11/2026), nem CONGREGADO (a tela aprovada da rodada 28:
+// "ainda não membro: não vota"; e 25/11: "fica fora de tudo"). A ficha sem situação (NULL) continua apta, como antes. motivo: null (apto), "ARROLAMENTO", "CONGREGADO" ou "OUTRO" — a
+// votação do tema diz o motivo de verdade (identidadeVisualDb.textoNaoApto).
+async function situacaoParaVoto(pool, membroId, sql = sqlPadrao) {
   const r = await pool.request().input("m", sql.Int, membroId).query(`
-    SELECT CASE WHEN m.Status = 'ATIVO' AND ISNULL(m.SituacaoMembro, '') <> 'SEM_COMUNHAO'
+    SELECT m.SituacaoMembro AS situacao,
+           CASE WHEN m.Status = 'ATIVO' AND (m.SituacaoMembro IS NULL OR m.SituacaoMembro NOT IN ('SEM_COMUNHAO', 'ARROLAMENTO', 'CONGREGADO'))
                  AND NOT EXISTS (SELECT 1 FROM ProcessosDisciplinares LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = ProcessosDisciplinares.PenalidadeId
                                  WHERE ProcessosDisciplinares.MembroId = m.MembroId AND ${CONDICAO_SQL_ATIVO} AND ${foraDaReadmissao("m")})
            THEN 1 ELSE 0 END AS apto
     FROM MembroReferencia m WHERE m.MembroId = @m`);
-  return !!(r.recordset[0] && Number(r.recordset[0].apto) === 1);
+  const l = r.recordset[0];
+  if (l && Number(l.apto) === 1) return { apto: true, motivo: null };
+  const motivo = l && (l.situacao === "ARROLAMENTO" || l.situacao === "CONGREGADO") ? l.situacao : "OUTRO";
+  return { apto: false, motivo };
+}
+async function aptoEmComunhao(pool, membroId, sql = sqlPadrao) {
+  return (await situacaoParaVoto(pool, membroId, sql)).apto;
 }
 
 async function membroElegivel(pool, sql, enquete, membroId) {
   if (enquete.publicoTipo === "LISTA_CUSTOM") {
     const r = await pool.request().input("id", sql.Int, enquete.enqueteId).input("m", sql.Int, membroId)
-      .query(`SELECT 1 AS ok FROM PublicoEnqueteCustom WHERE EnqueteId = @id AND MembroId = @m`);
+      .query(`SELECT 1 AS ok ${NA_LISTA_SEM_ARROLAMENTO} AND p.MembroId = @m`);
     return r.recordset.length > 0;
   }
   return aptoEmComunhao(pool, membroId, sql);
@@ -123,4 +139,4 @@ async function encerrarVencidas(pool, { sql = sqlPadrao } = {}) {
   return { encerradas };
 }
 
-module.exports = { membrosElegiveis, membroElegivel, aptoEmComunhao, passouDoFechamento, encerrarEnquete, gravarResultado, recuperarResultado, encerrarVencidas };
+module.exports = { membrosElegiveis, membroElegivel, aptoEmComunhao, situacaoParaVoto, passouDoFechamento, encerrarEnquete, gravarResultado, recuperarResultado, encerrarVencidas };

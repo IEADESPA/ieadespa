@@ -8,6 +8,7 @@
 const { getPool, sql } = require("../shared/db");
 const auth = require("../shared/auth");
 const { noEscopoDaPessoa } = require("../shared/escopoRotas");
+const nivelDoCargo = require("../shared/nivelDoCargo");
 const pinMembro = require("../shared/pinMembro");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { enviarEmailNotificacao } = require("../shared/notificacaoEmail");
@@ -33,6 +34,9 @@ module.exports = async function (context, req) {
     context.res = { status: 403, body: { sucesso: false, mensagem: "Fora do seu escopo de atuação." } };
     return;
   }
+  // Quem tem cargo de liderança vigente: o PIN provisório abre a sessão de titular dele, e a regra é a do nível do cargo com a confirmação recente (25 e 26/11).
+  if (!(await nivelDoCargo.conferirPinDeLideranca(pool, sql, req, context, usuario, membroId))) return;
+
 
   const pin = pinMembro.gerarPinProvisorio({ nascimento: m.DataNascimento, matricula: membroId });
   await pinMembro.gravarPin(pool, membroId, pin, { provisorioPor: usuario.membroId });

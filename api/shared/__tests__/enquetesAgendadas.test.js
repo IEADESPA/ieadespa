@@ -10,6 +10,8 @@ jest.mock("../db", () => ({
       if (valor instanceof Error) throw valor;
       return { recordset: typeof valor === "function" ? valor(inputs, texto) : valor, rowsAffected: [afetadas === undefined ? 0 : afetadas] };
     }
+    // passo 6 (juntar fichas): criar uma votação geral confere antes o alerta da assembleia (cadastros a acertar) — aqui, nenhum
+    if (/AS possiveis/.test(texto)) return { recordset: [{ repetidas: 0, numero: 0, arrolamento: 0, possiveis: 0 }], rowsAffected: [0] };
     return { recordset: [], rowsAffected: [0] };
   } }; return r; } }),
   sql: new Proxy({}, { get: () => () => undefined })

@@ -12,6 +12,9 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { exigirGeral } = require("../shared/escopoRotas");
+// A trava das matrículas (23/11/2026): antes da importação do sistema pago concluída, a planilha que traz uma matrícula NOVA não grava nada (atualizar
+// quem já existe continua livre)
+const matriculaNova = require("../shared/matriculaNova");
 
 const MAX_LINHAS = 2000;
 
@@ -40,7 +43,9 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   const situacoesResult = await pool.request().query(`SELECT Sigla FROM SituacoesMembro`);
-  const situacoesValidas = new Set(situacoesResult.recordset.map(s => s.Sigla));
+  // FASE 10, rodada 28: o "Arrolamento a completar" só vem da importação do sistema pago e só sai completando (api/Arrolamento): a planilha antiga não põe
+  // ninguém no grupo (a sigla não vale aqui) nem tira (a ficha que está nele continua nele).
+  const situacoesValidas = new Set(situacoesResult.recordset.map(s => s.Sigla).filter(s => s !== "ARROLAMENTO"));
 
   let criados = 0;
   let atualizados = 0;
@@ -48,6 +53,7 @@ module.exports = async function (context, req) {
   const transaction = new sql.Transaction(pool);
   const r = () => new sql.Request(transaction);
   await transaction.begin();
+  let liberadas = null;   // lida uma vez, só se aparecer uma linha nova
   try {
     const vistos = new Set();
     for (const linha of linhasValidas) {
@@ -72,12 +78,18 @@ module.exports = async function (context, req) {
         const request = r().input("id", sql.Int, membroId).input("nome", sql.NVarChar(200), nome);
         if (situacaoMembro) {
           await request.input("situacaoMembro", sql.NVarChar(30), situacaoMembro)
-            .query(`UPDATE MembroReferencia SET Nome = @nome, SituacaoMembro = @situacaoMembro WHERE MembroId = @id`);
+            .query(`UPDATE MembroReferencia SET Nome = @nome, SituacaoMembro = CASE WHEN SituacaoMembro = N'ARROLAMENTO' THEN SituacaoMembro ELSE @situacaoMembro END WHERE MembroId = @id`);
         } else {
           await request.query(`UPDATE MembroReferencia SET Nome = @nome WHERE MembroId = @id`);
         }
         atualizados++;
       } else {
+        if (liberadas === null) liberadas = await matriculaNova.matriculasLiberadas(r);
+        if (!liberadas) {
+          await transaction.rollback();
+          context.res = { status: 409, body: { sucesso: false, mensagem: `${matriculaNova.MSG_TRAVADA} Nenhuma linha foi gravada: a planilha traz a matrícula ${membroId}, que ainda não existe.` } };
+          return;
+        }
         await r()
           .input("id", sql.Int, membroId)
           .input("nome", sql.NVarChar(200), nome)

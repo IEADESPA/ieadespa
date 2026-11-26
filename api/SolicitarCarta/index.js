@@ -29,6 +29,9 @@ const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { garantirContaSite } = require("../shared/directusContas");
 const auth = require("../shared/auth");
+const { recusaDaEmissaoNaHora } = require("../shared/cartaSituacao");   // volta 10 do Membros: quem está em arrolamento não emite na hora
+const travaPermissoes = require("../shared/travaPermissoes");
+const { hojeBrasilia } = require("../shared/dataBrasilia");
 
 const TIPOS = ["RECOMENDACAO", "MUDANCA", "ATESTADO_SUPLETIVO"];
 const EMISSAO_IMEDIATA = ["RECOMENDACAO", "ATESTADO_SUPLETIVO"];
@@ -94,7 +97,7 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   const membro = await pool.request().input("id", sql.Int, matricula)
-    .query(`SELECT MembroId, Nome, Email FROM MembroReferencia WHERE MembroId = @id`);
+    .query(`SELECT MembroId, Nome, Email, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id`);
   if (membro.recordset.length === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
     return;
@@ -127,15 +130,22 @@ module.exports = async function (context, req) {
       contaSiteGarantida = await garantirContaSite(email);
     }
     const declaracao = `Eu, ${nome}, solicito minha Carta de Mudança e estou ciente do meu desligamento do rol de membros da IEADESPA.`;
+    // O membro sai sozinho, seja qual for o cargo (regra do responsável, 23/11/2026): a confirmação nunca é barrada. Se ele é a última pessoa que administra
+    // os acessos, a Geral é avisada agora (shared/travaPermissoes.js); a situação é lida antes de gravar, com o cargo ainda vigente.
+    const ultimoAdministrador = tipo === "MUDANCA"
+      && travaPermissoes.ficariaSemAdministrador(await travaPermissoes.situacaoDoCargo(pool, sql, matricula, hojeBrasilia()));
     await pool.request()
       .input("id", sql.Int, cartaAtiva.CartaId)
       .input("declaracao", sql.NVarChar(500), declaracao)
       .input("manterAcessoSite", sql.Bit, querManterAcessoSite)
       .query(`UPDATE CartasTransito SET Status = 'CONFIRMADA', DeclaracaoCiencia = @declaracao,
                 DataConfirmacao = SYSUTCDATETIME(), ManterAcessoSite = @manterAcessoSite WHERE CartaId = @id`);
+    const avisoGeral = ultimoAdministrador ? await travaPermissoes.avisarGeralSaidaDoUltimo(pool, { cartaId: cartaAtiva.CartaId, membroId: matricula }) : null;
+    // Quem confirmou fica na trilha: a própria pessoa, pela sessão dela (exigirTitular), e por qual entrada. É o que distingue a confirmação do membro.
     await registrarAuditoria({
       tabela: "CartasTransito", registroId: Number(cartaAtiva.CartaId), acao: "Confirmou solicitação de carta",
-      usuarioId: Number(matricula), dadosDepois: { tipo, declaracao, manterAcessoSite: querManterAcessoSite, contaSiteGarantida }
+      usuarioId: Number(matricula), dadosDepois: { tipo, declaracao, manterAcessoSite: querManterAcessoSite, contaSiteGarantida,
+        confirmadoPor: Number(usuarioCarta.membroId), via: usuarioCarta.via || null, ...(ultimoAdministrador ? { ultimoAdministrador: true, avisoGeral } : {}) }
     });
     const mensagem = querManterAcessoSite && !contaSiteGarantida
       ? "✅ Solicitação confirmada. Não foi possível garantir o acesso ao site agora — tente de novo em Minha Conta, no site, usando o mesmo e-mail."
@@ -146,6 +156,13 @@ module.exports = async function (context, req) {
 
   if (cartaAtiva) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Você já tem uma carta deste tipo em aberto (aguardando ou ainda dentro da validade)." } };
+    return;
+  }
+
+  // volta 10 do Membros (25/11/2026): a ficha em arrolamento (a completar) não emite sozinha a carta que sai na hora; a frase é neutra (shared/cartaSituacao.js)
+  const recusaSituacao = recusaDaEmissaoNaHora(tipo, membro.recordset[0].SituacaoMembro);
+  if (recusaSituacao) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: recusaSituacao } };
     return;
   }
 

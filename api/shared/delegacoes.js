@@ -51,10 +51,15 @@ async function criarDelegacao(pool, sql, { liderancaId, deleganteMembroId, deleg
 // Todo papel (Lideranca) hoje ativamente delegado a este membro — usado
 // tanto no login (pra somar permissão/escopo) quanto na tela "delegado a
 // mim". Ativa = Status='ATIVA', dentro da janela de datas, com o cargo delegado vigente E quem delegou ATIVO no rol de membros (a mesma regra do login dele).
+// ExpiradasDoTitular: as permissões que a recertificação vencida tirou de quem é dono do cargo (o mesmo critério de compliance.permissoesComRecertificacaoExpirada):
+// o login do titular já não as recebe, e a delegação não as passa adiante.
 async function delegacoesAtivasRecebidas(pool, sql, membroId, hoje) {
   const result = await pool.request().input("membroId", sql.Int, membroId).input("hoje", sql.Date, hoje).query(`
     SELECT d.DelegacaoId, d.LiderancaId, d.DataFim, CONVERT(varchar(10), d.DataFim, 120) AS DataFimTexto, d.Motivo, deleg.Nome AS deleganteNome,
-           l.EscopoTipo, l.EscopoId, l.DepartamentoId, CONVERT(varchar(10), l.AtivoAte, 120) AS LiderancaAtivoAteTexto, p.Nome AS papelNome, p.Nivel AS papelNivel, p.Permissoes AS permissoesStr
+           l.EscopoTipo, l.EscopoId, l.DepartamentoId, CONVERT(varchar(10), l.AtivoAte, 120) AS LiderancaAtivoAteTexto, p.Nome AS papelNome, p.Nivel AS papelNivel, p.Permissoes AS permissoesStr,
+           (SELECT STRING_AGG(r.Permissao, ',') FROM RecertificacoesAcesso r
+            WHERE r.MembroId = l.MembroId AND r.Status = 'EXPIRADA'
+              AND r.RecertificacaoId = (SELECT MAX(r2.RecertificacaoId) FROM RecertificacoesAcesso r2 WHERE r2.MembroId = r.MembroId AND r2.Permissao = r.Permissao)) AS ExpiradasDoTitular
     FROM DelegacoesAcesso d
     JOIN Lideranca l ON l.LiderancaId = d.LiderancaId
     JOIN Papeis p ON p.PapelId = l.PapelId
@@ -65,6 +70,14 @@ async function delegacoesAtivasRecebidas(pool, sql, membroId, hoje) {
   `);
   return result.recordset;
 }
+
+// "pessoas, financeiro" -> ["pessoas", "financeiro"]: a lista do papel sem as permissões vencidas do titular do cargo nem as de `expiradas` (as de quem recebe).
+function permissoesDaDelegacao(d, expiradas = []) {
+  const vencidas = new Set((d.ExpiradasDoTitular || "").split(",").map((p) => p.trim()).filter(Boolean).concat(expiradas || []));
+  return [...new Set((d.permissoesStr || "").split(",").map((p) => p.trim()).filter(Boolean))].filter((p) => !vencidas.has(p));
+}
+// O fim da delegação como o dia (AAAA-MM-DD): o instante da meia-noite UTC aparecia na tela como o dia anterior.
+const resumoDaDelegacao = (d) => ({ delegacaoId: d.DelegacaoId, deleganteNome: d.deleganteNome, papelNome: d.papelNome, dataFim: d.DataFimTexto || d.DataFim });
 
 // Quem perde o cargo (medida cautelar, saída do rol, mudança de situação, diretoria dissolvida) leva junto as delegações: ficam CANCELADAS, com a trilha,
 // e levantar a medida ou voltar a ATIVO não as revive (quem delegou faz uma nova, se quiser). A sessão de quem recebeu carrega o cargo delegado como uma
@@ -112,7 +125,7 @@ async function permissoesEscopoDelegados(pool, sql, membroId, hoje) {
   let escopoVirouTodas = false;
 
   for (const d of delegacoes) {
-    permissoesExtras = permissoesExtras.concat((d.permissoesStr || "").split(",").map((p) => p.trim()).filter(Boolean));
+    permissoesExtras = permissoesExtras.concat(permissoesDaDelegacao(d));
     const escopo = await resolverEscopoCongregacoes(pool, d.EscopoTipo, d.EscopoId);
     if (escopo === "TODAS") escopoVirouTodas = true;
     else escopoExtra = escopoExtra.concat(escopo);
@@ -121,13 +134,13 @@ async function permissoesEscopoDelegados(pool, sql, membroId, hoje) {
   return {
     permissoesExtras: [...new Set(permissoesExtras)],
     escopoExtra: escopoVirouTodas ? "TODAS" : [...new Set(escopoExtra)],
-    delegacoesAtivas: delegacoes.map((d) => ({ delegacaoId: d.DelegacaoId, deleganteNome: d.deleganteNome, papelNome: d.papelNome, dataFim: d.DataFim }))
+    delegacoesAtivas: delegacoes.map(resumoDaDelegacao)
   };
 }
 
 // v7.6 — uma CONCESSÃO por delegação ativa (ver shared/auth.js, "Concessões"): a permissão delegada vale só com o escopo, o nível e o departamento do papel
 // delegado, e só até o último dia da delegação (`ate`) — a delegação não amplia mais o escopo das permissões do cargo próprio, nem o contrário.
-// `expiradas`: permissões com recertificação vencida (shared/compliance.js) saem de todas as concessões.
+// `expiradas`: permissões com recertificação vencida de quem recebe (shared/compliance.js) saem de todas as concessões; as vencidas do titular do cargo também.
 async function concessoesDelegadas(pool, sql, membroId, hoje, expiradas = []) {
   const delegacoes = await delegacoesAtivasRecebidas(pool, sql, membroId, hoje);
   const concessoes = [];
@@ -140,14 +153,14 @@ async function concessoesDelegadas(pool, sql, membroId, hoje, expiradas = []) {
     const fins = [d.DataFimTexto, d.LiderancaAtivoAteTexto].filter((x) => typeof x === "string" && x);
     concessoes.push({
       origem: "DELEGACAO", delegacaoId: d.DelegacaoId, ate: fins.length ? fins.sort()[0] : null,
-      permissoes: [...new Set((d.permissoesStr || "").split(",").map((p) => p.trim()).filter(Boolean))].filter((p) => !expiradas.includes(p)),
+      permissoes: permissoesDaDelegacao(d, expiradas),
       nivel: d.papelNivel || null, escopoCongregacoes: escopo, escopoExtensaoNome: extensao || null,
       departamentoId: d.EscopoTipo === "DEPARTAMENTO" ? d.EscopoId : (d.DepartamentoId || null)
     });
   }
   return {
     concessoes,
-    delegacoesAtivas: delegacoes.map((d) => ({ delegacaoId: d.DelegacaoId, deleganteNome: d.deleganteNome, papelNome: d.papelNome, dataFim: d.DataFim }))
+    delegacoesAtivas: delegacoes.map(resumoDaDelegacao)
   };
 }
 

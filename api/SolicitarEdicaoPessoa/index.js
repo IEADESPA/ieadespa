@@ -1,13 +1,17 @@
-// SolicitarEdicaoPessoa (v1.11 — público, autoatendimento por matrícula)
-// Campos "sujeitos a aprovação" (ver shared/camposEdicaoPessoa.js): o membro
-// propõe, a Secretaria decide campo a campo na Fila de Aprovações
-// (GestaoFilaAprovacoes) antes de valer em MembroReferencia.
-// GET  /api/solicitacoes-edicao/{matricula} -> próprias solicitações (com os campos aninhados)
-// POST /api/solicitacoes-edicao/{matricula} -> body: { campos: { dataNascimento?, ... } }
-const { getPool, sql } = require("../shared/db");
-const { registrarAuditoria } = require("../shared/auditoria");
-const { CAMPOS_APROVACAO } = require("../shared/camposEdicaoPessoa");
+// SolicitarEdicaoPessoa (v1.11 — autoatendimento por matrícula)
+// A SUGESTÃO do membro: o que ele não muda sozinho (o que já está preenchido e os atos da igreja — admissão, batismo, rito, procedência — e o nome) ele propõe, e a
+// secretaria confere campo a campo na CAIXA DE SUGESTÕES (GestaoFilaAprovacoes) antes de valer na ficha. FASE 10, v10.1b passo 5 (18/11/2026): os campos e a
+// conferência vêm de shared/edicaoFicha.js (os mesmos da edição campo a campo); UMA sugestão pendente por campo; o membro vê a resposta (o motivo da recusa).
+// GET  /api/solicitacoes-edicao/{matricula} -> os próprios pedidos (com os campos aninhados, a situação e o motivo da recusa)
+// POST /api/solicitacoes-edicao/{matricula} -> body: { campos: { nome?, dataNascimento?, dataAdmissao?, ... }, anexo?: { base64, tipo } }
+//   FASE 10 (as sobras, migração 182): o anexo é a foto do documento (imagem ou PDF, até 5 MB, conferido pelo conteúdo); é guardado ANTES de criar a sugestão
+//   (se não der para guardar, nada é enviado) e apagado se a sugestão for recusada pelas regras (nada fica esquecido no armazenamento).
+const { getPool } = require("../shared/db");
 const auth = require("../shared/auth");
+const { hojeBrasilia } = require("../shared/dataBrasilia");
+const edicaoFichaDb = require("../shared/edicaoFichaDb");
+const anexoSugestao = require("../shared/anexoSugestao");
+const storage = require("../shared/storage");
 
 module.exports = async function (context, req) {
   // fecho da v7.5 — exige sessão e só a matrícula da própria sessão (antes qualquer um propunha mudar a data de nascimento de qualquer pessoa).
@@ -16,84 +20,36 @@ module.exports = async function (context, req) {
   const pool = await getPool();
 
   if (req.method === "GET") {
-    const result = await pool.request().input("mat", sql.Int, matricula).query(`
-      SELECT s.SolicitacaoId AS solicitacaoId, CONVERT(varchar(33), s.DataSolicitacao, 126) AS dataSolicitacao, s.Status AS status,
-             c.CampoId AS campoId, c.NomeCampo AS nomeCampo, c.ValorAnterior AS valorAnterior, c.ValorProposto AS valorProposto, c.Status AS statusCampo
-      FROM SolicitacoesEdicaoPessoa s
-      JOIN SolicitacoesEdicaoCampos c ON c.SolicitacaoId = s.SolicitacaoId
-      WHERE s.MembroId = @mat
-      ORDER BY s.DataSolicitacao DESC, c.CampoId`);
-
-    const porSolicitacao = {};
-    result.recordset.forEach(r => {
-      if (!porSolicitacao[r.solicitacaoId]) {
-        porSolicitacao[r.solicitacaoId] = { solicitacaoId: r.solicitacaoId, dataSolicitacao: r.dataSolicitacao, status: r.status, campos: [] };
-      }
-      porSolicitacao[r.solicitacaoId].campos.push({
-        campoId: r.campoId, nomeCampo: r.nomeCampo, valorAnterior: r.valorAnterior, valorProposto: r.valorProposto, status: r.statusCampo
-      });
-    });
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: Object.values(porSolicitacao) };
+    context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: await edicaoFichaDb.minhasSugestoes(pool, Number(matricula)) };
     return;
   }
 
   if (req.method === "POST") {
-    const camposBody = (req.body || {}).campos || {};
-    const chavesValidas = Object.keys(camposBody).filter(k => CAMPOS_APROVACAO[k] && String(camposBody[k] ?? "").trim());
-    if (chavesValidas.length === 0) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe ao menos um campo válido pra solicitar mudança." } };
-      return;
+    const bruto = req.body && typeof req.body === "object" ? req.body.campos : null;
+    const campos = {};
+    // o que veio vazio não é sugestão (a tela antiga manda só o que foi preenchido)
+    if (bruto && typeof bruto === "object" && !Array.isArray(bruto)) {
+      for (const [k, v] of Object.entries(bruto)) if (v !== null && v !== undefined && String(v).trim() !== "") campos[k] = v;
     }
-
-    const colunasSelect = Object.values(CAMPOS_APROVACAO).map(c => c.coluna).join(", ");
-    const membro = await pool.request().input("id", sql.Int, matricula).query(`SELECT MembroId, ${colunasSelect} FROM MembroReferencia WHERE MembroId = @id`);
-    if (membro.recordset.length === 0) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
-      return;
+    let anexo = null;
+    if (req.body && req.body.anexo != null) {
+      const v = anexoSugestao.validar(req.body.anexo);
+      if (!v.ok) { context.res = { status: 400, body: { sucesso: false, mensagem: v.mensagem } }; return; }
+      try {
+        anexo = { nome: await anexoSugestao.guardar(v), tipo: v.tipo };
+      } catch (e) {
+        context.log.error("[SolicitarEdicaoPessoa] o anexo não foi guardado:", e && e.message);
+        context.res = { status: 503, body: { sucesso: false, mensagem: "Não deu para guardar o anexo agora: nada foi enviado. Tente de novo em instantes." } };
+        return;
+      }
     }
-    const atual = membro.recordset[0];
-
-    const camposParaCriar = chavesValidas
-      .map(chave => {
-        const config = CAMPOS_APROVACAO[chave];
-        const bruto = atual[config.coluna];
-        const valorAnterior = config.tipoData && bruto ? new Date(bruto).toISOString().slice(0, 10) : (bruto || null);
-        const valorProposto = String(camposBody[chave]).trim();
-        return { chave, valorAnterior, valorProposto };
-      })
-      .filter(c => String(c.valorAnterior || "") !== c.valorProposto); // só o que realmente muda
-
-    if (camposParaCriar.length === 0) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Nenhum dos valores enviados é diferente do que já está cadastrado." } };
-      return;
+    const r = await edicaoFichaDb.sugerir(pool, { membroId: Number(matricula), campos, hoje: hojeBrasilia() });
+    if (anexo) {
+      if (r.sucesso && r.solicitacaoId) await anexoSugestao.ligar(pool, { solicitacaoId: r.solicitacaoId, membroId: Number(matricula), nome: anexo.nome, tipo: anexo.tipo });
+      else await storage.excluirDocumento(anexo.nome);
     }
-
-    const criarSolicitacao = await pool.request().input("mat", sql.Int, matricula)
-      .query(`INSERT INTO SolicitacoesEdicaoPessoa (MembroId) OUTPUT INSERTED.SolicitacaoId VALUES (@mat)`);
-    const solicitacaoId = criarSolicitacao.recordset[0].SolicitacaoId;
-
-    for (const c of camposParaCriar) {
-      await pool.request()
-        .input("sol", sql.Int, solicitacaoId)
-        .input("nome", sql.NVarChar(50), c.chave)
-        .input("antes", sql.NVarChar(300), c.valorAnterior)
-        .input("depois", sql.NVarChar(300), c.valorProposto)
-        .query(`INSERT INTO SolicitacoesEdicaoCampos (SolicitacaoId, NomeCampo, ValorAnterior, ValorProposto) VALUES (@sol, @nome, @antes, @depois)`);
-    }
-
-    await registrarAuditoria({
-      tabela: "SolicitacoesEdicaoPessoa",
-      registroId: solicitacaoId,
-      acao: "Solicitou edição de dados (aguardando aprovação)",
-      usuarioId: Number(matricula),
-      dadosDepois: { campos: camposParaCriar }
-    });
-
-    context.res = {
-      status: 201,
-      headers: { "Content-Type": "application/json" },
-      body: { sucesso: true, mensagem: `✅ Pedido enviado — ${camposParaCriar.length} campo(s) aguardando aprovação da Secretaria.`, solicitacaoId }
-    };
+    const { status, ...corpo } = r;
+    context.res = { status: status || 200, headers: { "Content-Type": "application/json" }, body: corpo };
     return;
   }
 

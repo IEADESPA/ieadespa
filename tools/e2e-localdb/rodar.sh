@@ -202,6 +202,134 @@ case "$1" in
     migrar 173 2
     base salvar cenario-173
     ;;
+  preparar-174)
+    # FASE 10, v10.1b (14/11/2026): a partir da base "cenario-173", aplica a 174 duas vezes (a ficha por dentro: CPF, filiação, escolaridade, CpfLeituras e
+    # MatriculasLivres; prova a idempotência); salva "cenario-174" (e2e-84 e e2e-85 montam o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-173
+    migrar 174 2
+    base salvar cenario-174
+    ;;
+  preparar-176)
+    # FASE 10, v10.1b passo 3 (17/11/2026): a partir da base "cenario-174", aplica a 175 (os índices do raio-x) e a 176 duas vezes (a transferência de congregação
+    # como fluxo; prova a idempotência); salva "cenario-176" (e2e-89 monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-174
+    migrar 175
+    migrar 176 2
+    base salvar cenario-176
+    ;;
+  preparar-177)
+    # FASE 10, v10.1b passo 4 (17/11/2026): a partir da base "cenario-176", aplica a 177 duas vezes (o pré-cadastro e a fila de cadastros, os casos da Secretaria
+    # Geral; prova a idempotência); salva "cenario-177" (e2e-90 monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-176
+    migrar 177 2
+    base salvar cenario-177
+    ;;
+  preparar-178)
+    # FASE 10, v10.1b passo 5 (18/11/2026): a partir da base "cenario-177", aplica a 178 duas vezes (a edição campo a campo e a caixa de sugestões: o motivo da
+    # recusa e os índices da caixa e do histórico; prova a idempotência); salva "cenario-178" (e2e-91 monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-177
+    migrar 178 2
+    base salvar cenario-178
+    ;;
+  preparar-179)
+    # FASE 10, v10.1b passo 6 (18/11/2026): a partir da base "cenario-178", aplica a 179 duas vezes (juntar fichas: as pendências de cadastro, o registro das
+    # junções e o arquivo; prova a idempotência); salva "cenario-179" (e2e-93 monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-178
+    migrar 179 2
+    base salvar cenario-179
+    ;;
+  preparar-180)
+    # FASE 10, v10.1b passo 8 (19/11/2026): a partir da base "cenario-179", aplica a 180 duas vezes (as carteirinhas: os modelos da física, o QR fixo de cada
+    # pessoa, o registro das impressões e os pedidos de segunda via; prova a idempotência); salva "cenario-180" (e2e-94 monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-179
+    migrar 180 2
+    base salvar cenario-180
+    ;;
+  preparar-181)
+    # FASE 10, as sobras de Membros (19/11/2026): a partir da base "cenario-180", aplica a 181 duas vezes (onde a pessoa serve: MembrosMinisterios; prova a
+    # idempotência); salva "cenario-181" (e2e-95 monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-180
+    migrar 181 2
+    base salvar cenario-181
+    ;;
+  preparar-182)
+    # FASE 10, as sobras de Membros (19/11/2026): a partir da base "cenario-181", aplica a 182 duas vezes (o anexo da sugestão: AnexoNome e AnexoTipo em
+    # SolicitacoesEdicaoPessoa; prova a idempotência); salva "cenario-182" (e2e-95 monta o próprio cenário; e2e-91 também roda nela).
+    cd "$AQUI"
+    base restaurar cenario-181
+    migrar 182 2
+    base salvar cenario-182
+    ;;
+  preparar-183)
+    # FASE 10, as sobras de Membros (19/11/2026): a partir da base "cenario-182", aplica a 183 duas vezes (a pessoa completa o pré-cadastro pelo e-mail:
+    # PedidoPessoa* em PreCadastros e o índice do código; prova a idempotência); salva "cenario-183".
+    cd "$AQUI"
+    base restaurar cenario-182
+    migrar 183 2
+    base salvar cenario-183
+    ;;
+  preparar-184)
+    # FASE 10, as pendências do "Quero me cadastrar" (21/11/2026): a partir da base "cenario-183", aplica a 184 duas vezes (a chave do envio do site:
+    # EnvioId em PreCadastros, o CHECK do formato e o índice único filtrado; prova a idempotência); salva "cenario-184" (e2e-95 e e2e-90 montam o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-183
+    migrar 184 2
+    base salvar cenario-184
+    ;;
+  preparar-200)
+    # FASE 10, Financeiro (módulo 2), incremento 1a (21/11/2026): a partir da base "cenario-184", aplica a 200 duas vezes (a base do Financeiro novo:
+    # centros de custo, blocos de recibo e o livro; prova a idempotência e que os centros de custo nascem uma vez só); salva "cenario-200" (e2e-200).
+    # O Financeiro roda no LocalDB próprio (E2E_INSTANCIA=fin E2E_BANCO=ieadespa_fin E2E_CS=...), para não atropelar quem trabalha no psc7.
+    cd "$AQUI"
+    base restaurar cenario-184
+    migrar 200 2
+    migrar 201 2   # a revisão de 23/11/2026: os índices que faltavam, FinFolhasDesfeitas e a Quantidade em blocos (e2e-200 e e2e-201)
+    migrar 202 2   # a revisão de 24/11/2026 (m2): a SaidaId e a faixa conferidas no banco (e2e-200 e e2e-201)
+    migrar 203 2   # a decisão dele de 24/11/2026: a folha inexistente (o destino com 11 letras e os CHECKs; e2e-202)
+    migrar 205 2   # o portão da parte 2 (26/11/2026, I2): o papel de quem marcou e de quem desfez, gravado na hora (e2e-202)
+    base salvar cenario-200
+    ;;
+  preparar-185)
+    # FASE 10, a importação dos membros do sistema pago (22/11/2026): a partir da base "cenario-184", aplica a 185 duas vezes (ImportacoesMembros, as linhas
+    # da prévia e a situação ARROLAMENTO; prova a idempotência); salva "cenario-185" (e2e-96 monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-184
+    migrar 185 2
+    base salvar cenario-185
+    ;;
+  preparar-186)
+    # FASE 10, a guarda dos dados da importação (24/11/2026): a partir da base "cenario-185", aplica a 186 duas vezes (as duas políticas de retenção da
+    # importação, com a base legal; prova a idempotência); salva "cenario-186" (e2e-100 monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-185
+    migrar 186 2
+    base salvar cenario-186
+    ;;
+  preparar-187)
+    # FASE 10, a importação parada e a do resto (G2, decisão dele de 24/11/2026): a partir da base "cenario-186", aplica a 187 duas vezes (o último lote,
+    # a importação do resto e a descartada depois de confirmada; prova a idempotência); salva "cenario-187". Os roteiros da importação (e2e-96, 97, 99, 100
+    # e 102) rodam nela: a importação lê e grava o último lote.
+    cd "$AQUI"
+    base restaurar cenario-186
+    migrar 187 2
+    base salvar cenario-187
+    ;;
+  preparar-188)
+    # FASE 10, o ensaio da importação no tamanho real (missão C, 26/11/2026): a partir da base "cenario-187", aplica a 188 duas vezes (o índice do
+    # nascimento das fichas, que a prévia da importação e a tela Fichas repetidas usam; prova a idempotência); salva "cenario-188". O ensaio
+    # (tools/ensaio-importacao/ensaio-localdb.js) e os roteiros da importação rodam nela.
+    cd "$AQUI"
+    base restaurar cenario-187
+    migrar 188 2
+    base salvar cenario-188
+    ;;
   preparar-175)
     # FASE 10 (17/11/2026, raio-x de velocidade): a partir da base "cenario-173", aplica a 175 duas vezes (os índices das tabelas grandes; prova a idempotência);
     # salva "cenario-175" (e2e-88 monta o próprio cenário).

@@ -65,8 +65,41 @@
 // meus-dados.js).
 // v59 (13/11/2026): FASE 10 — a votação vinculante com o tipo (proposta ou escolha): o seletor e a ajuda no formulário (index.html), os papéis das opções e o
 // resultado com o placar, a escolhida ou o empate (modulos/enquetes.js). Feita no ramo v10-votacao como v58; subiu para v59 porque a main já tinha usado a v58.
-const CACHE_NOME = "ieadespa-app-shell-v59";
-const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/afm.js", "/modulos/arquivos.js", "/modulos/assistencia.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/catalogos-estrutura.js", "/modulos/checkin-infantil.js", "/modulos/comunicacao.js", "/modulos/consagracoes.js", "/modulos/crise-seguranca.js", "/modulos/cuidado-pastoral.js", "/modulos/disciplina.js", "/modulos/discipulado.js", "/modulos/distritos.js", "/modulos/doacoes.js", "/modulos/ebd.js", "/modulos/educacao-continuada.js", "/modulos/endereco.js", "/modulos/enquetes.js", "/modulos/entidades-vinculadas.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/expansao.js", "/modulos/financeiro.js", "/modulos/identidade-visual.js", "/modulos/meu-painel.js", "/modulos/meus-dados.js", "/modulos/ministerio-menores.js", "/modulos/missoes.js", "/modulos/ouvidoria.js", "/modulos/permissoes.js", "/modulos/pessoas.js", "/modulos/projetos-assembleia.js", "/modulos/protecao.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/reunioes.js", "/modulos/seminario.js", "/modulos/setores-tecnicos.js", "/modulos/territorio.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js", "/vendor/simplewebauthn-browser.js"];
+// v60 (17/11/2026): FASE 10 — a casca nova (modulos/casca.js: claro/escuro, a entrada como primeira tela, as pílulas do celular; o estilo novo em style.css),
+// por enquanto só no ramo v10-casca e na homologação.
+// v61 (17/11/2026): FASE 10, incremento 4 da casca — o visual novo em todas as telas (style.css), o menu de cada módulo na cor do módulo e os números
+// das tabelas à direita (modulos/casca.js). Também só no ramo v10-casca e na homologação.
+// v62 (18/11/2026): FASE 10, v10.1b passo 7a — o módulo Membros na casca nova: o painel executivo, a lista em páginas e a ficha 360 com a edição campo
+// a campo (modulos/membros.js, index.html, style.css, pessoas.js); o incremento 2 (modulos/membros-cadastro.js: o cadastro em etapas, a fila de cadastros e o
+// pré-cadastro rápido) e o 3 (modulos/membros-movimento.js: as mudanças de congregação, a caixa de sugestões e a minha ficha em Minha vida) entram na mesma
+// v62, que ainda não foi para a produção. Só no ramo v10-membros e na homologação.
+// v63 (18/11/2026): FASE 10, conformidade da casca com o desenho aprovado — os ícones de traço, o menu principal limpo, o Início com as pendências
+// de cada módulo, as duas colunas, o caminho no topo, o menu recolhível, Meu trabalho, Minha vida e Meu Perfil (index.html, style.css, modulos/casca.js).
+// Pula a v62 porque o ramo v10-membros (na homologação) já a usou. Só no ramo v10-casca e na homologação.
+// v64 (18/11/2026): FASE 10, etapa 2 da casca — as letras servidas de dentro (app/fontes, licença OFL), o seletor "Fonte (teste)" fora da produção e os
+// efeitos (afundar ao tocar, painéis que entram suaves, a troca de tela deslizando), com movimento reduzido. Só no ramo v10-casca e na homologação.
+// v65 (19/11/2026): FASE 10 — Membros refeito do zero em Svelte: o index.html (os pontos de montagem), a casca (abrirModuloSvelte, a ponte), o script.js
+// (o módulo Membros com uma aba só; o Cuidado Pastoral com o cartão dele) e o style.css mudaram. As telas novas (app/svelte/membros.js e .css) NÃO entram na
+// instalação: são baixadas só quando a pessoa entra em Membros e ficam guardadas pelo fetch abaixo (rede primeiro). As telas do passo 7a em JavaScript
+// (modulos/membros.js, membros-cadastro.js e membros-movimento.js) saíram da casca. Só no ramo v10-membros-svelte e na homologação.
+// v66 (19/11/2026): FASE 10, passo 8 — as carteirinhas: a casca (os atalhos "Minha carteirinha" abrem a digital nova na Minha vida) e as telas Svelte (fora da
+// instalação, como as outras). A página pública conferir.html (o QR fixo) não entra no cache: é aberta por quem confere, sem o app (de verdade só desde a v72).
+// v71 (25/11/2026): FASE 10, Membros volta 9 — a casca (abrirAba: o aviso da Geral abre Estrutura -> Órgãos) e os módulos reunioes.js e
+// catalogos-estrutura.js (encerrar a cadeira e a vaga de comissão pedem o motivo). Pula a v67 a v70 (usadas no ramo do acesso). Só no ramo
+// v10-membros-svelte e na homologação.
+// v72 (25/11/2026): FASE 10, Membros volta 10 — a página pública do QR da carteirinha (conferir.html e conferir.js) passa direto pelo fetch abaixo, como a da
+// credencial: o endereço leva o código do QR, que nunca vence, e não pode ficar guardado no aparelho de quem confere (importante 3 do portão v9; até a v71 ela
+// caía no cache, ao contrário do que dizia o comentário da v66). A troca de versão apaga o cache antigo no activate, e com ele os endereços já guardados.
+// Mudaram também o script.js (o pedido de texto com o rótulo do botão e o limite) e os módulos pessoas.js, reunioes.js, catalogos-estrutura.js e
+// projetos-assembleia.js (encerrar a cadeira pede o motivo em todos os botões; a carta de quem está em arrolamento não se imprime). Só no ramo
+// v10-membros-svelte e na homologação.
+// v70 (25/11/2026): acesso parte 3 — a situação na ficha da pessoa: a licença por candidatura fora do seletor e só para leitura de quem está nela, com a dica
+// (pessoas.js, index.html). Número bem acima da v66 dos ramos em construção, para não colidir.
+// v73 (26/11/2026): a mescla do acesso parte 3 (v70) no ramo v10-membros-svelte (v72): os dois lados mudaram o pessoas.js, o meu-painel.js e o index.html,
+// e a casca nova baixa tudo junto. Acima da v72 deste ramo e da v71 da homologação.
+// v75 (26/11/2026): só no homolog — o Membros com o acesso (v73) junto do Financeiro parte 2 (v74). Acima de todas.
+const CACHE_NOME = "ieadespa-app-shell-v75";
+const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/afm.js", "/modulos/arquivos.js", "/modulos/assistencia.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/casca.js", "/modulos/catalogos-estrutura.js", "/modulos/checkin-infantil.js", "/modulos/comunicacao.js", "/modulos/consagracoes.js", "/modulos/crise-seguranca.js", "/modulos/cuidado-pastoral.js", "/modulos/disciplina.js", "/modulos/discipulado.js", "/modulos/distritos.js", "/modulos/doacoes.js", "/modulos/ebd.js", "/modulos/educacao-continuada.js", "/modulos/endereco.js", "/modulos/enquetes.js", "/modulos/entidades-vinculadas.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/expansao.js", "/modulos/financeiro.js", "/modulos/identidade-visual.js", "/modulos/meu-painel.js", "/modulos/meus-dados.js", "/modulos/ministerio-menores.js", "/modulos/missoes.js", "/modulos/ouvidoria.js", "/modulos/permissoes.js", "/modulos/pessoas.js", "/modulos/projetos-assembleia.js", "/modulos/protecao.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/reunioes.js", "/modulos/seminario.js", "/modulos/setores-tecnicos.js", "/modulos/territorio.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js", "/vendor/simplewebauthn-browser.js"];
 
 self.addEventListener("install", (evento) => {
   evento.waitUntil(caches.open(CACHE_NOME).then((cache) => cache.addAll(ARQUIVOS_SHELL)));
@@ -96,6 +129,8 @@ self.addEventListener("fetch", (evento) => {
   if (url.pathname === "/verificar.html") return;
   // v8.4 — a página do QR da credencial também passa direto: o endereço leva o código de segurança, que não pode ficar guardado no aparelho de quem leu (revisão independente)
   if (url.pathname === "/credencial.html" || url.pathname === "/credencial.js") return;
+  // v72 — a página pública do QR da carteirinha (o QR fixo) também passa direto: o endereço leva o código, que nunca vence (portão v9, importante 3)
+  if (url.pathname === "/conferir.html" || url.pathname === "/conferir.js") return;
   // v9.5 — a página do mapa do Google (moldura com sandbox) passa direto: nunca cai no index.html nem fica guardada
   if (url.pathname.startsWith("/mapa-territorial.")) return;
 

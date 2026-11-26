@@ -70,7 +70,7 @@ module.exports = async function (context, req) {
       `);
       // O SQL já filtrou; o JS repete a conferência (e é ele que corta quando a lista de congregações é grande demais para o SQL).
       filtrarPorEscopo(vPessoas, r.recordset, p => p.congregacao, p => p.extensao).slice(0, LIMITE_POR_FONTE)
-        .forEach(p => resultados.push({ tipo: "Pessoa", titulo: p.titulo, subtitulo: p.congregacao || "-", aba: "pessoas" }));
+        .forEach(p => resultados.push({ tipo: "Pessoa", titulo: p.titulo, subtitulo: p.congregacao || "-", aba: "pessoas", membroId: p.id }));
     }
   }
 

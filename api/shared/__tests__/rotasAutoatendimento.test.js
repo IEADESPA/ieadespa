@@ -11,6 +11,11 @@ jest.mock("../db", () => ({
 jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), sha256: () => "" }));
 jest.mock("../storage", () => ({ urlComSas: (u) => u, salvarFoto: jest.fn(async () => "u"), salvarDocumento: jest.fn(async () => "u") }));
 jest.mock("../directusContas", () => ({ garantirContaSite: jest.fn(async () => true) }));
+// v10.1b passo 5 — Meus Dados e as sugestões gravam numa transação (shared/edicaoFichaDb.js, provada no e2e-91 e em edicaoFicha.test.js); aqui só a guarda importa
+jest.mock("../edicaoFichaDb", () => ({
+  gravarDoMembro: jest.fn(async () => ({ sucesso: false, mensagem: "Matrícula não encontrada." })), regrasDoMembro: jest.fn(async () => []),
+  sugerir: jest.fn(async () => ({ sucesso: false, status: 200, mensagem: "Matrícula não encontrada." })), minhasSugestoes: jest.fn(async () => [])
+}));
 // Os nomes mockConsultas/mockRespostas existem para o jest deixar a fábrica acima enxergá-los.
 const mockConsultas = consultas;
 let mockRespostas = respostas;

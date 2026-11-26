@@ -62,6 +62,7 @@ module.exports = async function (context, req) {
            m.SituacaoMembro AS situacaoMembro, d.Nome AS departamento, m.CargoMinisterial AS cargoMinisterial,
            m.Telefone AS telefone, m.Email AS email, m.Endereco AS endereco, e.Nome AS extensao,
            m.FotoUrl AS fotoUrl,
+           m.Cpf AS cpf, m.NomeMae AS nomeMae, m.NomePai AS nomePai, m.Escolaridade AS escolaridade,
            CONVERT(varchar(33), m.CriadoEm, 126) AS criadoEm
     FROM MembroReferencia m
     LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId

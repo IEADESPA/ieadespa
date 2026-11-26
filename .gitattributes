@@ -10,6 +10,10 @@ secrets.env text eol=lf
 app/vendor/* -text
 site/public/vendor/* -text
 
+# FASE 10 (19/11/2026): o código das telas Svelte com LF em toda máquina (o carimbo do build conta o texto com LF) e a saída do build byte a byte
+front/** text eol=lf
+app/svelte/** -text
+
 # Memória do projeto (servidor MCP) e memória automática do Claude, versionadas desde 20/11/2026: as ferramentas gravam
 # com LF; sem conversão, o arquivo não aparece inteiro como alterado a cada gravação.
 .claude/continuidade/memoria/*.jsonl text eol=lf

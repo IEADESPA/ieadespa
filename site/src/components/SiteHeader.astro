@@ -32,6 +32,11 @@ const isCurrentPath = (href: string) =>
           ))
         }
       </nav>
+      <a
+        href="/quero-me-cadastrar/"
+        class="hidden h-9 shrink-0 items-center whitespace-nowrap rounded-lg bg-[#ffb800] px-4 text-sm font-extrabold text-[#0a2342] xl:inline-flex"
+        aria-current={isCurrentPath("/quero-me-cadastrar/") ? "page" : undefined}>Quero me cadastrar</a
+      >
 
       <div class="flex items-center gap-1">
         <a
@@ -195,6 +200,10 @@ const isCurrentPath = (href: string) =>
   </div>
 
   <nav class="px-6 py-4" aria-label="Navegação móvel">
+    <a
+      href="/quero-me-cadastrar/"
+      class="mb-2 flex h-12 items-center justify-center rounded-xl bg-[#ffb800] text-lg font-extrabold text-[#0a2342]">Quero me cadastrar</a
+    >
     <ul>
       {
         navigation.map((item) => (

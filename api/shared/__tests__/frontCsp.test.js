@@ -325,15 +325,57 @@ if (typeof describe === "function") {
       expect(ler("credencial.js")).not.toMatch(/innerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/);
     });
 
-    test("service-worker: cache novo (v59), eventos.js e todos os módulos na casca offline", () => {
+    // FASE 10, passo 8 — a página pública que o QR FIXO da carteirinha abre: as mesmas regras (só o próprio script e o próprio estilo, nada em linha, nada perigoso)
+    test("conferir.html e conferir.js (o QR da carteirinha): só conferir.js e conferir.css, zero evento ou script em linha, a resposta só por textContent", () => {
+      const html = ler("conferir.html");
+      const tags = tagsDoHtml(html);
+      expect(tags.filter(t => t.nome === "script").map(t => t.attrs.find(a => a.nome === "src").valor)).toEqual(["conferir.js"]);
+      expect(tags.filter(t => t.nome === "style")).toEqual([]);
+      expect(tags.filter(t => t.attrs.some(a => a.nome === "style" || /^on/.test(a.nome) || /^data-on-/.test(a.nome)))).toEqual([]);
+      expect(tags.some(t => t.nome === "link" && t.attrs.some(a => a.nome === "href" && a.valor === "conferir.css"))).toBe(true);
+      const analise = analisarScript("conferir.js", ler("conferir.js"));
+      expect(analise.problemas || []).toEqual([]);
+      expect(ler("conferir.js")).not.toMatch(/innerHTML|insertAdjacentHTML|document\.write|eval\(|new Function|localStorage|sessionStorage|document\.cookie/);
+      expect(ler("conferir.js")).toMatch(/fetch\("\/api\/conferencia\/"/);
+    });
+
+    // FASE 10, as sobras — a página pública em que a própria pessoa completa o pré-cadastro pelo link do e-mail: as mesmas regras
+    test("completar-cadastro.html e .js (o link do e-mail): só o próprio script e conferir.css, nada em linha, a resposta só por textContent", () => {
+      const html = ler("completar-cadastro.html");
+      const tags = tagsDoHtml(html);
+      expect(tags.filter(t => t.nome === "script").map(t => t.attrs.find(a => a.nome === "src").valor)).toEqual(["completar-cadastro.js"]);
+      expect(tags.filter(t => t.nome === "style")).toEqual([]);
+      expect(tags.filter(t => t.attrs.some(a => a.nome === "style" || /^on/.test(a.nome) || /^data-on-/.test(a.nome)))).toEqual([]);
+      expect(tags.some(t => t.nome === "link" && t.attrs.some(a => a.nome === "href" && a.valor === "conferir.css"))).toBe(true);
+      const analise = analisarScript("completar-cadastro.js", ler("completar-cadastro.js"));
+      expect(analise.problemas || []).toEqual([]);
+      expect(ler("completar-cadastro.js")).not.toMatch(/innerHTML|insertAdjacentHTML|document\.write|eval\(|new Function|localStorage|sessionStorage|document\.cookie/);
+    });
+
+    test("service-worker: cache novo (v75), eventos.js e todos os módulos na casca offline (as telas Svelte ficam fora: baixadas sob demanda)", () => {
       const sw = ler("service-worker.js");
-      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v59";/);
+      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v75";/);
+      expect(sw).not.toMatch(/"\/svelte\//);
       const casca = JSON.parse(/const ARQUIVOS_SHELL = (\[[^\]]*\]);/.exec(sw)[1]);
       expect(casca).toEqual(expect.arrayContaining(["/index.html", "/eventos.js", "/script.js", "/style.css", ...MODULOS.map(m => "/" + m)]));
     });
 
     // Com a CSP estrita o `connect-src 'self'` vale também para o service worker: o fetch() dele para as fontes do Google era recusado e a página perdia a fonte
     // (a recusa só aparece no console do service worker, não na página). Por isso ele só trata pedidos do PRÓPRIO endereço e deixa os de fora para o navegador.
+    // FASE 10, etapa 2: as letras moram no próprio sistema (app/fontes, licença OFL junto); a CSP não aceita mais o Google Fonts
+    test("as letras são servidas de dentro: nada do Google Fonts no index.html nem na CSP, e cada família com a licença OFL", () => {
+      expect(ler("index.html")).not.toMatch(/fonts\.(googleapis|gstatic)\.com/);
+      const cfg = JSON.parse(ler("staticwebapp.config.json"));
+      const csp = cfg.globalHeaders["Content-Security-Policy"];
+      expect(csp).not.toMatch(/fonts\.(googleapis|gstatic)\.com/);
+      expect(csp).toMatch(/font-src 'self';/);
+      const css = ler("style.css");
+      const arquivos = [...css.matchAll(/url\("(fontes\/[^"]+\.woff2)"\)/g)].map((m) => m[1]);
+      expect(arquivos.length).toBeGreaterThanOrEqual(20);
+      for (const a of arquivos) expect(fs.existsSync(path.join(APP, a))).toBe(true);
+      for (const pasta of fs.readdirSync(path.join(APP, "fontes"))) expect(fs.readFileSync(path.join(APP, "fontes", pasta, "OFL.txt"), "utf8")).toMatch(/SIL Open Font License/);
+    });
+
     test("service-worker: ignora pedido de outra origem (antes do respondWith), para não cair no connect-src 'self'", () => {
       const sw = ler("service-worker.js");
       const ouvinte = sw.slice(sw.indexOf('addEventListener("fetch"'));

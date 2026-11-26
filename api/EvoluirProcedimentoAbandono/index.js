@@ -26,6 +26,8 @@ const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const abandonoDigital = require("../shared/abandonoDigital");
 const vacancia = require("../shared/vacancia");
+const licencaCandidatura = require("../shared/licencaCandidatura");
+const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { obterTrava } = require("../shared/financeiroSeguro");
 const { exigirGeral, pessoaAlcancavel } = require("../shared/escopoRotas");
 
@@ -132,6 +134,9 @@ module.exports = async function (context, req) {
                 WHERE MembroId = @id`);
       // vacancia.encerrarVinculos só usa pool.request(): recebe um "pool" que cria cada request DENTRO desta transação.
       await vacancia.encerrarVinculos({ request: rq }, sql, atual.MembroId, motivoSaida);
+      // a licença por candidatura que estiver aberta fecha junto (decisão de 25/11/2026), com o motivo neutro (o abandono é causa disciplinar); sem licença aberta,
+      // nada muda
+      await licencaCandidatura.encerrarLicencaAberta({ request: rq }, sql, atual.MembroId, licencaCandidatura.MOTIVO_SAIDA_DO_ROL, hojeBrasilia());
       await registrarAuditoriaNaTransacao(transacao, {
         tabela: "ProcedimentosAbandono",
         registroId: Number(procedimentoId),

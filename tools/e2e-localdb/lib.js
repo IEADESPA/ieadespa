@@ -23,6 +23,13 @@ async function q(texto, params = {}) {
   }
   return (await r.query(texto)).recordset;
 }
+// A trava das matrículas (23/11/2026): sem uma importação do sistema pago CONCLUÍDA, nenhum caminho cria ficha nova. Os roteiros que cadastram gente
+// (e2e-85, 90, 93 e 95) semeiam uma no começo — só a linha de controle, sem pessoa nenhuma (precisa da base cenario-185 ou mais nova).
+async function importacaoConcluida() {
+  await q(`IF NOT EXISTS (SELECT 1 FROM ImportacoesMembros WHERE Situacao = N'CONCLUIDA')
+    INSERT INTO ImportacoesMembros (Situacao, NomeArquivo, HashArquivo, CriadaPor, ConfirmadaEm, ConfirmadaPor, ConcluidaEm, Resumo)
+    VALUES (N'CONCLUIDA', N'semeada-pelo-roteiro.csv', REPLICATE('0', 64), 1, SYSUTCDATETIME(), 1, SYSUTCDATETIME(), N'{"semeadaPeloRoteiro":true}')`);
+}
 const um = async (t, p) => (await q(t, p))[0];
 const escalar = async (t, p) => { const l = await um(t, p); return l ? Object.values(l)[0] : null; };
 
@@ -102,4 +109,4 @@ async function fuzz(rotulo, handler, { acao, metodo = 'POST', token, base, campo
   ok(mudancas.length === 0, rotulo + ': chamada recusada nunca altera o banco', mudancas.slice(0, 5));
 }
 
-module.exports = { termoHashDo, LIXO, retrato, fuzz, API, sql, auth, q, um, escalar, ok, fim, chamar, GET, POST, sessao, GERAL, LIDER, PIN, IP_PUBLICO, hojeBr, obterPool, falhasLista, shimEncerrar, path };
+module.exports = { termoHashDo, LIXO, retrato, fuzz, API, sql, auth, q, importacaoConcluida, um, escalar, ok, fim, chamar, GET, POST, sessao, GERAL, LIDER, PIN, IP_PUBLICO, hojeBr, obterPool, falhasLista, shimEncerrar, path };

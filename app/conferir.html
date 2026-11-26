@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="theme-color" content="#1d4ed8" />
+  <title>Conferir carteirinha — IEADESPA</title>
+  <!-- FASE 10, passo 8 — a página PÚBLICA (sem login) que o QR da carteirinha abre (rodada 11, opção 2: o topo colorido e o anel vivo na foto). O QR é fixo:
+       o mesmo da física e da digital, e nunca vence; o que muda é o que esta página mostra, calculado agora (api/ConferirCarteirinha). Autônoma de propósito: não
+       carrega o app, não usa cookie nem armazenamento local. A resposta da API entra sempre por textContent, nunca como HTML. -->
+  <link rel="icon" href="icones/icone-192.png" />
+  <link rel="stylesheet" href="conferir.css" />
+</head>
+<body>
+  <header class="barra">
+    <img src="icones/icone-192.png" alt="" width="40" height="40" />
+    <div><strong>IEADESPA · Conferência</strong><small id="onde">sem precisar entrar</small></div>
+  </header>
+  <section id="selo" class="selo espera" role="status" aria-live="polite">
+    <span id="seloIcone" class="ic" aria-hidden="true"></span>
+    <h1 id="seloTitulo">Conferindo…</h1>
+    <p id="seloTexto"></p>
+  </section>
+  <main>
+    <div id="pessoa" class="pessoa" hidden>
+      <div class="anel"><div id="foto" class="foto"></div></div>
+      <h2 id="nome"></h2>
+      <p class="vivo">selo vivo · <strong id="relogio"></strong></p>
+    </div>
+    <dl id="dados" class="dados" hidden></dl>
+    <form id="form" class="form" autocomplete="off" hidden>
+      <label for="codigo">Código da carteirinha</label>
+      <input id="codigo" name="codigo" inputmode="text" maxlength="24" placeholder="XXXX-XXXX-XXXX-XXXX" spellcheck="false" autocapitalize="characters" />
+      <button id="botao" type="submit">Conferir</button>
+    </form>
+    <p class="nota">Este QR é fixo: o mesmo da carteirinha de papel e da digital, e não vence. O que muda é o que esta página mostra, calculado agora. Nunca mostra CPF, endereço, contato nem motivo.</p>
+  </main>
+  <script src="conferir.js"></script>
+</body>
+</html>

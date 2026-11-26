@@ -10,8 +10,42 @@ const STATUS_DEFAULT = [
   { sigla: "ATIVO", nome: "ATIVO", ativa: true },
   { sigla: "LICENÇA", nome: "LICENÇA", ativa: true },
   { sigla: "INATIVO", nome: "INATIVO", ativa: true },
-  { sigla: "DESLIGADO", nome: "DESLIGADO", ativa: true }
+  { sigla: "DESLIGADO", nome: "DESLIGADO", ativa: true },
+  { sigla: "FALECIDO", nome: "Falecido", ativa: true },
+  { sigla: "AFASTADO", nome: "Afastado", ativa: true }
 ];
+// A licença por candidatura entra pela aba "Licença Candidatura" (ela grava a licença, o afastamento dos cargos e a decisão do retorno): fora do seletor da ficha.
+// Para quem está nela com a licença ABERTA, o seletor oferece só a própria licença e o falecimento (decisão de 25/11/2026): a volta e o não retorno vão pela aba
+// da licença, o desligamento pelo botão "Desligar" (o servidor recusa qualquer outra troca pela ficha). Com a licença já encerrada (a API manda licencaAberta
+// false), a lista inteira volta.
+const STATUS_LICENCA_CANDIDATURA = "LICENCA_CANDIDATURA";
+const STATUS_FALECIDO = "FALECIDO";
+
+// A situação da pessoa no seletor: a opção que não está na lista (a licença, ou uma situação desativada no catálogo) entra só para esta pessoa. Em licença, as
+// outras opções ficam desabilitadas e escondidas (desabilitadas também porque há celular que mostra a opção escondida); a próxima pessoa recebe a lista inteira.
+function preencherSituacaoFichaPessoa(pessoa) {
+  const select = document.getElementById("pessoaStatus");
+  [...select.options].filter(o => o.getAttribute("data-so-desta-pessoa")).forEach(o => o.remove());
+  const status = pessoa ? pessoa.status : "";
+  const naLicenca = status === STATUS_LICENCA_CANDIDATURA;
+  const emLicenca = naLicenca && pessoa.licencaAberta !== false;   // sem a informação, vale a regra da licença aberta (o servidor confere de qualquer jeito)
+  const incluirSoDestaPessoa = (sigla, nome) => {
+    if ([...select.options].some(o => o.value === sigla)) return;
+    select.insertAdjacentHTML("beforeend", `<option value="${escaparHtmlEbd(sigla)}" data-so-desta-pessoa="1">${escaparHtmlEbd(nome)}</option>`);
+  };
+  if (status) incluirSoDestaPessoa(status, naLicenca ? "Licença por candidatura" : status);
+  if (emLicenca) incluirSoDestaPessoa(STATUS_FALECIDO, "Falecido");
+  [...select.options].forEach(o => {
+    const fora = emLicenca && o.value !== STATUS_LICENCA_CANDIDATURA && o.value !== STATUS_FALECIDO;
+    o.disabled = fora;
+    o.hidden = fora;
+  });
+  if (status) select.value = status; else select.selectedIndex = 0;
+  select.disabled = false;
+  document.getElementById("pessoaStatusDica").textContent = emLicenca
+    ? "Em licença por candidatura: o falecimento se registra aqui, escolhendo \"Falecido\"; o desligamento, pelo botão \"Desligar\"; a volta e o não retorno, na aba \"Licença Candidatura\"."
+    : naLicenca ? "A licença por candidatura desta pessoa já foi encerrada: escolha a situação atual dela no rol." : "";
+}
 
 // v10.1 — o "Cadastrar Pessoa" em branco: a aba esperava as SEIS listas abaixo chegarem para só então pôr o formulário na tela (e, se uma falhava, ele nunca
 // aparecia). Agora o formulário entra na hora e cada lista carrega por conta própria: a que falha avisa no próprio campo e não derruba as outras. Enquanto a
@@ -116,7 +150,7 @@ function carregarOpcoesFormPessoa() {
   const statusesPronto = pedidos.statuses.then(statuses => {
     if (!valendo()) return;
     trocarOpcoesFormPessoa(document.getElementById("pessoaStatus"), (statuses || STATUS_DEFAULT)
-      .filter(s => s.ativa !== false)
+      .filter(s => s.ativa !== false && s.sigla !== STATUS_LICENCA_CANDIDATURA)
       .map(s => `<option value="${escaparHtmlEbd(s.sigla)}">${escaparHtmlEbd(s.nome)}</option>`).join(""));
   });
 
@@ -199,7 +233,7 @@ async function salvarPessoa() {
 
   // Editando dentro do Perfil (aba Editar) — mantém onde está, só atualiza o
   // cabeçalho. Cadastrando pessoa nova — limpa o formulário e oferece o Perfil.
-  const emPerfil = document.getElementById("subPessoasPerfil").style.display !== "none";
+  const emPerfil = document.getElementById("subPessoasPerfil").style.display !== "none" || subAbaPessoasAtual === "ficha";
   if (emPerfil) {
     const pessoa = (window._pessoasCache || []).find(p => p.membroId === Number(membroId));
     if (pessoa) {
@@ -240,7 +274,8 @@ function mudouCargoPessoaAcao() {
 
 // ---- NAVEGAÇÃO DA ABA PESSOAS (v1.10 — submenu Cadastrar/Buscar + Perfil) ----
 
-let subAbaPessoasAtual = "cadastrar";
+// FASE 10, passo 7a — a entrada do módulo é o PAINEL executivo (modulos/membros.js)
+let subAbaPessoasAtual = "visao";
 
 function limparFormPessoa() {
   ["pessoaMatricula", "pessoaNome", "pessoaOrigem", "pessoaIgrejaAnterior", "pessoaNomeLidoRito",
@@ -260,7 +295,7 @@ function limparFormPessoa() {
   document.getElementById("pessoaCongregacao").selectedIndex = 0;
   document.getElementById("pessoaDepartamento").value = "";
   document.getElementById("pessoaExtensao").value = "";
-  document.getElementById("pessoaStatus").selectedIndex = 0;
+  preencherSituacaoFichaPessoa(null);
   document.getElementById("pessoaFormaAdmissao").value = "";
   document.getElementById("pessoaSituacao").value = "EM_COMUNHAO";
   document.getElementById("pessoaEstadoCivil").value = "";
@@ -279,14 +314,32 @@ function moverFormPessoaPara(slotId) {
   document.getElementById(slotId).appendChild(bloco);
 }
 
-const TITULOS_SUB_PESSOAS = { cadastrar: "Cadastrar Pessoa", buscar: "Buscar Pessoas", aprovacoes: "Fila de Aprovações", credenciais: "Credenciais", discipulado: "Discipulado" };
+// FASE 10, passo 7a — o painel, a lista e a ficha 360 novos (modulos/membros.js); o "Buscar Pessoas" antigo ficou só para importar e exportar a planilha
+const TITULOS_SUB_PESSOAS = { visao: "Painel executivo", lista: "Pessoas", ficha: "Ficha da pessoa", cadastrar: "Cadastrar Pessoa", fila: "Fila de cadastros",
+  precadastro: "Pré-cadastro rápido", transferencias: "Mudanças de congregação", buscar: "Importar e exportar",
+  aprovacoes: "Sugestões dos membros", credenciais: "Credenciais", discipulado: "Discipulado" };
 
 function mostrarSubAbaPessoas(sub) {
   // v8.4 — as credenciais são só da Secretaria Geral (o botão nem aparece fora do nível geral; o servidor confere). O desvio vem ANTES de qualquer painel: quem não é
   // do nível geral e herdou "credenciais" de outra sessão cai na busca, nunca numa tela em branco.
   const credGeral = geralPara("pessoas");
-  if (sub === "credenciais" && !credGeral) sub = "buscar";
+  if (sub === "credenciais" && !credGeral) sub = "lista";
+  if (!Object.prototype.hasOwnProperty.call(TITULOS_SUB_PESSOAS, sub)) sub = "visao";
+  // a ficha só abre com uma pessoa escolhida (mbAbrirFicha); sem ela, a lista
+  if (sub === "ficha" && !(typeof mbFichaPodeAbrir === "function" && mbFichaPodeAbrir())) sub = "lista";
+  const saiuDaFicha = subAbaPessoasAtual === "ficha" && sub !== "ficha";
   subAbaPessoasAtual = sub;
+  document.getElementById("subPessoasVisao").style.display = sub === "visao" ? "block" : "none";
+  document.getElementById("subPessoasLista").style.display = sub === "lista" ? "block" : "none";
+  document.getElementById("subPessoasFicha").style.display = sub === "ficha" ? "block" : "none";
+  document.getElementById("subPessoasFila").style.display = sub === "fila" ? "block" : "none";
+  document.getElementById("subPessoasPreCadastro").style.display = sub === "precadastro" ? "block" : "none";
+  document.getElementById("btnSubPessoasFila").classList.toggle("ativo", sub === "fila");
+  document.getElementById("btnSubPessoasPrecadastro").classList.toggle("ativo", sub === "precadastro");
+  document.getElementById("subPessoasTransferencias").style.display = sub === "transferencias" ? "block" : "none";
+  document.getElementById("btnSubPessoasTransferencias").classList.toggle("ativo", sub === "transferencias");
+  document.getElementById("btnSubPessoasVisao").classList.toggle("ativo", sub === "visao");
+  document.getElementById("btnSubPessoasLista").classList.toggle("ativo", sub === "lista" || sub === "ficha");
   document.getElementById("subPessoasCadastrar").style.display = sub === "cadastrar" ? "block" : "none";
   document.getElementById("subPessoasBuscar").style.display = sub === "buscar" ? "block" : "none";
   document.getElementById("subPessoasAprovacoes").style.display = sub === "aprovacoes" ? "block" : "none";
@@ -300,20 +353,36 @@ function mostrarSubAbaPessoas(sub) {
   document.getElementById("btnSubPessoasBuscar").classList.toggle("ativo", sub === "buscar");
   document.getElementById("btnSubPessoasAprovacoes").classList.toggle("ativo", sub === "aprovacoes");
   document.getElementById("tituloModulo").textContent = `Pessoas — ${TITULOS_SUB_PESSOAS[sub]}`;
+  if (saiuDaFicha && typeof mbSaiuDaFicha === "function") mbSaiuDaFicha();
+  if (typeof mbMarcarPilulas === "function") mbMarcarPilulas(sub);
+  if (sub === "visao" && typeof mbCarregarPainel === "function") mbCarregarPainel();
+  if (sub === "lista" && typeof mbAbrirLista === "function") mbAbrirLista();
+  if (sub === "ficha" && typeof mbEntrarNaFicha === "function") mbEntrarNaFicha();
+  if (sub === "buscar") carregarPessoas();   // a tela antiga (importar e exportar) usa a lista INTEIRA do escopo: só ela pede
+  if (sub === "cadastrar" && typeof mcAbrirCadastro === "function") mcAbrirCadastro();
+  if (sub === "fila" && typeof mcAbrirFila === "function") mcAbrirFila();
+  if (sub === "precadastro" && typeof mcAbrirPreCadastro === "function") mcAbrirPreCadastro();
+  if (sub === "transferencias" && typeof mtAbrirTransferencias === "function") mtAbrirTransferencias();
   if (sub === "cadastrar") {
     moverFormPessoaPara("slotFormPessoaCadastrar");
     limparFormPessoa();
   }
-  if (sub === "aprovacoes") carregarFilaAprovacoes();
+  // passo 7a, incremento 3: a caixa de sugestões nova (modulos/membros-movimento.js); sem ela, a tela de antes
+  if (sub === "aprovacoes") { if (typeof mtAbrirSugestoes === "function") mtAbrirSugestoes(); else { document.getElementById("resultadoFilaAprovacoes").style.display = ""; carregarFilaAprovacoes(); } }
   if (sub === "credenciais") credCarregarListaAcao();
   if (sub === "discipulado") discAbrirSubAba();
 }
 
 function voltarBuscaPessoas() {
-  mostrarSubAbaPessoas("buscar");
+  mostrarSubAbaPessoas("lista");
 }
 
+// FASE 10, passo 7a — o perfil abre na FICHA 360 nova (modulos/membros.js): as abas antigas do perfil vão para dentro dela
 function abrirPerfilPessoa(membroId) {
+  if (typeof mbAbrirFicha === "function") { mbAbrirFicha(membroId, "resumo"); return; }
+  abrirPerfilPessoaAntigo(membroId);
+}
+function abrirPerfilPessoaAntigo(membroId) {
   const pessoa = (window._pessoasCache || []).find(p => p.membroId === membroId);
   if (!pessoa) return;
 
@@ -523,6 +592,12 @@ async function endCarregarBairrosPessoas() {
 }
 
 async function carregarPessoas() {
+  // FASE 10, passo 7a — a lista INTEIRA do escopo só serve à tela antiga "Importar e exportar" (sub "buscar"). Nas telas novas, depois de salvar algo, quem está
+  // aberto se relê sozinho (a ficha relê a pessoa; a lista, a página; o painel, os números), sem baixar o cadastro inteiro.
+  if (subAbaPessoasAtual !== "buscar") {
+    if (typeof mbDadosMudaram === "function") await mbDadosMudaram();
+    return;
+  }
   endCarregarBairrosPessoas();
   const res = await fetchProtegido(`${API_BASE}/pessoas`);
   const lista = await jsonDaTela(res, document.getElementById("resultadoListaPessoas"), "lista");
@@ -884,7 +959,7 @@ function editarPessoa(membroId) {
   if (!pessoa) return;
   document.getElementById("pessoaMatricula").value = pessoa.membroId;
   document.getElementById("pessoaNome").value = pessoa.nome;
-  document.getElementById("pessoaStatus").value = pessoa.status;
+  preencherSituacaoFichaPessoa(pessoa);
   document.getElementById("pessoaCongregacao").value = pessoa.congregacaoId != null ? String(pessoa.congregacaoId) : "";
   document.getElementById("pessoaDataNascimento").value = pessoa.dataNascimento || "";
   document.getElementById("pessoaDataAdmissao").value = pessoa.dataAdmissao || "";
@@ -1040,7 +1115,7 @@ function renderizarCartas() {
       <td>${escaparHtmlEbd(c.dataPedido) || "-"}</td>
       <td>${escaparHtmlEbd(c.dataValidade) || "-"}</td>
       <td class="acoes-inline">
-        ${["SOLICITADA", "CONFIRMADA"].includes(c.status) ? `<button class="btn-link" data-on-click="emitirCarta" data-args-click="${argsAttr(c.cartaId)}">Emitir</button>` : ""}
+        ${c.status === "CONFIRMADA" || (c.status === "SOLICITADA" && c.tipo !== "MUDANCA") ? `<button class="btn-link" data-on-click="emitirCarta" data-args-click="${argsAttr(c.cartaId)}">Emitir</button>` : ""}
         ${["SOLICITADA", "CONFIRMADA", "EMITIDA"].includes(c.status) ? `<button class="btn-link btn-link-perigo" data-on-click="cancelarCarta" data-args-click="${argsAttr(c.cartaId)}">Cancelar</button>` : ""}
         <button class="btn-link" data-on-click="imprimirCarta" data-args-click="${argsAttr(c.cartaId)}">🖨️ Imprimir</button>
         ${["EMITIDA", "CONFIRMADA"].includes(c.status) ? `<button class="btn-link" data-on-click="baixarPdfCarta" data-args-click="${argsAttr(c.cartaId, c.membroId)}">📄 Baixar PDF</button>` : ""}
@@ -1127,9 +1202,12 @@ function imprimirMinhaCarta(cartaId) {
 }
 
 function renderizarImpressaoCarta(c) {
+  // volta 10 do Membros: a ficha em arrolamento (a completar) não tem documento de carta, como no PDF (api/shared/cartaSituacao.js): o modelo diria
+  // "Membro" e "Comunhão" de quem a secretaria ainda não conferiu
+  if (c.situacaoMembro === "ARROLAMENTO") { mostrarToast("A ficha ainda está para completar: a carta sai depois que a secretaria completar a ficha.", "erro"); return; }
   const rotulo = ROTULO_CARTA[c.tipo] || c.tipo;
   const ehCongregado = c.situacaoMembro === "CONGREGADO";
-  const situacaoRotulo = LABEL_SITUACAO_CARTA[c.situacaoMembro] || "Comunhão";
+  const situacaoRotulo = LABEL_SITUACAO_CARTA[c.situacaoMembro] || "______________";   // fora da lista do modelo, a linha em branco (antes: "Comunhão")
   const hoje = new Date();
   const dataEmissaoFmt = c.dataEmissao ? c.dataEmissao.split("-").reverse().join("/") : `____ / ____ / ${hoje.getFullYear()}`;
   const w = window.open("", "_blank", "width=760,height=900");
@@ -1637,7 +1715,8 @@ async function excluirApresentacaoCriancaAcao(apresentacaoId) {
 }
 
 // ---- LICENÇA POR CANDIDATURA (v1.9 — Reg. Art. 157 §2º) ----
-const ROTULO_STATUS_LICENCA = { EM_LICENCA: "Em licença", RETORNOU: "Retornou", NAO_RETORNOU: "Não retornou" };
+// DUPLICADA: a segunda licença aberta da mesma pessoa, fechada pela migração 301 (uma licença aberta por pessoa, decisão de 25/11/2026).
+const ROTULO_STATUS_LICENCA = { EM_LICENCA: "Em licença", RETORNOU: "Retornou", NAO_RETORNOU: "Não retornou", DUPLICADA: "Duplicada (fechada)" };
 
 async function carregarLicencasCandidatura(membroId) {
   const container = document.getElementById("resultadoListaLicencasCandidatura");
@@ -1693,9 +1772,9 @@ function pedirDecisaoRetornoLicenca() {
     const caixa = document.getElementById("modalCaixa");
     caixa.innerHTML = `
       <h3>Registrar retorno da Licença por Candidatura</h3>
-      <p class="subtitle">Decisão da Diretoria após o pleito. Se retornou, o status do membro volta pra ATIVO
-        (Cargo/Assentos precisam ser reatribuídos manualmente). Se não retornou, o status do membro não muda
-        sozinho — o próximo passo (ex: desligamento) fica por conta de quem está operando.</p>
+      <p class="subtitle">Decisão da Diretoria após o pleito. Se retornou, o status do membro volta para ATIVO
+        (Cargo/Assentos precisam ser reatribuídos manualmente). Se não retornou, a pessoa fica INATIVO no rol
+        (o desligamento, se for o caso, é feito depois, pelo botão Desligar).</p>
       <div class="modal-acoes">
         <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
         <button class="btn-confirmar btn-perigo" id="modalNaoRetornou">Não retornou</button>

@@ -119,3 +119,75 @@ describe("tudo junto ou nada", () => {
     expect(auditoria.registrarAuditoriaNaTransacao).toHaveBeenCalledTimes(1);
   });
 });
+
+// Concluir o relatório (Art. 45 §2º) — revisão de fora, 25/11/2026 (E6 e L9): a data e a trilha numa transação só (sem trilha, nada fica fechado), e a gravação
+// só vale para a medida ainda sem conclusão (dois cliques ao mesmo tempo: o segundo é recusado, sem trocar a data nem gravar a trilha duas vezes).
+describe("concluir o relatório da medida", () => {
+  async function concluir() {
+    const context = { bindingData: { id: "9", acao: "concluir-relatorio" }, log: Object.assign(() => {}, { error() {}, info() {}, warn() {}, verbose() {} }) };
+    await hMedidas(context, { method: "POST", query: {}, body: {}, headers: { "x-forwarded-for": "177.40.1.2:5000, 40.70.146.136:6000", "x-auth-token": geral() } });
+    return context.res;
+  }
+  beforeEach(() => { mockRegras.unshift([/SELECT \* FROM MedidasCautelares WHERE MedidaId = @id/, { recordset: [{ MedidaId: 9, DataConclusaoRelatorio: null }] }]); });
+
+  test("a data e a trilha na mesma transação, e a gravação exige a medida ainda sem conclusão", async () => {
+    const r = await concluir();
+    expect(r.body.sucesso).toBe(true);
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["confirmada"]);
+    const upd = rodou(/UPDATE MedidasCautelares SET DataConclusaoRelatorio/);
+    expect(upd).toHaveLength(1);
+    expect(upd[0].texto).toMatch(/WHERE MedidaId = @id AND DataConclusaoRelatorio IS NULL/);
+    expect(upd[0].transacao).toBe(mockTransacoes[0]);
+    expect(auditoria.registrarAuditoriaNaTransacao).toHaveBeenCalledTimes(1);
+    expect(auditoria.registrarAuditoriaNaTransacao.mock.calls[0][0]).toBe(mockTransacoes[0]);
+    expect(auditoria.registrarAuditoriaNaTransacao.mock.calls[0][1]).toMatchObject({ tabela: "MedidasCautelares", registroId: 9, usuarioId: 1 });
+    expect(auditoria.registrarAuditoria).not.toHaveBeenCalled();
+  });
+
+  test("dois cliques: o segundo encontra a medida já concluída na gravação (0 linhas) e é recusado, sem trilha", async () => {
+    mockRegras.unshift([/UPDATE MedidasCautelares SET DataConclusaoRelatorio/, { recordset: [], rowsAffected: [0] }]);
+    const r = await concluir();
+    expect(r.body.sucesso).toBe(false);
+    expect(r.body.mensagem).toMatch(/já foi concluído/);
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["desfeita"]);
+    expect(auditoria.registrarAuditoriaNaTransacao).not.toHaveBeenCalled();
+    expect(auditoria.registrarAuditoria).not.toHaveBeenCalled();
+  });
+
+  test("a trilha falha: a conclusão é desfeita (o prazo não fica fechado sem quem fechou) e o erro sobe", async () => {
+    auditoria.registrarAuditoriaNaTransacao.mockImplementationOnce(async () => { throw new Error("falha simulada"); });
+    await expect(concluir()).rejects.toThrow("falha simulada");
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["desfeita"]);
+  });
+});
+
+// L7 (revisão de fora, 25/11/2026): as três restrições são sim/não de verdade. O texto "false" (ou 1, ou null) não vale como "suspender": 400, antes do 428 e
+// antes de qualquer gravação. Sem o campo, é "não", como sempre.
+describe("as restrições da medida são sim/não", () => {
+  const semFator = () => auth.reassinarSessao({ membroId: 1, via: "SENHA", fator: { via: "NENHUM", em: Date.now() }, nivel: "GLOBAL", permissoes: ["pessoas"],
+    escopoCongregacoes: "TODAS", termosPendentes: [] });
+  async function aplicarCom(corpo, token) {
+    const context = { bindingData: {}, log: Object.assign(() => {}, { error() {}, info() {}, warn() {}, verbose() {} }) };
+    await hMedidas(context, { method: "POST", query: {}, body: corpo, headers: { "x-forwarded-for": "177.40.1.2:5000, 40.70.146.136:6000", "x-auth-token": token } });
+    return context.res;
+  }
+  test.each([
+    ["suspenderAcessoSistema", "false"], ["suspenderAcessoSistema", 1], ["suspenderAcessoSistema", null], ["suspenderAcessoSistema", "true"],
+    ["suspensaoContasBancarias", "false"], ["suspensaoChavesFisicas", 0]
+  ])("%s = %p: 400 antes do 428, nada gravado", async (campo, valor) => {
+    const r = await aplicarCom({ membroId: 20, motivo: "Apuração de contas", [campo]: valor }, semFator());
+    expect(r.status).toBe(400);
+    expect(r.body.mensagem).toMatch(/sim ou não/);
+    expect(mockTransacoes).toHaveLength(0);
+    expect(rodou(/INSERT|UPDATE/)).toHaveLength(0);
+  });
+  test("false de verdade, sem a confirmação recente: grava sem suspender (o 428 é só para quem suspende o acesso)", async () => {
+    const r = await aplicarCom({ membroId: 20, motivo: "Chaves do templo", suspenderAcessoSistema: false, suspensaoChavesFisicas: true }, semFator());
+    expect(r.status).toBe(201);
+    expect(rodou(/UPDATE Lideranca/)).toHaveLength(0);
+  });
+  test("true de verdade sem a confirmação recente: 428, como sempre", async () => {
+    const r = await aplicarCom(CORPO, semFator());
+    expect(r.status).toBe(428);
+  });
+});

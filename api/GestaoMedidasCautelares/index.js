@@ -8,7 +8,7 @@
 // POST /api/medidas-cautelares                          -> body: { membroId, motivo, suspenderAcessoSistema?, suspensaoContasBancarias?, suspensaoChavesFisicas? }
 // POST /api/medidas-cautelares/{id}/concluir-relatorio  -> fecha o prazo (representação à CLI feita)
 const auth = require("../shared/auth");
-const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("../shared/auditoria");
+const { registrarAuditoriaNaTransacao } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const travaPermissoes = require("../shared/travaPermissoes");
 const { emTransacao } = require("../shared/transacaoCurta");
@@ -67,17 +67,32 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "O relatório dessa medida já foi concluído." } };
       return;
     }
-    await pool.request().input("id", sql.Int, id).input("hoje", sql.Date, hojeBrasilia())
-      .query(`UPDATE MedidasCautelares SET DataConclusaoRelatorio = @hoje WHERE MedidaId = @id`);
-    await registrarAuditoria({
-      tabela: "MedidasCautelares", registroId: Number(id), acao: "Concluiu relatório de auditoria (Art. 45 §2º)", usuarioId: usuario.membroId
+    // A data e a trilha numa transação só (sem a trilha, o prazo não fica fechado sem quem fechou), e só vence quem ainda encontra a medida sem conclusão: dois
+    // cliques ao mesmo tempo não trocam a data nem gravam a trilha duas vezes.
+    const concluiu = await emTransacao(pool, async ({ rq, transacao, desistir }) => {
+      const upd = await rq().input("id", sql.Int, id).input("hoje", sql.Date, hojeBrasilia())
+        .query(`UPDATE MedidasCautelares SET DataConclusaoRelatorio = @hoje WHERE MedidaId = @id AND DataConclusaoRelatorio IS NULL`);
+      if (!((upd.rowsAffected && upd.rowsAffected[0]) || 0)) { await desistir(); return false; }
+      await registrarAuditoriaNaTransacao(transacao, {
+        tabela: "MedidasCautelares", registroId: Number(id), acao: "Concluiu relatório de auditoria (Art. 45 §2º)", usuarioId: usuario.membroId
+      });
+      return true;
     });
+    if (!concluiu) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "O relatório dessa medida já foi concluído." } };
+      return;
+    }
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Relatório concluído — representação à CLI registrada." } };
     return;
   }
 
   if (req.method === "POST" && !id) {
     const { membroId: membroIdBruto, motivo, suspenderAcessoSistema, suspensaoContasBancarias, suspensaoChavesFisicas } = req.body || {};
+    // As três restrições são sim/não de verdade: o texto "false" não pode valer como "suspender" (sem o campo, é "não"). Antes do 428 e de qualquer gravação.
+    if ([suspenderAcessoSistema, suspensaoContasBancarias, suspensaoChavesFisicas].some((v) => v !== undefined && typeof v !== "boolean")) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "As restrições da medida (acesso ao sistema, contas bancárias, chaves físicas) são sim ou não (true/false)." } };
+      return;
+    }
     // Suspender o acesso tira cargo e permissão: pede a confirmação recente (428), como retirar um cargo ou cancelar uma delegação.
     if (suspenderAcessoSistema && !auth.exigirFatorRecente(req, context)) return;
     if (!membroIdBruto || !motivo || typeof motivo !== "string" || !motivo.trim()) {

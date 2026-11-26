@@ -308,6 +308,15 @@ case "$1" in
     migrar 187 2
     base salvar cenario-187
     ;;
+  preparar-188)
+    # FASE 10, o ensaio da importação no tamanho real (missão C, 26/11/2026): a partir da base "cenario-187", aplica a 188 duas vezes (o índice do
+    # nascimento das fichas, que a prévia da importação e a tela Fichas repetidas usam; prova a idempotência); salva "cenario-188". O ensaio
+    # (tools/ensaio-importacao/ensaio-localdb.js) e os roteiros da importação rodam nela.
+    cd "$AQUI"
+    base restaurar cenario-187
+    migrar 188 2
+    base salvar cenario-188
+    ;;
   preparar-175)
     # FASE 10 (17/11/2026, raio-x de velocidade): a partir da base "cenario-173", aplica a 175 duas vezes (os índices das tabelas grandes; prova a idempotência);
     # salva "cenario-175" (e2e-88 monta o próprio cenário).

@@ -4,10 +4,14 @@
 // (sys.dm_exec_query_stats). Confere o resultado contra o gabarito da massa (gerar-massa.js). Só dados de mentira. A ponte não conta o BEGIN e o COMMIT de
 // cada transação: na nuvem, são mais duas idas por chamada.
 //
-// Roda sobre a base cenario-187 (ou mais nova), com a trava do banco de teste:
+// Roda sobre a base cenario-188 (ou mais nova; a 188 é o índice do nascimento das fichas), com a trava do banco de teste:
 //   until mkdir /c/tmp/localdb-trava 2>/dev/null; do sleep 20; done && \
-//   (cd tools/e2e-localdb && BASE=cenario-187 bash rodar.sh roteiro ../ensaio-importacao/ensaio-localdb.js) ; rmdir /c/tmp/localdb-trava
-// Variáveis: ENSAIO_LINHAS (padrão 6000), ENSAIO_SEMENTE, ENSAIO_SAIDA (a pasta do relatório; padrão C:/tmp/ieadespa-membros/ensaio).
+//   (cd tools/e2e-localdb && BASE=cenario-188 bash rodar.sh roteiro ../ensaio-importacao/ensaio-localdb.js) ; rmdir /c/tmp/localdb-trava
+// Variáveis: ENSAIO_LINHAS (padrão 6000), ENSAIO_SEMENTE, ENSAIO_SAIDA (a pasta do relatório; padrão C:/tmp/ieadespa-membros/ensaio), ENSAIO_ORCAMENTO_MS
+// (os lotes chamam a camada do banco com esse orçamento de tempo, em vez da rota com o de sempre: simula a nuvem longe, com o lote cortado pelo tempo) e
+// ENSAIO_FICHAS_EXTRA (padrão 0: as fichas fictícias postas no banco antes da importação. Com 0, o banco tem poucas fichas, como a produção antes da
+// importação grande: é o caso em que, sem o índice da 188, a procura do mesmo nome e nascimento relia o arquivo inteiro para cada ficha. Com 5000, o
+// banco fica como a massa grande da homologação, onde o plano é outro).
 process.env.AUTH_SECRET = "segredo-do-ensaio-da-importacao-" + "x".repeat(24);
 const fs = require("fs");
 const sql = require("mssql");
@@ -19,6 +23,9 @@ const { ok, fim, q, escalar, obterPool } = L;
 const LINHAS = Number(process.env.ENSAIO_LINHAS || 6000);
 const SEMENTE = Number(process.env.ENSAIO_SEMENTE || 20261205);
 const SAIDA = process.env.ENSAIO_SAIDA || "C:/tmp/ieadespa-membros/ensaio";
+const ORCAMENTO = process.env.ENSAIO_ORCAMENTO_MS ? Number(process.env.ENSAIO_ORCAMENTO_MS) : null;
+const FICHAS_EXTRA = Number(process.env.ENSAIO_FICHAS_EXTRA || 0);
+const TETO_LEITURAS = 100000;   // páginas lidas numa execução de uma consulta: acima disso, ela lê a tabela inteira (ou mais) e não aguenta o Basic
 const GERAL_ID = 9701;
 const tok = () => L.GERAL(GERAL_ID, ["pessoas"]);
 
@@ -52,7 +59,7 @@ const percentil = (lista, p) => { const o = [...lista].sort((a, b) => a - b); re
 async function principal() {
   await obterPool();
   fs.mkdirSync(SAIDA, { recursive: true });
-  const relatorio = { quando: new Date().toISOString(), linhas: LINHAS, semente: SEMENTE, banco: "LocalDB (ponte PowerShell)" };
+  const relatorio = { quando: new Date().toISOString(), linhas: LINHAS, semente: SEMENTE, banco: "LocalDB (ponte PowerShell)", orcamentoMs: ORCAMENTO };
 
   console.log("== o cenário ==");
   ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembros") === 0, "nenhuma importação na base");
@@ -68,10 +75,19 @@ async function principal() {
     await q(`INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, SituacaoMembro, DataNascimento, Cpf) VALUES (@id, @n, @c, N'ATIVO', N'EM_COMUNHAO', @d, @cpf)`,
       { id: f.membroId, n: f.nome, c: congSede, d: f.dataNascimento || "1970-01-01", cpf: f.cpf || null });
   }
+  // as fichas que já estão no banco antes da importação (fictícias, matrículas 600001 em diante: fora da massa, das fichas plantadas e da base), com o
+  // nascimento espalhado em 70 anos; nenhuma tem o nome de uma linha do arquivo
+  if (FICHAS_EXTRA > 0) {
+    await q(`WITH n AS (SELECT TOP (@k) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS i FROM sys.all_objects a CROSS JOIN sys.all_objects b)
+      INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, SituacaoMembro, DataNascimento)
+      SELECT 600000 + n.i, CONCAT(N'Ficha Base ', n.i, N' (Fictícia)'), @c, N'ATIVO', N'EM_COMUNHAO', DATEADD(DAY, (n.i * 37) % 25550, '1940-01-01')
+      FROM n WHERE NOT EXISTS (SELECT 1 FROM MembroReferencia m WHERE m.MembroId = 600000 + n.i)`, { k: FICHAS_EXTRA, c: congSede });
+  }
   const fichasAntes = await escalar("SELECT COUNT(*) FROM MembroReferencia");
-  relatorio.arquivo = { bytes: Buffer.byteLength(texto, "utf8"), corpoJsonBytes: Buffer.byteLength(JSON.stringify({ nomeArquivo: "massa.csv", texto }), "utf8") };
+  relatorio.fichasNoBancoAntes = fichasAntes;
+  relatorio.arquivo ={ bytes: Buffer.byteLength(texto, "utf8"), corpoJsonBytes: Buffer.byteLength(JSON.stringify({ nomeArquivo: "massa.csv", texto }), "utf8") };
   relatorio.gabarito = plantio.gabarito;
-  console.log(`  massa: ${LINHAS} pessoas, ${relatorio.arquivo.bytes.toLocaleString("pt-BR")} bytes (o corpo do pedido: ${relatorio.arquivo.corpoJsonBytes.toLocaleString("pt-BR")})`);
+  console.log(`  massa: ${LINHAS} pessoas, ${relatorio.arquivo.bytes.toLocaleString("pt-BR")} bytes (o corpo do pedido: ${relatorio.arquivo.corpoJsonBytes.toLocaleString("pt-BR")}); ${fichasAntes} fichas no banco antes`);
 
   // a ida ao banco mais simples, para separar o custo da ponte do trabalho do banco
   fase("calibragem");
@@ -110,12 +126,17 @@ async function principal() {
   console.log("== os lotes até o fim ==");
   const lotes = [];
   let resultado = null;
-  for (let n = 1; n <= 200 && !resultado; n++) {
+  for (let n = 1; n <= 2000 && !resultado; n++) {
     const f = fase(`lote${n}`);
-    const lt = await medirMemoria(() => R({ metodo: "POST", binding: { acao: "lote" }, corpo: { importacaoId } }));
+    const lt = await medirMemoria(async () => {
+      if (ORCAMENTO == null) return R({ metodo: "POST", binding: { acao: "lote" }, corpo: { importacaoId } });
+      const camada = require(L.path.join(L.API, "shared/importacaoMembrosDb"));
+      const pool = await require(L.path.join(L.API, "shared/db")).getPool();
+      return { status: 200, body: await camada.importarLote(pool, { membroId: GERAL_ID }, importacaoId, { orcamentoMs: ORCAMENTO }) };
+    });
     if (lt.r.status !== 200 || lt.r.body.sucesso !== true) { ok(false, `o lote ${n} passou`, lt.r.body); break; }
     lotes.push({ n, ms: lt.ms, idas: f.idas, importadas: lt.r.body.importadas, restantes: lt.r.body.restantes, rssPicoMb: lt.memoria.rssPicoMb });
-    if (n === 1 || lt.r.body.concluida || n % 5 === 0) console.log(`  lote ${n}: ${lt.ms} ms, ${f.idas} idas, ${lt.r.body.importadas} entraram, faltam ${lt.r.body.restantes}`);
+    if (n === 1 || lt.r.body.concluida || n % (ORCAMENTO == null ? 5 : 25) === 0) console.log(`  lote ${n}: ${lt.ms} ms, ${f.idas} idas, ${lt.r.body.importadas} entraram, faltam ${lt.r.body.restantes}`);
     if (lt.r.body.concluida) resultado = lt.r.body.resultado;
   }
   ok(!!resultado, "a importação terminou (CONCLUIDA)");
@@ -151,10 +172,21 @@ async function principal() {
     FROM sys.dm_exec_query_stats qs CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) t
     CROSS APPLY (SELECT CONVERT(INT, value) AS dbid FROM sys.dm_exec_plan_attributes(qs.plan_handle) WHERE attribute = N'dbid') pa
     WHERE pa.dbid = DB_ID() ORDER BY qs.total_elapsed_time DESC`);
+  // a que mais leu numa execução (pode não estar entre as mais demoradas): nenhuma consulta pode reler o arquivo inteiro (ou a tabela das fichas) uma
+  // vez para cada ficha ou para cada linha
+  const maisLeu = (await q(`SELECT TOP 1 qs.max_logical_reads AS maxLeituras, qs.execution_count AS execucoes, LEFT(REPLACE(REPLACE(SUBSTRING(t.text, qs.statement_start_offset / 2 + 1,
+        (CASE WHEN qs.statement_end_offset = -1 THEN DATALENGTH(t.text) ELSE qs.statement_end_offset END - qs.statement_start_offset) / 2 + 1), CHAR(10), ' '), CHAR(13), ' '), 160) AS trecho
+    FROM sys.dm_exec_query_stats qs CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) t
+    CROSS APPLY (SELECT CONVERT(INT, value) AS dbid FROM sys.dm_exec_plan_attributes(qs.plan_handle) WHERE attribute = N'dbid') pa
+    WHERE pa.dbid = DB_ID() ORDER BY qs.max_logical_reads DESC`))[0] || { maxLeituras: 0, trecho: "" };
+  relatorio.consultaQueMaisLeu = { ...maisLeu, maxLeituras: Number(maisLeu.maxLeituras), trecho: String(maisLeu.trecho).replace(/\s+/g, " ").trim() };
+  ok(relatorio.consultaQueMaisLeu.maxLeituras <= TETO_LEITURAS,
+    `nenhuma consulta lê mais de ${TETO_LEITURAS.toLocaleString("pt-BR")} páginas numa execução (a que mais leu: ${relatorio.consultaQueMaisLeu.maxLeituras.toLocaleString("pt-BR")})`,
+    relatorio.consultaQueMaisLeu.trecho.slice(0, 120));
   relatorio.consultasPesadas = pesadas.map((l) => ({ ...l, totalMs: Number(l.totalMs), maxMs: Number(l.maxMs), trecho: String(l.trecho).replace(/\s+/g, " ").trim() }));
   relatorio.idasPorFase = Object.fromEntries(Object.entries(idas.porFase).filter(([k]) => !/^lote\d+$/.test(k)));
 
-  const arq = `${SAIDA}/relatorio-ensaio-${LINHAS}.json`;
+  const arq = `${SAIDA}/relatorio-ensaio-${LINHAS}${ORCAMENTO == null ? "" : `-orcamento-${ORCAMENTO}`}.json`;
   fs.writeFileSync(arq, JSON.stringify(relatorio, null, 2));
   console.log("== resumo ==");
   console.log(`  ida vazia ao banco (a ponte): ${relatorio.idaVaziaMs} ms`);

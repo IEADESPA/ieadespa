@@ -257,6 +257,11 @@ Cada versão parte da base da anterior (`BASE=...`):
   importado, a tela volta ao resultado com o que o resto fez (e quantas não vieram), a lista e o CSV de antes dizem de cada linha que faltou se veio no
   resto ou não, um segundo resto é recusado (e o índice único do banco o impede) e o painel do arrolamento guarda o dia de antes; a trilha sem dado
   pessoal e a cadeia.
+- **FASE 10, o ensaio da importação no tamanho real** (missão C, 26/11/2026; migração 188), base `cenario-188` (`bash rodar.sh preparar-188`: a
+  `cenario-187` com a 188, o índice do nascimento das fichas, aplicada duas vezes). O ensaio (`../ensaio-importacao/ensaio-localdb.js`, ver o
+  [README dele](../ensaio-importacao/README.md)) importa 6 mil pessoas fictícias pela rota e confere o gabarito, o tempo de cada lote, as idas ao
+  banco e que nenhuma consulta lê mais de 100 mil páginas numa execução (sem a 188 e com poucas fichas no banco, a procura do mesmo nome e nascimento
+  da prévia relia o arquivo inteiro para cada ficha: 1,47 milhão de páginas).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

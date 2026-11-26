@@ -352,9 +352,9 @@ if (typeof describe === "function") {
       expect(ler("completar-cadastro.js")).not.toMatch(/innerHTML|insertAdjacentHTML|document\.write|eval\(|new Function|localStorage|sessionStorage|document\.cookie/);
     });
 
-    test("service-worker: cache novo (v71), eventos.js e todos os módulos na casca offline (as telas Svelte ficam fora: baixadas sob demanda)", () => {
+    test("service-worker: cache novo (v72), eventos.js e todos os módulos na casca offline (as telas Svelte ficam fora: baixadas sob demanda)", () => {
       const sw = ler("service-worker.js");
-      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v71";/);
+      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v72";/);
       expect(sw).not.toMatch(/"\/svelte\//);
       const casca = JSON.parse(/const ARQUIVOS_SHELL = (\[[^\]]*\]);/.exec(sw)[1]);
       expect(casca).toEqual(expect.arrayContaining(["/index.html", "/eventos.js", "/script.js", "/style.css", ...MODULOS.map(m => "/" + m)]));

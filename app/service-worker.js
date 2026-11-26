@@ -83,11 +83,17 @@
 // instalação: são baixadas só quando a pessoa entra em Membros e ficam guardadas pelo fetch abaixo (rede primeiro). As telas do passo 7a em JavaScript
 // (modulos/membros.js, membros-cadastro.js e membros-movimento.js) saíram da casca. Só no ramo v10-membros-svelte e na homologação.
 // v66 (19/11/2026): FASE 10, passo 8 — as carteirinhas: a casca (os atalhos "Minha carteirinha" abrem a digital nova na Minha vida) e as telas Svelte (fora da
-// instalação, como as outras). A página pública conferir.html (o QR fixo) não entra no cache: é aberta por quem confere, sem o app.
+// instalação, como as outras). A página pública conferir.html (o QR fixo) não entra no cache: é aberta por quem confere, sem o app (de verdade só desde a v72).
 // v71 (25/11/2026): FASE 10, Membros volta 9 — a casca (abrirAba: o aviso da Geral abre Estrutura -> Órgãos) e os módulos reunioes.js e
 // catalogos-estrutura.js (encerrar a cadeira e a vaga de comissão pedem o motivo). Pula a v67 a v70 (usadas no ramo do acesso). Só no ramo
 // v10-membros-svelte e na homologação.
-const CACHE_NOME = "ieadespa-app-shell-v71";
+// v72 (25/11/2026): FASE 10, Membros volta 10 — a página pública do QR da carteirinha (conferir.html e conferir.js) passa direto pelo fetch abaixo, como a da
+// credencial: o endereço leva o código do QR, que nunca vence, e não pode ficar guardado no aparelho de quem confere (importante 3 do portão v9; até a v71 ela
+// caía no cache, ao contrário do que dizia o comentário da v66). A troca de versão apaga o cache antigo no activate, e com ele os endereços já guardados.
+// Mudaram também o script.js (o pedido de texto com o rótulo do botão e o limite) e os módulos pessoas.js, reunioes.js, catalogos-estrutura.js e
+// projetos-assembleia.js (encerrar a cadeira pede o motivo em todos os botões; a carta de quem está em arrolamento não se imprime). Só no ramo
+// v10-membros-svelte e na homologação.
+const CACHE_NOME = "ieadespa-app-shell-v72";
 const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/afm.js", "/modulos/arquivos.js", "/modulos/assistencia.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/casca.js", "/modulos/catalogos-estrutura.js", "/modulos/checkin-infantil.js", "/modulos/comunicacao.js", "/modulos/consagracoes.js", "/modulos/crise-seguranca.js", "/modulos/cuidado-pastoral.js", "/modulos/disciplina.js", "/modulos/discipulado.js", "/modulos/distritos.js", "/modulos/doacoes.js", "/modulos/ebd.js", "/modulos/educacao-continuada.js", "/modulos/endereco.js", "/modulos/enquetes.js", "/modulos/entidades-vinculadas.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/expansao.js", "/modulos/financeiro.js", "/modulos/identidade-visual.js", "/modulos/meu-painel.js", "/modulos/meus-dados.js", "/modulos/ministerio-menores.js", "/modulos/missoes.js", "/modulos/ouvidoria.js", "/modulos/permissoes.js", "/modulos/pessoas.js", "/modulos/projetos-assembleia.js", "/modulos/protecao.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/reunioes.js", "/modulos/seminario.js", "/modulos/setores-tecnicos.js", "/modulos/territorio.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js", "/vendor/simplewebauthn-browser.js"];
 
 self.addEventListener("install", (evento) => {
@@ -118,6 +124,8 @@ self.addEventListener("fetch", (evento) => {
   if (url.pathname === "/verificar.html") return;
   // v8.4 — a página do QR da credencial também passa direto: o endereço leva o código de segurança, que não pode ficar guardado no aparelho de quem leu (revisão independente)
   if (url.pathname === "/credencial.html" || url.pathname === "/credencial.js") return;
+  // v72 — a página pública do QR da carteirinha (o QR fixo) também passa direto: o endereço leva o código, que nunca vence (portão v9, importante 3)
+  if (url.pathname === "/conferir.html" || url.pathname === "/conferir.js") return;
   // v9.5 — a página do mapa do Google (moldura com sandbox) passa direto: nunca cai no index.html nem fica guardada
   if (url.pathname.startsWith("/mapa-territorial.")) return;
 

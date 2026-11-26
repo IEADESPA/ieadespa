@@ -43,7 +43,10 @@ describe("migração 301: a licença por candidatura aberta é única", () => {
     expect(codigo).toMatch(/FROM dbo\.LicencasCandidatura WHERE Status = N'EM_LICENCA'/);
     expect(codigo).toMatch(/WHERE a\.Ordem > 1 AND l\.Status = N'EM_LICENCA'/);
     expect(codigo).toMatch(/DataRetornoDecidida = CONVERT\(date, DATEADD\(hour, -3, SYSUTCDATETIME\(\)\)\)/);
-    expect(codigo).toMatch(/ObservacaoRetorno = N'Fechada pela migração 301: licença duplicada; a licença aberta da pessoa é a nº ' \+ CAST\(a\.Mantida AS NVARCHAR\(12\)\) \+ N'\.'/);
+    // a observação aparece no painel do membro: texto simples, sem termo técnico (sem "migração")
+    expect(codigo).toMatch(/ObservacaoRetorno = N'Registro em duplicidade, encerrado na conferência do sistema: a licença que vale é a nº ' \+ CAST\(a\.Mantida AS NVARCHAR\(12\)\) \+ N'\.'/);
+    const observacao = codigo.match(/ObservacaoRetorno = N'([^']*)'/);
+    expect(observacao && observacao[1]).not.toMatch(/migra/i);
   });
 
   test("não apaga linha, não grava na trilha e não mexe na situação da pessoa no rol", () => {

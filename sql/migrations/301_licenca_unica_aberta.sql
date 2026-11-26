@@ -35,7 +35,7 @@ BEGIN
     UPDATE l
        SET Status = N'DUPLICADA',
            DataRetornoDecidida = CONVERT(date, DATEADD(hour, -3, SYSUTCDATETIME())),
-           ObservacaoRetorno = N'Fechada pela migração 301: licença duplicada; a licença aberta da pessoa é a nº ' + CAST(a.Mantida AS NVARCHAR(12)) + N'.'
+           ObservacaoRetorno = N'Registro em duplicidade, encerrado na conferência do sistema: a licença que vale é a nº ' + CAST(a.Mantida AS NVARCHAR(12)) + N'.'
       FROM dbo.LicencasCandidatura l
       JOIN abertas a ON a.LicencaId = l.LicencaId
      WHERE a.Ordem > 1 AND l.Status = N'EM_LICENCA';

@@ -593,13 +593,13 @@ async function principal() {
 
   // ------------------------------------------------------------------------------------------------------------------
   console.log("== 7. a licença aberta é única pela rota, e o retorno diz a situação real ==");
-  const outraLic = await lic(ID.licSozinha);
+  const outraLic = await tentar(() => lic(ID.licSozinha));
   ok(outraLic.status === 200 && outraLic.body && outraLic.body.sucesso === false && /já tem uma licença por candidatura aberta/.test(outraLic.body.mensagem)
     && (await escalar("SELECT COUNT(*) FROM LicencasCandidatura WHERE MembroId = @m", { m: ID.licSozinha })) === 2, "a rota recusa a segunda licença aberta com a mensagem clara, e nada é gravado", resumo(outraLic));
-  const licReal = await lic(ID.licRetornoReal);
+  const licReal = await tentar(() => lic(ID.licRetornoReal));
   ok(licReal.status === 201, "a licença de quem vai mudar de situação no meio", resumo(licReal));
   await q("UPDATE MembroReferencia SET Status = 'AFASTADO' WHERE MembroId = @id", { id: ID.licRetornoReal });   // a situação mudou por fora da licença
-  const retornoReal = await decidir(licReal.body && licReal.body.licencaId, true);
+  const retornoReal = await tentar(() => decidir(licReal.body && licReal.body.licencaId, true));
   const trilhaRetorno = await escalar("SELECT TOP 1 DadosDepois FROM AuditLog WHERE Tabela = N'LicencasCandidatura' AND RegistroId = @id ORDER BY AuditId DESC", { id: licReal.body && licReal.body.licencaId });
   ok(retornoReal.body && retornoReal.body.sucesso === true && /não mudou/.test(retornoReal.body.mensagem) && /Afastado/.test(retornoReal.body.mensagem) && !/voltou para ATIVO/.test(retornoReal.body.mensagem)
     && (await statusDe(ID.licRetornoReal)) === "AFASTADO" && /^RETORNOU/.test(await licencaDe(ID.licRetornoReal)),
@@ -614,13 +614,13 @@ async function principal() {
   const minhas = (membroId, corpo) => chamarRota("SolicitarCarta/index.js", { metodo: "POST", token: L.PIN(membroId), corpo: { matricula: membroId, ...corpo } });
   const cartas = (acao, corpo) => chamarRota("GestaoCartas/index.js", { metodo: "POST", binding: { acao }, token: local(), corpo });
   const cartaDe = (id) => escalar("SELECT Status FROM CartasTransito WHERE CartaId = @id", { id });
-  const pedido = await minhas(ID.adminA, { tipo: "MUDANCA", destino: "Igreja de Teste", motivoSaida: "Mudança de cidade (roteiro)" });
+  const pedido = await tentar(() => minhas(ID.adminA, { tipo: "MUDANCA", destino: "Igreja de Teste", motivoSaida: "Mudança de cidade (roteiro)" }));
   const cartaA = pedido.body && pedido.body.cartaId;
   ok(pedido.status === 201 && cartaA && (await cartaDe(cartaA)) === "SOLICITADA", "o próprio membro pede a Carta de Mudança", resumo(pedido));
-  const emitirPedida = await cartas("emitir", { cartaId: cartaA });
+  const emitirPedida = await tentar(() => cartas("emitir", { cartaId: cartaA }));
   ok(emitirPedida.body && emitirPedida.body.sucesso === false && /confirma/.test(emitirPedida.body.mensagem) && (await cartaDe(cartaA)) === "SOLICITADA",
     "a secretaria não emite a Carta de Mudança só pedida", resumo(emitirPedida));
-  const confirmou = await minhas(ID.adminA, { tipo: "MUDANCA", confirmar: true });
+  const confirmou = await tentar(() => minhas(ID.adminA, { tipo: "MUDANCA", confirmar: true }));
   ok(confirmou.body && confirmou.body.sucesso === true && (await cartaDe(cartaA)) === "CONFIRMADA", "a confirmação do último que administra os acessos vale (não se barra a saída do membro)", resumo(confirmou));
   const avisos = await q("SELECT DestinatarioMembroId AS d, Titulo, Mensagem FROM Notificacoes WHERE RegraChave = N'ACESSO_ULTIMO_ADMIN_SAINDO' AND ReferenciaTabela = N'CartasTransito' AND ReferenciaId = @c", { c: cartaA });
   ok(avisos.some((a) => a.d === ID.avisoSecGeral) && !avisos.some((a) => a.d === ID.adminA) && avisos.every((a) => !/adminA|E2E152/.test(`${a.Titulo} ${a.Mensagem}`)),
@@ -629,13 +629,13 @@ async function principal() {
   ok(new RegExp(`"confirmadoPor":${ID.adminA}`).test(trilhaConfirmacao || "") && /"via":"PIN"/.test(trilhaConfirmacao || "") && /"ultimoAdministrador":true/.test(trilhaConfirmacao || "")
     && /"avisados":[1-9]/.test(trilhaConfirmacao || ""), "a trilha da confirmação diz quem confirmou (o próprio membro), por onde, e que a Geral foi avisada", String(trilhaConfirmacao).slice(0, 200));
   // o prazo da política (ou o padrão) já passou desde a CONFIRMAÇÃO; e uma Mudança EMITIDA sem a confirmação do membro (dado de antes da regra), pedida há muito tempo
-  const { prazoMinimizacaoExMembro } = require(path.join(API, "shared/minimizacaoLgpd.js"));
-  const prazoCarta = await prazoMinimizacaoExMembro(await obterPool());
+  const minimizacao = require(path.join(API, "shared/minimizacaoLgpd.js"));   // (o código de antes da revisão só tinha diasMinimizacaoExMembro: a prova com ele)
+  const prazoCarta = minimizacao.prazoMinimizacaoExMembro ? await minimizacao.prazoMinimizacaoExMembro(await obterPool()) : { dias: await minimizacao.diasMinimizacaoExMembro(await obterPool()) };
   await q("UPDATE CartasTransito SET DataConfirmacao = DATEADD(day, -(@d + 1), SYSUTCDATETIME()) WHERE CartaId = @c", { c: cartaA, d: prazoCarta.dias });
   const cartaVelha = await escalar(`INSERT INTO CartasTransito (MembroId, Tipo, Status, Destino, SolicitadoPor, DataSolicitacao, DataEmissao)
     OUTPUT INSERTED.CartaId VALUES (@m, 'MUDANCA', 'EMITIDA', N'Igreja de Teste', @m, DATEADD(day, -(@d + 400), SYSUTCDATETIME()), '2024-01-10')`, { m: ID.cartaSemConfirmacao, d: prazoCarta.dias });
   const dataSaidaEsperada = await escalar("SELECT CONVERT(varchar(10), DATEADD(hour, -3, DataConfirmacao), 120) FROM CartasTransito WHERE CartaId = @c", { c: cartaA });
-  const processou = await cartas("processar", {});
+  const processou = await tentar(() => cartas("processar", {}));
   ok(processou.body && processou.body.sucesso === true && /1 saída\(s\) minimizada/.test(processou.body.mensagem) && /1 carta\(s\) de mudança sem a confirmação/.test(processou.body.mensagem),
     "o processamento minimiza a confirmada e diz quantas ficaram fora por falta da confirmação", resumo(processou));
   ok((await cartaDe(cartaA)) === "CONCLUIDA" && (await statusDe(ID.adminA)) === "DESLIGADO" && (await fimDoCargo(ID.adminA)) !== "vigente"
@@ -677,17 +677,17 @@ async function principal() {
 
   // ------------------------------------------------------------------------------------------------------------------
   console.log("== 10. a medida cautelar: o relatório concluído uma vez só, e as restrições sim/não ==");
-  const medRel = await medida({ membroId: ID.medidaRel, motivo: "Chaves do templo (roteiro)", suspensaoChavesFisicas: true });
+  const medRel = await tentar(() => medida({ membroId: ID.medidaRel, motivo: "Chaves do templo (roteiro)", suspensaoChavesFisicas: true }));
   const medidaRelId = medRel.body && medRel.body.medida && medRel.body.medida.medidaId;
   ok(medRel.status === 201 && medidaRelId, "a medida sem suspensão do acesso", resumo(medRel));
   const concluirRel = () => chamarRota("GestaoMedidasCautelares/index.js", { metodo: "POST", binding: { id: String(medidaRelId), acao: "concluir-relatorio" }, token: L.GERAL(ID.geral, ["pessoas", "permissoes"]) });
   // (a corrida de verdade — dois pedidos ao mesmo tempo — não roda na ponte do LocalDB, uma conexão só: a gravação condicionada está no teste da rota)
-  const conclusoes = [await concluirRel(), await concluirRel()];
+  const conclusoes = [await tentar(concluirRel), await tentar(concluirRel)];
   const dataConclusao = await escalar("SELECT CONVERT(varchar(10), DataConclusaoRelatorio, 120) FROM MedidasCautelares WHERE MedidaId = @id", { id: medidaRelId });
   ok(conclusoes[0].body && conclusoes[0].body.sucesso === true && conclusoes[1].body && conclusoes[1].body.sucesso === false && dataConclusao === hojeBrasilia()
     && (await escalar("SELECT COUNT(*) FROM AuditLog WHERE Tabela = N'MedidasCautelares' AND RegistroId = @id AND Acao LIKE N'Concluiu relatório%'", { id: medidaRelId })) === 1,
   "concluir duas vezes: uma conclusão (a data de hoje) e uma trilha, gravadas juntas", conclusoes.map(resumo).join(" | "));
-  const textoFalse = await medida({ membroId: ID.medidaRel, motivo: "Apuração de contas (roteiro)", suspenderAcessoSistema: "false" });
+  const textoFalse = await tentar(() => medida({ membroId: ID.medidaRel, motivo: "Apuração de contas (roteiro)", suspenderAcessoSistema: "false" }));
   ok(textoFalse.status === 400 && (await escalar("SELECT COUNT(*) FROM MedidasCautelares WHERE MembroId = @m", { m: ID.medidaRel })) === 1,
     "o texto \"false\" em suspender o acesso: 400, nenhuma medida a mais", resumo(textoFalse));
 }

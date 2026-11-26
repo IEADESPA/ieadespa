@@ -317,6 +317,14 @@ case "$1" in
     migrar 188 2
     base salvar cenario-188
     ;;
+  preparar-189)
+    # FASE 10, a saída com a carta nova (missão B, 26/11/2026): a partir da base "cenario-188", aplica a 189 duas vezes (a tabela SaidasDoRol, as regras
+    # e os índices; prova a idempotência); salva "cenario-189". O e2e-104 (a tabela) e os roteiros da saída rodam nela.
+    cd "$AQUI"
+    base restaurar cenario-188
+    migrar 189 2
+    base salvar cenario-189
+    ;;
   preparar-175)
     # FASE 10 (17/11/2026, raio-x de velocidade): a partir da base "cenario-173", aplica a 175 duas vezes (os índices das tabelas grandes; prova a idempotência);
     # salva "cenario-175" (e2e-88 monta o próprio cenário).

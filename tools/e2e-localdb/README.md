@@ -262,6 +262,11 @@ Cada versão parte da base da anterior (`BASE=...`):
   [README dele](../ensaio-importacao/README.md)) importa 6 mil pessoas fictícias pela rota e confere o gabarito, o tempo de cada lote, as idas ao
   banco e que nenhuma consulta lê mais de 100 mil páginas numa execução (sem a 188 e com poucas fichas no banco, a procura do mesmo nome e nascimento
   da prévia relia o arquivo inteiro para cada ficha: 1,47 milhão de páginas).
+- **FASE 10, a saída com a carta nova** (missão B, 26/11/2026; migração 189), base `cenario-189` (`bash rodar.sh preparar-189`: a `cenario-188` com
+  a 189, a tabela `SaidasDoRol`, aplicada duas vezes). O `e2e-104-saidas-do-rol-tabela.js` prova o banco segurando sozinho as regras da tabela: uma
+  saída aberta por pessoa (quem voltou sai de novo), o pedido próprio só da própria pessoa, o filho ligado à saída de quem pediu, o protocolo e o
+  código curto únicos e só com os símbolos do papel, a carta viva em JSON e a apagada sem conteúdo nem destino, a etapa do apagamento com a data, a
+  impressão digital conferindo depois da ida e volta pelo banco, e nada na `CartasTransito` (o "processar" antigo nunca vê).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

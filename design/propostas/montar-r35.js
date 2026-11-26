@@ -77,7 +77,7 @@ const achou = procura(semMod3, /culto|ceia|malote|cofre|segunda-feira|domingo à
 // vocabulário do Regimento que não é a realidade. Os níveis dormindo (o plano: "só a Geral vê que existem") aparecem num
 // cartão só da tela das áreas, com as três palavras numa linha marcada com R35_DORMINDO, que a procura desconta.
 const fontes35Proc = fontes35.split('\n').filter(l => !l.includes('R35_DORMINDO')).join('\n');
-const achou35 = procura(fontes35Proc, /(?<!santa )ceia(?! local| geral| locais| gerais)|malote|cofre|segunda-feira|domingo à noite|lacre|extens[ãa]o da tenda|extens[õo]es|\bparecer\b|comiss[ãa]o de miss[õo]es|quadrante|regi[ãa]o\b|regi[õo]es|distrito(?! sede)|distritos/gi);
+const achou35 = procura(fontes35Proc, /(?<!santa )ceia(?!s? (?:locais|local|gerais|geral))|malote|cofre|segunda-feira|domingo à noite|lacre|extens[ãa]o da tenda|extens[õo]es|\bparecer\b|comiss[ãa]o de miss[õo]es|quadrante|regi[ãa]o\b|regi[õo]es|distrito(?! sede)|distritos/gi);
 console.log('Oferta de culto:', (html.match(/oferta de culto/gi) || []).length, '· palavras proibidas fora do Módulo 3:', achou.length, '· nos fontes da 35 (lista do módulo 3):', achou35.length);
 achou.concat(achou35).slice(0, 30).forEach(x => console.log('   SOBROU:', x));
 if (achou.length || achou35.length) process.exitCode = 1;

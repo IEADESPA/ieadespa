@@ -9,7 +9,7 @@ const h = fs.readFileSync(path.join(__dirname, arq), 'utf8');
 const ini = h.indexOf('<script>') + 8, js = h.slice(ini, h.indexOf('</script>', ini));
 new Function(js);
 const { TELAS, P, DORM } = new Function(js.slice(0, js.indexOf('const $ = id')) + '; return { TELAS, P, DORM: typeof R35_DORMINDO_TXT === "string" ? R35_DORMINDO_TXT : "" };')();
-const PROIB = /culto|ceia|malote|cofre|segunda-feira|domingo à noite|lacre/i, PROIB35 = /(?<!santa )ceia(?! local| geral| locais| gerais)|malote|cofre|segunda-feira|domingo à noite|lacre|extens[ãa]o da tenda|extens[õo]es|\bparecer\b|comiss[ãa]o de miss[õo]es|quadrante|regi[ãa]o|regi[õo]es|distrito(?! sede)|distritos/i, AVISO = /segunda|duas pessoas/i, EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+const PROIB = /culto|ceia|malote|cofre|segunda-feira|domingo à noite|lacre/i, PROIB35 = /(?<!santa )ceia(?!s? (?:locais|local|gerais|geral))|malote|cofre|segunda-feira|domingo à noite|lacre|extens[ãa]o da tenda|extens[õo]es|\bparecer\b|comiss[ãa]o de miss[õo]es|quadrante|regi[ãa]o|regi[õo]es|distrito(?! sede)|distritos/i, AVISO = /segunda|duas pessoas/i, EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
 let n = 0, ruins = 0; const avisos = new Set();
 for (const t of TELAS) for (const o of t.opcoes) for (const modo of ['claro'])
   for (const pf of (t.perfis || [[undefined]]).map(x => x[0]))

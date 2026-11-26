@@ -1,4 +1,4 @@
-<!-- A lista vazia do Financeiro (rodada 30, "r30-blocos-vazios", o "r30Vazio" do desenho): o ícone do livro, o título, a frase e, se houver, uma
+<!-- A lista vazia do Financeiro (rodada 30, "r30-blocos-vazios", o "r30Vazio" do desenho): o ícone do livro, o título, a frase (se houver) e, se houver, uma
      ação embaixo, no meio. Solta na página, com a borda tracejada; dentro de um quadro ("O livro"), sem borda e com menos folga. -->
 <script lang="ts">
   import type { Snippet } from "svelte";
@@ -18,7 +18,7 @@
 <div class="vazio" class:cel={celular} class:dentro>
   <span class="ic"><Icone nome="livro" tam={celular ? 28 : 32} traco={1.8} /></span>
   <strong>{titulo}</strong>
-  <span class="txt">{texto}</span>
+  {#if texto}<span class="txt">{texto}</span>{/if}
   {#if acao}{@render acao()}{/if}
 </div>
 

@@ -5,7 +5,17 @@ function mostrarToast(mensagem, tipo) {
   const container = document.getElementById("toastContainer");
   const toast = document.createElement("div");
   toast.className = "toast" + (tipo === "sucesso" ? " toast-sucesso" : tipo === "erro" ? " toast-erro" : "");
-  toast.textContent = mensagem;
+  // FASE 10 (26/11/2026): nas telas novas (Membros e Finanças), o aviso vem embaixo, no meio, com o ícone (casca.js, svAvisoEmbaixo)
+  const embaixo = typeof svAvisoEmbaixo === "function" && svAvisoEmbaixo();
+  container.classList.toggle("toast-embaixo", embaixo);
+  if (embaixo) {
+    const texto = document.createElement("span");
+    texto.textContent = mensagem;
+    toast.insertAdjacentHTML("afterbegin", svIconeDoAviso(tipo));   // desenho fixo, de lista fechada (nada vem da mensagem)
+    toast.appendChild(texto);
+  } else {
+    toast.textContent = mensagem;
+  }
   container.appendChild(toast);
   setTimeout(() => {
     toast.classList.add("toast-saindo");

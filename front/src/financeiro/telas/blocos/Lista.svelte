@@ -1,6 +1,7 @@
 <!-- Blocos de recibo: os blocos (rodada 17, "r17-blocos", opção 1). A procura pelo número do bloco ou de uma folha, as pílulas (todos, em uso,
      esperando, fechado), a lista em páginas de 40 e, à direita, o lote da gráfica (Geral e área) ou "Seus blocos" (a congregação). O número do bloco
-     sai da primeira folha (70.051 → 1.401): ninguém digita. No celular: as abas e as pílulas no alto, a lista em linhas e "Próxima página". -->
+     sai da primeira folha (70.051 → 1.401): ninguém digita. No celular: as abas, a procura e as pílulas no alto (a procura veio da r30, "o desenho
+     mais novo vale", 26/11), a lista em linhas e "Próxima página". O botão do lote é dourado, como na r30. -->
 <script lang="ts">
   import { pedir, qs } from "../../../comum/api";
   import { numero } from "../../../comum/formato";
@@ -16,7 +17,7 @@
   import Numeros from "../../partes/Numeros.svelte";
   import Paginas from "../../partes/Paginas.svelte";
   import Vazio from "../../partes/Vazio.svelte";
-  import { vazioDaProcura, vazioDosBlocos } from "../../vazios";
+  import { vazioDaProcura, vazioDaSituacao, vazioDosBlocos, vazioSemBloco } from "../../vazios";
   import Cabecalho from "./Cabecalho.svelte";
 
   interface Props { celular: boolean }
@@ -62,13 +63,14 @@
   }
   $effect(() => { void ler(filtro, procuraValendo, pagina); });
 
-  // as listas vazias da r30 ("r30-blocos-vazios"), no lugar da lista e das páginas: a procura sem resultado e a Geral antes do primeiro lote,
-  // só em "Todos" (com uma pílula, o bloco pode existir em outra situação). A pílula sem bloco e a área ou a congregação sem bloco continuam com
-  // a frase de antes (sem texto aprovado ainda)
+  // as listas vazias, no lugar da lista e das páginas. Da r30 ("r30-blocos-vazios"): a procura sem resultado e a Geral antes do primeiro lote, só
+  // em "Todos" (com uma pílula, o bloco pode existir em outra situação). Sem desenho, os textos de 26/11 ("para conferir"): a pílula sem bloco
+  // (com ou sem a procura) e a área ou a congregação sem bloco
   const vazio = $derived.by(() => {
-    if (!dados || dados.total || lidoCom.filtro !== "todos") return null;
+    if (!dados || dados.total) return null;
+    if (lidoCom.filtro !== "todos") return vazioDaSituacao(lidoCom.procura);
     if (lidoCom.procura) return vazioDaProcura(lidoCom.procura);
-    return nivel === "geral" ? vazioDosBlocos(celular) : null;
+    return nivel === "geral" ? vazioDosBlocos(celular) : vazioSemBloco(nivel);
   });
 
   function escolherFiltro(f: FiltroBlocos) { filtro = f; pagina = 1; }
@@ -186,7 +188,7 @@
 
 {#snippet acaoGeral()}
   {#if nivel === "geral"}
-    <button type="button" class="forte" aria-expanded={avisoLote} onclick={() => (avisoLote = !avisoLote)}><Icone nome="mais" tam={16} traco={2.2} />Cadastrar lote da gráfica</button>
+    <button type="button" class="ouro" aria-expanded={avisoLote} onclick={() => (avisoLote = !avisoLote)}><Icone nome="mais" tam={18} traco={2.2} />Cadastrar lote da gráfica</button>
   {/if}
 {/snippet}
 
@@ -196,9 +198,18 @@
   {/if}
 {/snippet}
 
+{#snippet busca()}
+  <label class="busca">
+    <Icone nome="busca" tam={celular ? 16 : 18} traco={celular ? 2 : 1.8} />
+    <span class="sv-escondido">Procurar pelo número do bloco ou de uma folha</span>
+    <input type="search" inputmode="numeric" autocomplete="off" placeholder="Nº do bloco ou de uma folha" maxlength="12" bind:value={procura} />
+  </label>
+{/snippet}
+
 {#if celular}
   <div class="pagina cel">
     <Cabecalho aba="blocos" {celular} />
+    {@render busca()}
     {@render pilulas()}
     {@render lista()}
   </div>
@@ -206,11 +217,7 @@
   <div class="pagina">
     <Cabecalho aba="blocos" {celular} acoes={acaoGeral} abaixo={recadoLote} />
     <div class="filtros">
-      <label class="busca">
-        <Icone nome="busca" tam={18} traco={1.8} />
-        <span class="sv-escondido">Procurar pelo número do bloco ou de uma folha</span>
-        <input type="search" inputmode="numeric" autocomplete="off" placeholder="Nº do bloco ou de uma folha" maxlength="12" bind:value={procura} />
-      </label>
+      {@render busca()}
       {@render pilulas()}
     </div>
     <div class="dois">
@@ -225,12 +232,13 @@
   .pagina.cel { gap: 10px; }
   button { font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 
-  .forte {
-    height: 36px; padding: 0 14px; border-radius: 9px; border: 0; background: var(--fin-forte); color: var(--fin-forte-texto); display: inline-flex; align-items: center; gap: 7px;
-    font-size: 13.5px; font-weight: 700; white-space: nowrap; transition: transform .12s ease, box-shadow .15s ease;
+  /* o botão do lote: o "m8Ouro" da r30 (40 px, dourado, o ícone de 18) */
+  .ouro {
+    height: 40px; padding: 0 16px; border-radius: 10px; border: 0; background: #FFB800; color: #0A2342; display: inline-flex; align-items: center; gap: 8px;
+    font-size: 14px; font-weight: 700; white-space: nowrap; transition: transform .12s ease, box-shadow .15s ease;
   }
-  .forte:active { transform: scale(.97); }
-  @media (hover: hover) { .forte:hover { box-shadow: 0 2px 6px rgba(10, 35, 66, .18); } }
+  .ouro:active { transform: scale(.97); }
+  @media (hover: hover) { .ouro:hover { box-shadow: 0 2px 6px rgba(10, 35, 66, .18); } }
 
   /* a procura e as pílulas */
   .filtros { display: flex; gap: 8px; align-items: center; min-width: 0; }
@@ -241,6 +249,8 @@
   .busca:focus-within { border-color: var(--sv-mod); }
   .busca input { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; font-size: 14px; color: var(--sv-texto); outline: none; padding: 0; height: 100%; }
   .busca input::placeholder { color: var(--sv-suave); opacity: 1; }
+  .cel .busca { width: auto; }   /* no celular, a largura inteira (r30) */
+  .cel .busca input { font-size: 13.5px; }
   .pilulas { display: flex; gap: 8px; align-items: center; }
   .pilulas button {
     height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid var(--sv-borda); background: transparent; display: flex; align-items: center;

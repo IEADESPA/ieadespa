@@ -37,6 +37,16 @@ export function vazioDosBlocos(celular: boolean): TextoVazio {
   return { titulo: "Nenhum bloco ainda.", texto: celular ? "Os blocos aparecem quando o lote da gráfica chega." : "Os blocos aparecem quando o lote da gráfica chega. Comece em “Cadastrar lote da gráfica”." };
 }
 
+/** a aba Blocos da área e da congregação sem bloco (texto dado em 26/11, sem desenho: "para conferir") */
+export function vazioSemBloco(nivel: Nivel): TextoVazio {
+  return { titulo: nivel === "area" ? "Nenhum bloco com as congregações da área." : "Nenhum bloco com a sua congregação.", texto: "" };
+}
+
+/** uma pílula (em uso, esperando, fechado) sem bloco, com ou sem a procura: o bloco pode existir em outra situação (texto de 26/11, "para conferir") */
+export function vazioDaSituacao(procura: string): TextoVazio {
+  return { titulo: procura.trim() ? "Nenhum bloco nesta situação com esse número." : "Nenhum bloco nesta situação.", texto: "" };
+}
+
 /** a procura sem resultado, no lugar da lista: "Nenhum bloco tem o número 99.999." */
 export function vazioDaProcura(procura: string): TextoVazio {
   const s = procura.trim().replace(/\./g, "");

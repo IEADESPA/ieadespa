@@ -5,7 +5,7 @@
 //
 // Rodar (pelo PowerShell; pelo Bash o Edge sem tela não abre neste notebook):
 //   node tools/front-financeiro/navegador.js            (PUPPETEER_CORE = a pasta do puppeteer-core; sem ela, tools/csp-e2e/node_modules)
-//   LISTA=1 mostra cada caso aprovado; SO=folhas, SO=desfazer, SO=livro, SO=saida ou SO=vazios roda só uma parte.
+//   LISTA=1 mostra cada caso aprovado; SO=folhas, SO=desfazer, SO=livro, SO=saida, SO=vazios ou SO=aviso roda só uma parte.
 "use strict";
 const fs = require("fs");
 const os = require("os");
@@ -890,6 +890,23 @@ async function provarVazios() {
   ok(tem(t, "Nenhum bloco ainda. Os blocos aparecem quando o lote da gráfica chega. Comece em “Cadastrar lote da gráfica”."), "geral: a aba Blocos antes do primeiro lote", t.slice(0, 400));
   ok(!tem(t, "0 blocos") && !tem(t, "Congregação Situação"), "geral: sem a tabela e sem as páginas vazias", t.slice(0, 400));
   ok(tem(t, "Nenhum lote da gráfica cadastrado ainda. Use o botão “Cadastrar lote da gráfica”, no alto."), "geral: o quadro do lote aponta para o botão");
+  // o botão do lote dourado, como na r30 (o desenho mais novo vale; decisão de 26/11)
+  const botaoLote = await s.page.evaluate(() => {
+    const b = [...document.querySelectorAll("#financeiroRaiz button")].find((x) => x.textContent.trim() === "Cadastrar lote da gráfica");
+    if (!b) return null;
+    const cs = getComputedStyle(b);
+    return { fundo: cs.backgroundColor, cor: cs.color, alt: Math.round(b.getBoundingClientRect().height) };
+  });
+  ok(botaoLote && botaoLote.fundo === "rgb(255, 184, 0)" && botaoLote.cor === "rgb(10, 35, 66)" && botaoLote.alt === 40, "geral: o botão do lote dourado, de 40 px (r30)", botaoLote);
+  // a pílula sem bloco (texto dado em 26/11, "para conferir")
+  const v0 = pedidos(s.api, "/api/financeiro/blocos").length;
+  await clicar(s.page, "Em uso");
+  await esperarPedido(s.api, "/api/financeiro/blocos", "GET", v0, 3000);
+  await calmo(s.page);
+  t = await textoTela(s.page);
+  ok(tem(t, "Nenhum bloco nesta situação.") && !tem(t, "Nenhum bloco ainda") && !tem(t, "Nenhum bloco com essa procura"), "geral: a pílula sem bloco", t.slice(0, 400));
+  await clicar(s.page, "Todos");
+  await calmo(s.page);
   await clicar(s.page, "Folhas do bloco");
   t = await textoTela(s.page);
   ok(tem(t, "Nenhum bloco saiu para as congregações ainda. Para entregar um bloco, use “Registrar saída”, no livro de entrada e saída."), "geral: as folhas sem bloco", t.slice(0, 400));
@@ -905,11 +922,27 @@ async function provarVazios() {
   s = await abrir("geral", "celular", { vazio: true });
   t = await textoTela(s.page);
   ok(tem(t, "Nenhum bloco ainda. Os blocos aparecem quando o lote da gráfica chega.") && !tem(t, "Comece em") && !tem(t, "nenhum bloco"), "geral celular: a aba Blocos vazia", t.slice(0, 400));
+  // a procura no celular, entre as abas e as pílulas (r30; decisão de 26/11)
+  const ordem = await s.page.evaluate(() => {
+    const i = [...document.querySelectorAll("#financeiroRaiz input[type=search]")].find((x) => x.offsetParent !== null);
+    const p = [...document.querySelectorAll("#financeiroRaiz .pilulas button")].find((x) => x.textContent.trim() === "Todos");
+    if (!i || !p) return null;
+    const ri = i.closest("label").getBoundingClientRect();
+    return { busca: Math.round(ri.top), pilulas: Math.round(p.getBoundingClientRect().top), larg: Math.round(ri.width), alt: Math.round(ri.height) };
+  });
+  ok(ordem && ordem.busca < ordem.pilulas && ordem.larg >= 356 && ordem.alt >= 40, "geral celular: a procura largura inteira, acima das pílulas", ordem);
+  const c0 = pedidos(s.api, "/api/financeiro/blocos").length;
+  await digitar(s.page, "Procurar pelo número", "99.999");
+  ok(await esperarPedido(s.api, "/api/financeiro/blocos", "GET", c0, 3000), "geral celular: a procura pede a lista");
+  await calmo(s.page);
+  t = await textoTela(s.page);
+  ok(tem(t, "Nenhum bloco tem o número 99.999. Confira o número do bloco ou da folha."), "geral celular: a procura sem resultado", t.slice(0, 400));
   await fechar(s, "vazios geral celular");
   // a área: o nome dela, sem o botão do livro; o quadro do lote sem apontar para o botão que ela não tem
   s = await abrir("area", "notebook", { vazio: true });
   t = await textoTela(s.page);
   ok(tem(t, "Nenhum lote da gráfica cadastrado ainda.") && !tem(t, "Use o botão"), "área: o quadro do lote sem o botão");
+  ok(tem(t, "Nenhum bloco com as congregações da área.") && !tem(t, "Nenhum bloco com essa procura"), "área: a aba Blocos sem bloco", t.slice(0, 400));
   await clicar(s.page, "Folhas do bloco");
   t = await textoTela(s.page);
   ok(tem(t, "Nenhuma congregação da Área 2 está com bloco agora. Os blocos saem da Tesouraria Geral. Quando um chegar a uma congregação da área, as folhas dele aparecem aqui."),
@@ -921,6 +954,8 @@ async function provarVazios() {
   await fechar(s, "vazios área notebook");
   // a congregação no celular
   s = await abrir("local", "celular", { vazio: true });
+  t = await textoTela(s.page);
+  ok(tem(t, "Nenhum bloco com a sua congregação.") && !tem(t, "Nenhum bloco com essa procura"), "local celular: a aba Blocos sem bloco", t.slice(0, 400));
   await clicar(s.page, "Folhas do bloco");
   t = await textoTela(s.page);
   ok(tem(t, "Vila Nova está sem bloco de recibo agora. Para receber um bloco, fale com a Tesouraria Geral. Quando ele chegar, as folhas aparecem aqui."), "local celular: as folhas sem bloco", t.slice(0, 400));
@@ -952,7 +987,8 @@ async function provarVazios() {
   await esperarPedido(s.api, "/api/financeiro/blocos", "GET", b2, 3000);
   await calmo(s.page);
   t = await textoTela(s.page);
-  ok(!tem(t, "Nenhum bloco tem o número") && tem(t, "Nenhum bloco com essa procura."), "geral: a pílula com a procura não diz que o número não existe", t.slice(0, 500));
+  ok(!tem(t, "Nenhum bloco tem o número") && tem(t, "Nenhum bloco nesta situação com esse número.") && !tem(t, "Nenhum bloco com essa procura"),
+    "geral: a pílula com a procura não diz que o número não existe", t.slice(0, 500));
   await fechar(s, "procura sem resultado");
   // o livro no celular: até 3 números de página (o desenho da r30)
   s = await abrir("geral", "celular");
@@ -960,6 +996,64 @@ async function provarVazios() {
   const nums = await s.page.evaluate(() => [...document.querySelectorAll("#financeiroRaiz nav.paginas button")].filter((b) => /^\d+$/.test(b.textContent.trim())).map((b) => b.textContent.trim()));
   ok(JSON.stringify(nums) === JSON.stringify(["1", "2", "3"]), "geral celular: o livro com 3 números de página", nums);
   await fechar(s, "livro celular páginas");
+}
+
+// o aviso (toast) das telas novas: embaixo, no meio do conteúdo, verde-água com o ✓ (o "r30Toast" do desenho; decisão de 26/11, peça comum de
+// Membros e Finanças). Fora das telas novas, o aviso continua no alto, à direita, como no resto do sistema
+async function provarAviso() {
+  const medir = (page) => page.evaluate(() => {
+    const c = document.getElementById("toastContainer");
+    const ts = [...c.querySelectorAll(".toast")];
+    const t = ts[ts.length - 1];
+    if (!t) return null;
+    const r = t.getBoundingClientRect(), sb = document.querySelector(".sidebar").getBoundingClientRect(), cs = getComputedStyle(t);
+    return {
+      embaixo: c.classList.contains("toast-embaixo"), esq: Math.round(r.left), dir: Math.round(r.right), topo: Math.round(r.top), baixo: Math.round(innerHeight - r.bottom),
+      meio: Math.round((r.left + r.right) / 2), meioConteudo: Math.round(innerWidth > 640 ? (sb.right + innerWidth) / 2 : innerWidth / 2), larg: innerWidth,
+      fundo: cs.backgroundColor, cor: cs.color, letra: cs.fontSize, icone: !!t.querySelector("svg"), texto: t.textContent
+    };
+  });
+  // um aviso de cada vez (os anteriores ficam 4,2 s e empurrariam a medida)
+  const limpar = (page) => page.evaluate(() => document.querySelectorAll("#toastContainer .toast").forEach((t) => t.remove()));
+  const aviso = async (page, contexto, texto, tipo) => {
+    await limpar(page);
+    await page.evaluate((c, x, t) => ponteSvelteCasca(c).avisar(x, t), contexto, texto, tipo);
+    await espera(400);   // a entrada (sobe 8 px) termina
+    return medir(page);
+  };
+  const FEITO = "Bloco 1.403 entregue a Vila Nova. Está no livro.";
+  // Finanças no notebook
+  let s = await abrir("geral", "notebook");
+  let m = await aviso(s.page, "financeiro", FEITO, "sucesso");
+  ok(m && m.embaixo && Math.abs(m.meio - m.meioConteudo) <= 2 && Math.abs(m.baixo - 20) <= 2, "notebook: o aviso embaixo, no meio do conteúdo", m);
+  ok(m && m.fundo === "rgb(15, 118, 110)" && m.cor === "rgb(255, 255, 255)" && m.letra === "13.5px" && m.icone && m.texto === FEITO, "notebook: verde-água, letra branca, o ✓ e o texto inteiro", m);
+  m = await aviso(s.page, "financeiro", "Falha simulada.", "erro");
+  ok(m && m.embaixo && m.fundo === "rgb(185, 28, 28)" && m.icone && m.texto === "Falha simulada.", "notebook: o aviso de erro em vermelho, no mesmo lugar", m);
+  // com o menu recolhido, o meio do conteúdo muda
+  await s.page.evaluate(() => ponteSvelteCasca("financeiro").menuRecolhido(true));
+  m = await aviso(s.page, "financeiro", FEITO, "sucesso");
+  ok(m && Math.abs(m.meio - m.meioConteudo) <= 2, "notebook: com o menu recolhido, no meio do conteúdo", m);
+  await s.page.evaluate(() => ponteSvelteCasca("financeiro").menuRecolhido(null));
+  // fora das telas novas: no alto, à direita, sem mudança
+  await s.page.evaluate(() => sairDoModulo());
+  await calmo(s.page);
+  await limpar(s.page);
+  await s.page.evaluate(() => mostrarToast("Fora das telas novas.", "sucesso"));
+  await espera(400);
+  m = await medir(s.page);
+  ok(m && !m.embaixo && m.topo < 40 && m.dir > m.larg - 40 && !m.icone && m.texto === "Fora das telas novas.", "fora das telas novas: o aviso no alto, à direita, como antes", m);
+  // Membros: a mesma peça
+  await s.page.evaluate(() => entrarModulo("membresia"));
+  const montou = await s.page.waitForFunction(() => typeof membrosSvelteMontado !== "undefined" && membrosSvelteMontado === true, { timeout: 10000 }).then(() => true, () => false);
+  ok(montou, "Membros: as telas novas montaram");
+  m = await aviso(s.page, "membresia", "Cadastro salvo.", "sucesso");
+  ok(m && m.embaixo && Math.abs(m.meio - m.meioConteudo) <= 2 && Math.abs(m.baixo - 20) <= 2 && m.fundo === "rgb(15, 118, 110)" && m.icone, "Membros: o aviso embaixo, no meio, verde-água", m);
+  await s.ctx.close();
+  // o celular: 30 px de cada lado, logo acima da barra do telefone
+  s = await abrir("local", "celular");
+  m = await aviso(s.page, "financeiro", FEITO, "sucesso");
+  ok(m && m.embaixo && Math.abs(m.esq - 30) <= 1 && Math.abs(m.larg - m.dir - 30) <= 1 && Math.abs(m.baixo - 20) <= 2 && m.letra === "13px", "celular: o aviso embaixo, 30 px de cada lado", m);
+  await fechar(s, "aviso celular");
 }
 
 async function provarSaida() {
@@ -1162,6 +1256,7 @@ async function provarSaida() {
     if (!SO || SO === "livro") { console.log("Livro de entrada e saída"); await provarLivro(); }
     if (!SO || SO === "saida") { console.log("Registrar saída"); await provarSaida(); }
     if (!SO || SO === "vazios") { console.log("As listas vazias"); await provarVazios(); }
+    if (!SO || SO === "aviso") { console.log("O aviso das telas novas"); await provarAviso(); }
   } finally {
     await nav.close();
     await srv.fechar();

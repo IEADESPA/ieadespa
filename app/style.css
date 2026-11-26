@@ -2305,3 +2305,38 @@ body { font-family: var(--fonte-sistema); }
   .painel-layout[data-modulo="financeiro"]:has(#abaFinancas[style*="block"]) .cabecalho-secretaria .btn-tema { color: #FFFFFF; background: transparent; border-color: transparent; }
   .painel-layout[data-modulo="financeiro"]:has(#abaFinancas[style*="block"]) .faixa-modulo-casca { display: none; }
 }
+
+/* ---- FASE 10, rodada 30 (o "r30Toast"; decisão de 26/11/2026): o AVISO das telas novas, Membros e Finanças, embaixo, no meio do conteúdo,
+   verde-água com o ✓; o erro em vermelho, com o alerta. A classe vem do mostrarToast (script.js), que pergunta à casca (svAvisoEmbaixo) a cada
+   aviso; fora das telas novas, o aviso continua no alto, à direita. No notebook, o meio do conteúdo fica à direita do menu do módulo (280 px;
+   recolhido, 76 px); no celular, 30 px de cada lado, logo acima da barra do telefone. ---- */
+#toastContainer.toast-embaixo {
+  top: auto; right: auto; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: calc(100vw - 32px); align-items: center; gap: 8px;
+}
+#toastContainer.toast-embaixo .toast {
+  display: flex; align-items: center; gap: 9px; padding: 10px 14px; border: 0; border-radius: 12px; background: #0F766E; color: #FFFFFF;
+  font-size: 13.5px; font-weight: 600; line-height: 1.35; box-shadow: 0 10px 28px rgba(0, 0, 0, .22); animation-name: toast-subir;
+}
+#toastContainer.toast-embaixo .toast > svg { flex: none; }
+#toastContainer.toast-embaixo .toast > span { min-width: 0; }
+#toastContainer.toast-embaixo .toast.toast-erro { background: #B91C1C; }
+#toastContainer.toast-embaixo .toast.toast-saindo { animation-name: toast-descer; }
+html[data-tema="escuro"] #toastContainer.toast-embaixo .toast { background: #115E59; box-shadow: 0 10px 28px rgba(0, 0, 0, .45); }
+html[data-tema="escuro"] #toastContainer.toast-embaixo .toast.toast-erro { background: #991B1B; }
+@keyframes toast-subir { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes toast-descer { to { opacity: 0; transform: translateY(8px); } }
+@media (min-width: 641px) {
+  #toastContainer.toast-embaixo { left: calc(50% + 140px); max-width: calc(100vw - 328px); }
+  body:has(.sidebar.recolhido) #toastContainer.toast-embaixo { left: calc(50% + 38px); max-width: calc(100vw - 124px); }
+}
+@media (max-width: 640px) {
+  #toastContainer.toast-embaixo { left: 30px; right: 30px; transform: none; width: auto; max-width: none; align-items: stretch; }
+  #toastContainer.toast-embaixo .toast { font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #toastContainer.toast-embaixo .toast { animation-name: toast-aparecer; }
+  #toastContainer.toast-embaixo .toast.toast-saindo { animation-name: toast-sumir; }
+  @keyframes toast-aparecer { from { opacity: 0; } }
+  @keyframes toast-sumir { to { opacity: 0; } }
+}

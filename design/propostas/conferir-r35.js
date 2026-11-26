@@ -2,7 +2,7 @@
 // no claro, cada nível e os dois aparelhos), undefined/NaN/[object Object]/${ esquecido, caixas <div> desiguais, emojis e as
 // palavras que não existem na Igreja (a lista do Módulo 3, que libera "culto", só aceita "ceia" em "Santa Ceia", "ceia local"
 // e "ceia geral" e barra o vocabulário do Regimento). A única exceção é o cartão dos níveis dormindo (o plano: "só a Geral
-// vê que existem"), na tela das áreas, vista pela Geral: a frase exata R35_DORMINDO_TXT é descontada antes da procura.
+// vê que existem"), na tela das áreas (r35-igrejas), vista pela Geral: a frase exata R35_DORMINDO_TXT é descontada antes da procura.
 const fs = require('fs'), path = require('path');
 const arq = process.argv[2] || 'propostas-r35/index.html';
 const h = fs.readFileSync(path.join(__dirname, arq), 'utf8');
@@ -24,7 +24,7 @@ for (const t of TELAS) for (const o of t.opcoes) for (const modo of ['claro'])
       const abreS = (s.match(/<span\b/g) || []).length, fechaS = (s.match(/<\/span>/g) || []).length;
       if (abreS !== fechaS) { ruins++; console.log('SPAN DESIGUAL', t.id, '|', pf, '|', d, '| abre', abreS, 'fecha', fechaS); }
       let txt = s.replace(/<[^>]*>/g, ' ').replace(/oferta de culto/gi, '');
-      if (DORM && t.id === 'r35-areas' && pf === 'geral') txt = txt.split(DORM).join(' ');
+      if (DORM && t.id === 'r35-igrejas' && pf === 'geral') txt = txt.split(DORM).join(' ');
       const pm = txt.match(t.rodada === 35 ? PROIB35 : PROIB); if (pm) { ruins++; console.log('PALAVRA PROIBIDA', t.id, pf, d, '·', txt.slice(Math.max(0, pm.index - 40), pm.index + 40)); }
       if (EMOJI.test(s)) { ruins++; console.log('EMOJI', t.id, pf, d); }
       const av = txt.match(AVISO); if (av) avisos.add(`${t.id} · ${pf} · ${txt.slice(Math.max(0, av.index - 40), av.index + 30).replace(/\s+/g, ' ')}`);

@@ -1,7 +1,9 @@
 // e2e-153-acesso-revisao.js — as correções da revisão de fora do ramo v10-acesso-ajustes-3 (26/11/2026), contra o SQL Server de verdade. Monta o próprio
 // cenário sobre a base cenario-175 (`BASE=cenario-175 bash rodar.sh roteiro e2e-153-acesso-revisao.js`). Cobre:
 //   1. a recusa da ficha não entrega a quem não vê a disciplina daquela pessoa que ela tem exclusão julgada: a mesma resposta para a exclusão e para o
-//      processo de cargo, e a recusa vem depois de todas as outras que quem salva provoca à vontade (a sonda sem gravar nada responde igual para todos).
+//      processo de cargo, e a recusa vem depois de todas as outras que quem salva provoca à vontade (a sonda sem gravar nada responde igual para todos);
+//   2. o "processar" das Cartas de Mudança confere a pessoa DENTRO da transação: quem faleceu ou saiu do rol por outra causa não vira "desligado por carta"
+//      (a carta é cancelada e a ficha fica como está), e quem foi readmitido no meio do processamento não é minimizado.
 process.env.AUTH_SECRET = "segredo-do-roteiro-da-revisao-3-" + "x".repeat(24);
 const L = require("./lib");
 const { ok, fim, q, escalar, obterPool } = L;
@@ -9,7 +11,8 @@ const { chamarRota } = require("./lib-afm");
 
 const BASE_ID = 1530000;
 const ID = {
-  geral: BASE_ID + 1, secLocal: BASE_ID + 2, comum: BASE_ID + 3, excluido: BASE_ID + 4, emCargo: BASE_ID + 5, proponente: BASE_ID + 6
+  geral: BASE_ID + 1, secLocal: BASE_ID + 2, comum: BASE_ID + 3, excluido: BASE_ID + 4, emCargo: BASE_ID + 5, proponente: BASE_ID + 6,
+  cartaFalecida: BASE_ID + 10, cartaExcluida: BASE_ID + 11, cartaReadmitido: BASE_ID + 12, cartaJaDesligada: BASE_ID + 13, cartaNormal: BASE_ID + 14
 };
 const NOME_SEDE = "Sede Revisao E2E153";
 const NOME_OUTRA = "Outra Revisao E2E153";
@@ -88,6 +91,67 @@ async function principal() {
   // a Secretaria (nível geral) registra a readmissão
   const rGeral = await pessoas("POST", { token: geral(), corpo: ficha(ID.excluido, { ...novaAdmissao, estadoCivil: "CASADO" }) });
   ok(rGeral.status === 200 && (await admissaoDe(ID.excluido)) === "2010-05-03", "o nível geral registra a readmissão", resumo(rGeral));
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 2. o processamento das Cartas de Mudança confere a pessoa dentro da transação ==");
+  const pool = await obterPool();
+  const cartas = (acao, corpo) => chamarRota("GestaoCartas/index.js", { metodo: "POST", binding: { acao }, token: soPessoas(), corpo });
+  const cartaDe = (id) => escalar("SELECT Status FROM CartasTransito WHERE CartaId = @id", { id });
+  const fichaDe = (id) => escalar(`SELECT CONCAT(Status, '|', ISNULL(MotivoSaida, '-'), '|', ISNULL(CONVERT(varchar(10), DataSaida, 120), '-'), '|', ISNULL(Telefone, '-'))
+    FROM MembroReferencia WHERE MembroId = @id`, { id });
+  const prazo = await require(L.path.join(L.API, "shared/minimizacaoLgpd.js")).prazoMinimizacaoExMembro(pool);
+  // as cartas confirmadas pelo próprio membro, todas já vencidas
+  const cartaVencida = (m) => escalar(`INSERT INTO CartasTransito (MembroId, Tipo, Status, Destino, SolicitadoPor, DataSolicitacao, DataConfirmacao, DeclaracaoCiencia)
+    OUTPUT INSERTED.CartaId VALUES (@m, 'MUDANCA', 'CONFIRMADA', N'Igreja de Teste', @m, DATEADD(day, -(@d + 5), SYSUTCDATETIME()), DATEADD(day, -(@d + 3), SYSUTCDATETIME()),
+    N'Declaro ciência (roteiro)')`, { m, d: prazo.dias });
+  const carta = {};
+  for (const k of ["cartaFalecida", "cartaExcluida", "cartaReadmitido", "cartaJaDesligada", "cartaNormal"]) {
+    await q("UPDATE MembroReferencia SET Telefone = N'91900000000' WHERE MembroId = @id", { id: ID[k] });
+    carta[k] = await cartaVencida(ID[k]);
+  }
+  // depois de confirmar a carta: uma faleceu e outra foi desligada pela ficha por exclusão; a terceira já tinha a saída por carta gravada à mão
+  await q("UPDATE MembroReferencia SET Status = 'FALECIDO', SituacaoMembro = 'SEM_COMUNHAO', DataSaida = '2026-11-20', MotivoSaida = N'FALECIMENTO' WHERE MembroId = @id",
+    { id: ID.cartaFalecida });
+  await q("UPDATE MembroReferencia SET Status = 'DESLIGADO', SituacaoMembro = 'SEM_COMUNHAO', DataSaida = '2026-11-21', MotivoSaida = N'EXCLUSAO' WHERE MembroId = @id",
+    { id: ID.cartaExcluida });
+  await q("UPDATE MembroReferencia SET Status = 'DESLIGADO', SituacaoMembro = 'SEM_COMUNHAO', DataSaida = '2026-11-02', MotivoSaida = N'CARTA_MUDANCA' WHERE MembroId = @id",
+    { id: ID.cartaJaDesligada });
+  // a readmissão gravada no meio do processamento: depois da leitura das cartas e antes da vez desta carta
+  const pedidoOriginal = pool.request;
+  let readmitir = true;
+  pool.request = (...a) => {
+    const rq = pedidoOriginal.apply(pool, a);
+    const consultar = rq.query.bind(rq);
+    rq.query = async (texto) => {
+      const resposta = await consultar(texto);
+      if (readmitir && /c\.Tipo = 'MUDANCA' AND c\.Status IN/.test(String(texto))) {
+        readmitir = false;
+        await pedidoOriginal.apply(pool).input("id", L.sql.Int, ID.cartaReadmitido).query("UPDATE MembroReferencia SET DataAdmissao = CAST(SYSUTCDATETIME() AS DATE) WHERE MembroId = @id");
+      }
+      return resposta;
+    };
+    return rq;
+  };
+  let processou;
+  try { processou = await cartas("processar", {}); } finally { pool.request = pedidoOriginal; }
+  ok(!readmitir, "a readmissão foi gravada depois da leitura das cartas (o gatilho do roteiro disparou)");
+  ok(processou.status === 200 && processou.body && processou.body.sucesso === true, "o processamento termina", resumo(processou));
+  ok((await cartaDe(carta.cartaFalecida)) === "CANCELADA" && (await fichaDe(ID.cartaFalecida)) === "FALECIDO|FALECIMENTO|2026-11-20|91900000000",
+    "quem faleceu depois de confirmar a carta continua falecido, com a data e a causa (a carta é cancelada, nada minimizado)", await fichaDe(ID.cartaFalecida));
+  ok((await cartaDe(carta.cartaExcluida)) === "CANCELADA" && (await fichaDe(ID.cartaExcluida)) === "DESLIGADO|EXCLUSAO|2026-11-21|91900000000",
+    "quem saiu do rol por exclusão continua com a causa e a data dela", await fichaDe(ID.cartaExcluida));
+  ok((await cartaDe(carta.cartaReadmitido)) === "CANCELADA" && /^ATIVO\|-\|-\|91900000000$/.test(await fichaDe(ID.cartaReadmitido)),
+    "quem foi readmitido no meio do processamento não é minimizado (a carta é cancelada pelo retorno)", await fichaDe(ID.cartaReadmitido));
+  ok((await cartaDe(carta.cartaJaDesligada)) === "CONCLUIDA" && (await fichaDe(ID.cartaJaDesligada)) === "DESLIGADO|CARTA_MUDANCA|2026-11-02|-",
+    "quem já tinha a saída por carta gravada à mão: minimizado, com a data de saída que estava", await fichaDe(ID.cartaJaDesligada));
+  ok((await cartaDe(carta.cartaNormal)) === "CONCLUIDA" && /^DESLIGADO\|CARTA_MUDANCA\|\d{4}-\d{2}-\d{2}\|-$/.test(await fichaDe(ID.cartaNormal)),
+    "a carta comum segue como sempre: concluída e minimizada", await fichaDe(ID.cartaNormal));
+  const msg = fala(processou);
+  ok(/2 saída\(s\) minimizada/.test(msg) && /1 carta\(s\) cancelada\(s\) por retorno/.test(msg) && /2 carta\(s\) cancelada\(s\) porque a pessoa já tinha saído do rol/.test(msg),
+    "a resposta conta as minimizadas, o retorno e as de quem já tinha saído do rol", msg);
+  const trilhaFalecida = await escalar("SELECT TOP 1 CONCAT(Acao, ' ', DadosDepois) FROM AuditLog WHERE Tabela = N'CartasTransito' AND RegistroId = @c ORDER BY AuditId DESC",
+    { c: carta.cartaFalecida });
+  ok(/já saiu do rol/.test(trilhaFalecida || "") && /"situacaoNoRol":"FALECIDO"/.test(trilhaFalecida || ""), "a trilha diz por que a carta foi cancelada", String(trilhaFalecida).slice(0, 200));
 }
 
 principal().then(() => fim("e2e-153 (acesso, revisão de fora)")).catch((e) => { console.error(e); ok(false, "o roteiro quebrou: " + (e && e.message)); fim("e2e-153 (acesso, revisão de fora)"); });

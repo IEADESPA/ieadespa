@@ -283,9 +283,11 @@ async function paraSaida(pool, { congregacaoId }) {
 // A saída (só a Tesouraria Geral): o bloco que chegou e está na Geral é entregue a alguém de uma congregação. A área pode levar, mas o bloco nunca
 // fica com ela: fica registrado como "levado pela área" e passa a ser da congregação. Regra de 24/11/2026 com o detalhe da r30: o bloco que voltou
 // em parte sai de novo SÓ com as folhas livres, pela primeira em branco da devolução, e a data não vem antes da volta; a saída guarda a faixa.
-async function entregar(pool, { primeiraFolha, congregacaoId, pessoa, levadoPelaArea, data, por }) {
+async function entregar(pool, { primeiraFolha, folha, congregacaoId, pessoa, levadoPelaArea, data, por }) {
   const pf = inteiroPositivo(primeiraFolha), cong = inteiroPositivo(congregacaoId);
   if (!pf) return { sucesso: false, mensagem: "Informe a primeira folha do bloco." };
+  const digitada = regra.folhaDigitada(folha);
+  if (digitada.erro) return { sucesso: false, mensagem: digitada.erro };
   if (!cong) return { sucesso: false, mensagem: "Escolha a congregação." };
   const p = regra.pessoaDoLivro(pessoa, "Escolha quem recebeu o bloco.");
   if (p.erro) return { sucesso: false, mensagem: p.erro };
@@ -314,6 +316,9 @@ async function entregar(pool, { primeiraFolha, congregacaoId, pessoa, levadoPela
       SELECT BlocoId, Numero, PrimeiraFolha, UltimaFolha, Situacao, ChegouEm, DevolvidoEm FROM FinBlocos WITH (UPDLOCK, ROWLOCK) WHERE BlocoId = @id`)).recordset[0];
     const naoComeca = { sucesso: false, mensagem: `Não há bloco que comece na folha ${milhar(pf)}.` };
     if (!b) return naoComeca;
+    // a folha digitada tem de ser deste bloco (a tela com a resposta de um número anterior gravaria o bloco errado: portão da parte 2, I1)
+    const fora = regra.folhaForaDoBloco(digitada.folha, { numero: b.Numero, primeiraFolha: b.PrimeiraFolha, ultimaFolha: b.UltimaFolha });
+    if (fora) return { sucesso: false, mensagem: fora };
     const volta = (await pedidoNaTransacao(t).input("id", sql.Int, b.BlocoId).query(`
       SELECT TOP 1 Parcial, PrimeiraFolha, DataRegistro FROM FinLivroBlocos WHERE Tipo = 'ENTRADA' AND BlocoId = @id ORDER BY RegistroId DESC`)).recordset[0];
     // por onde o bloco sai: o que voltou em parte, só pela primeira em branco da devolução (as folhas antes dela são da entrega anterior); o que
@@ -665,9 +670,11 @@ async function rastreio(pool, { folha }) {
 // sem destino antes dela continua com a congregação (nada se anula). A entrada guarda a saída
 // que fecha e, na parcial, a faixa que voltou livre. A exceção e o desfazer travam a mesma linha do bloco antes de mexer nas folhas: o que se
 // confere aqui não muda até o fim da transação.
-async function devolver(pool, { primeiraFolha, pessoa, parcial, primeiraEmBranco, data, por }) {
+async function devolver(pool, { primeiraFolha, folha, pessoa, parcial, primeiraEmBranco, data, por }) {
   const pf = inteiroPositivo(primeiraFolha);
   if (!pf) return { sucesso: false, mensagem: "Informe a primeira folha do bloco." };
+  const digitada = regra.folhaDigitada(folha);
+  if (digitada.erro) return { sucesso: false, mensagem: digitada.erro };
   const p = regra.pessoaDoLivro(pessoa, "Escolha quem trouxe o bloco.");
   if (p.erro) return { sucesso: false, mensagem: p.erro };
   const emParte = regra.devolucaoParcial(parcial);
@@ -695,6 +702,9 @@ async function devolver(pool, { primeiraFolha, pessoa, parcial, primeiraEmBranco
     const saida = b ? await ultimaSaida(t, b.BlocoId) : null;
     // pela primeira folha do bloco ou pela primeira da última saída (o bloco que saiu de novo com as folhas que voltaram livres)
     if (!b || (pf !== Number(b.PrimeiraFolha) && !(saida && pf === saida.primeiraFolha))) return { sucesso: false, mensagem: `Não há bloco que comece na folha ${milhar(pf)}.` };
+    // a folha digitada tem de ser deste bloco (portão da parte 2, I1)
+    const fora = regra.folhaForaDoBloco(digitada.folha, { numero: b.Numero, primeiraFolha: b.PrimeiraFolha, ultimaFolha: b.UltimaFolha });
+    if (fora) return { sucesso: false, mensagem: fora };
     if (b.Situacao === "NA_GERAL" && !saida) return { sucesso: false, mensagem: `O bloco ${milhar(b.Numero)} ainda está na Tesouraria Geral: não saiu para voltar.` };
     if (b.Situacao === "NA_GERAL") {
       // na Geral depois de sair: voltou em parte (revisão m3); só volta de novo depois de sair outra vez

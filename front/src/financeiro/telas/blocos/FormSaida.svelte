@@ -29,19 +29,23 @@
   // ---- o bloco: qualquer folha dele puxa o rastreio quando a pessoa para de digitar ----
   // svelte-ignore state_referenced_locally
   let folhaDigitada = $state(inicial ? numero(inicial) : "");
-  let rastreio = $state.raw<Rastreio | null>(null);
-  let erroRastreio = $state("");
+  const folhaAtual = $derived(soNumeros(folhaDigitada));
+  // a resposta do rastreio vale só para o número que a pessoa digitou: trocou o número, a do anterior sai de cena (a caixa some e o botão espera)
+  // até a do novo chegar; clicar antes gravaria o bloco do número anterior (portão da parte 2, I1)
+  let lido = $state.raw<{ folha: string; rastreio: Rastreio | null; erro: string } | null>(null);
+  const rastreio = $derived(lido && lido.folha === folhaAtual ? lido.rastreio : null);
+  const erroRastreio = $derived(lido && lido.folha === folhaAtual ? lido.erro : "");
+  const esperando = $derived(!!folhaAtual && lido?.folha !== folhaAtual);
   let seqRastreio = 0;
   $effect(() => {
-    const folha = soNumeros(folhaDigitada);
+    const folha = folhaAtual;
     const meu = ++seqRastreio;
-    if (!folha) { rastreio = null; erroRastreio = ""; return; }
+    if (!folha) { lido = null; return; }
     const t = setTimeout(async () => {
       const r = await pedir<Rastreio>("/financeiro/blocos/rastreio" + qs({ folha }));
       if (meu !== seqRastreio) return;
-      if (!r.ok) { rastreio = null; erroRastreio = r.cancelado ? "" : r.mensagem; return; }
-      erroRastreio = "";
-      rastreio = { bloco: r.dados.bloco, contagem: r.dados.contagem, pessoas: r.dados.pessoas, volta: r.dados.volta ?? null };
+      if (!r.ok) { lido = { folha, rastreio: null, erro: r.cancelado ? "" : r.mensagem }; return; }
+      lido = { folha, erro: "", rastreio: { bloco: r.dados.bloco, contagem: r.dados.contagem, pessoas: r.dados.pessoas, volta: r.dados.volta ?? null } };
     }, 400);
     return () => clearTimeout(t);
   });
@@ -76,16 +80,16 @@
   }
 
   function limpar(): void {
-    folhaDigitada = ""; rastreio = null; erroRastreio = "";
+    folhaDigitada = ""; lido = null;
     congId = ""; lideranca = null; pessoa = ""; outroNome = ""; levado = false; data = hojeBrasilia();
     erros = { folha: "", cong: "", pessoa: "", data: "" };
     seqLideranca++;
   }
 
   async function registrar(): Promise<void> {
-    if (gravando) return;
+    if (gravando || esperando) return;
     const e = { folha: "", cong: "", pessoa: "", data: "" };
-    if (!soNumeros(folhaDigitada)) e.folha = "Informe a primeira folha do bloco.";
+    if (!folhaAtual) e.folha = "Informe a primeira folha do bloco.";
     if (!congId) e.cong = "Escolha a congregação.";
     let quemRecebe: { membroId: number } | { nome: string } | null = null;
     if (pessoa === "outra") {
@@ -98,10 +102,12 @@
     erros = e;
     // a caixa vermelha já diz por que o bloco não sai; sem o bloco ainda (a pessoa digitando), espera
     if (e.folha || e.cong || e.pessoa || e.data || !rastreio || !caixa || caixa.erro || !quemRecebe) return;
-    const b = rastreio.bloco;
+    // o bloco da caixa tem de ser o do número no campo; a folha digitada vai junto, e o servidor confere de novo
+    const b = rastreio.bloco, folha = Number(folhaAtual);
+    if (folha < b.primeiraFolha || folha > b.ultimaFolha) return;
     gravando = true;
     const r = await pedir<{ mensagem: string }>("/financeiro/blocos/entregar", { metodo: "POST", corpo: {
-      primeiraFolha: b.parcial && b.faixa ? b.faixa.primeiraFolha : b.primeiraFolha, congregacaoId: Number(congId), pessoa: quemRecebe, levadoPelaArea: levado, data
+      primeiraFolha: b.parcial && b.faixa ? b.faixa.primeiraFolha : b.primeiraFolha, folha, congregacaoId: Number(congId), pessoa: quemRecebe, levadoPelaArea: levado, data
     } });
     gravando = false;
     if (!r.ok) { avisarFalha(r); return; }
@@ -182,7 +188,7 @@
       </div>
     {/if}
     <div class="fim">
-      <button type="button" class="ouro" disabled={gravando} aria-busy={gravando} onclick={() => void registrar()}><Icone nome="check" tam={18} traco={2.2} />Registrar a saída</button>
+      <button type="button" class="ouro" disabled={gravando || esperando} aria-busy={gravando} onclick={() => void registrar()}><Icone nome="check" tam={18} traco={2.2} />Registrar a saída</button>
     </div>
     {#if celular}<span class="por">Entregue por {quem} (quem está entrando).</span>{/if}
   </Quadro>

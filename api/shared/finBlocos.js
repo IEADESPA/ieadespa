@@ -239,9 +239,27 @@ function papelNoHistorico({ escopoTipo, papel, congregacao, area } = {}) {
   return "Tesouraria Geral";
 }
 
+// ---- a folha digitada (portão da parte 2, I1): a saída e a entrada vão pela primeira folha do bloco, e a tela manda junto a folha que a pessoa
+// digitou. Se ela não é do bloco que a primeira folha aponta, a tela estava com a resposta de um número anterior: o servidor recusa e diz por quê ----
+
+/** a folha digitada que vem no pedido: ausente (pedido antigo) não muda nada; presente, só número inteiro positivo */
+function folhaDigitada(v) {
+  if (v === undefined || v === null || v === "") return { folha: null, erro: null };
+  if (typeof v !== "number" || !Number.isInteger(v) || v <= 0 || v > 2147483647) return { folha: null, erro: "A folha digitada não confere." };
+  return { folha: v, erro: null };
+}
+
+/** a recusa quando a folha digitada não é do bloco ({numero, primeiraFolha, ultimaFolha}); null quando é (ou quando não veio) */
+function folhaForaDoBloco(folha, { numero, primeiraFolha, ultimaFolha }) {
+  if (folha === null || folha === undefined) return null;
+  if (folha >= Number(primeiraFolha) && folha <= Number(ultimaFolha)) return null;
+  return `A folha ${milhar(folha)} não é do bloco ${milhar(numero)}: confira o número.`;
+}
+
 module.exports = {
   FOLHAS_POR_BLOCO, POR_PAGINA, MAX_BLOCOS_POR_LOTE,
   numeroDoBloco, blocosDoLote, posicaoDaFolha, situacaoDoBloco, filtroDaLista, procuraDaLista, paginaDaLista, excecaoDaFolha,
   destinoDaTela, contagemDasFolhas, pessoaDoLivro, nomeDoDestino, porPaginaDoLivro, blocosAgora,
-  levadoPelaArea, desfazimentoDaFolha, devolucaoParcial, faixaLivre, mensagemDaParcial, mensagemJaVoltouParcial, horaBrasilia, papelNoHistorico
+  levadoPelaArea, desfazimentoDaFolha, devolucaoParcial, faixaLivre, mensagemDaParcial, mensagemJaVoltouParcial, horaBrasilia, papelNoHistorico,
+  folhaDigitada, folhaForaDoBloco
 };

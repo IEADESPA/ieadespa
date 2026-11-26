@@ -5,7 +5,7 @@
 //
 // Rodar (pelo PowerShell; pelo Bash o Edge sem tela não abre neste notebook):
 //   node tools/front-financeiro/navegador.js            (PUPPETEER_CORE = a pasta do puppeteer-core; sem ela, tools/csp-e2e/node_modules)
-//   LISTA=1 mostra cada caso aprovado; SO=folhas, SO=desfazer, SO=livro, SO=saida, SO=vazios ou SO=aviso roda só uma parte.
+//   LISTA=1 mostra cada caso aprovado; SO=folhas, SO=desfazer, SO=livro, SO=saida, SO=rastreio, SO=vazios ou SO=aviso roda só uma parte.
 "use strict";
 const fs = require("fs");
 const os = require("os");
@@ -687,7 +687,7 @@ async function provarLivro() {
   const lv = pedidos(api, "/api/financeiro/blocos/livro").length;
   await clicar(page, "Registrar a entrada");
   const dv = await esperarPedido(api, "/api/financeiro/blocos/devolver", "POST", d0);
-  ok(dv && JSON.stringify(dv.corpo) === JSON.stringify({ primeiraFolha: 68001, pessoa: { membroId: 301 }, parcial: false }), "geral: devolve pela PRIMEIRA folha do bloco (não a digitada), a pessoa do cadastro e completa", dv && dv.corpo);
+  ok(dv && JSON.stringify(dv.corpo) === JSON.stringify({ primeiraFolha: 68001, folha: 68010, pessoa: { membroId: 301 }, parcial: false }), "geral: devolve pela PRIMEIRA folha do bloco (e a digitada junto, para o servidor conferir), a pessoa do cadastro e completa", dv && dv.corpo);
   const relido = await esperarPedido(api, "/api/financeiro/blocos/livro", "GET", lv);
   ok(relido && (!relido.busca.pagina || relido.busca.pagina === "1"), "geral: depois da entrada, o livro volta à 1ª página", relido && relido.busca);
   await calmo(page);
@@ -702,7 +702,7 @@ async function provarLivro() {
   let dAntes = pedidos(api, "/api/financeiro/blocos/devolver", "POST").length;
   await clicar(page, "Registrar a entrada");
   let dEz = await esperarPedido(api, "/api/financeiro/blocos/devolver", "POST", dAntes);
-  ok(dEz && JSON.stringify(dEz.corpo) === JSON.stringify({ primeiraFolha: 68001, pessoa: { nome: "Ezequiel Ramos" }, parcial: false }), "geral: quem levou sem cadastro vai pelo nome", dEz && dEz.corpo);
+  ok(dEz && JSON.stringify(dEz.corpo) === JSON.stringify({ primeiraFolha: 68001, folha: 68001, pessoa: { nome: "Ezequiel Ramos" }, parcial: false }), "geral: quem levou sem cadastro vai pelo nome", dEz && dEz.corpo);
   // outra pessoa: o nome escrito
   await digitar(page, "Primeira folha do bloco", "68001");
   await espera(700);
@@ -711,7 +711,7 @@ async function provarLivro() {
   dAntes = pedidos(api, "/api/financeiro/blocos/devolver", "POST").length;
   await clicar(page, "Registrar a entrada");
   dEz = await esperarPedido(api, "/api/financeiro/blocos/devolver", "POST", dAntes);
-  ok(dEz && JSON.stringify(dEz.corpo) === JSON.stringify({ primeiraFolha: 68001, pessoa: { nome: "Marta Lima" }, parcial: false }), "geral: outra pessoa vai pelo nome escrito", dEz && dEz.corpo);
+  ok(dEz && JSON.stringify(dEz.corpo) === JSON.stringify({ primeiraFolha: 68001, folha: 68001, pessoa: { nome: "Marta Lima" }, parcial: false }), "geral: outra pessoa vai pelo nome escrito", dEz && dEz.corpo);
   await calmo(page);
   ok(/^O bloco 1\.360 já foi devolvido em 03\/11\/2026\.$/.test(await ultimoAviso(page)), "geral: a recusa do bloco que já voltou aparece para a pessoa", await ultimoAviso(page));
   // o bloco que ainda está na Geral e o já devolvido: o rastreio não quebra e não oferece o registro
@@ -752,7 +752,7 @@ async function provarLivro() {
   const dP = pedidos(api, "/api/financeiro/blocos/devolver", "POST").length;
   await clicar(page, "Registrar a entrada");
   const dvP = await esperarPedido(api, "/api/financeiro/blocos/devolver", "POST", dP);
-  ok(dvP && JSON.stringify(dvP.corpo) === JSON.stringify({ primeiraFolha: 66001, pessoa: { membroId: 101 }, parcial: true, primeiraEmBranco: 66040 }), "geral: a parcial vai com a primeira em branco", dvP && dvP.corpo);
+  ok(dvP && JSON.stringify(dvP.corpo) === JSON.stringify({ primeiraFolha: 66001, folha: 66001, pessoa: { membroId: 101 }, parcial: true, primeiraEmBranco: 66040 }), "geral: a parcial vai com a primeira em branco", dvP && dvP.corpo);
   await calmo(page);
   ok((await ultimoAviso(page)) === "Bloco 1.320 de volta, parcial: as folhas 66.040 a 66.050 estão livres para outra entrega.", "geral: a confirmação da parcial", await ultimoAviso(page));
   ok(!(await caixaSaida(page)) && !(await textoTela(page)).includes("Primeira folha em branco"), "geral: o formulário fica limpo, de novo em \"Completa\"");
@@ -1113,7 +1113,7 @@ async function provarSaida() {
   const lv = pedidos(api, "/api/financeiro/blocos/livro").length;
   await clicar(page, "Registrar a saída");
   const ent = await esperarPedido(api, "/api/financeiro/blocos/entregar", "POST", e0);
-  ok(ent && JSON.stringify(ent.corpo) === JSON.stringify({ primeiraFolha: 70151, congregacaoId: 2, pessoa: { membroId: 101 }, levadoPelaArea: false, data: hojeBrasilia() }),
+  ok(ent && JSON.stringify(ent.corpo) === JSON.stringify({ primeiraFolha: 70151, folha: 70160, congregacaoId: 2, pessoa: { membroId: 101 }, levadoPelaArea: false, data: hojeBrasilia() }),
     "geral: a saída vai pela PRIMEIRA folha do bloco, com a pessoa do cadastro, sem a área e a data", ent && ent.corpo);
   const relido = await esperarPedido(api, "/api/financeiro/blocos/livro", "GET", lv);
   ok(relido && (!relido.busca.pagina || relido.busca.pagina === "1"), "geral: o livro volta à 1ª página", relido && relido.busca);
@@ -1244,6 +1244,83 @@ async function provarSaida() {
   await fechar(s, "saída geral celular");
 }
 
+// ---- o rastreio velho (portão da parte 2, I1): a pessoa troca o número e clica antes de o rastreio do número novo voltar. O botão fica parado até
+// o bloco do número digitado chegar; a caixa do bloco anterior some; o que vai ao servidor é o bloco do número digitado, com o número do bloco ----
+// troca o número e, no mesmo instante (antes dos 400 ms do rastreio), lê o botão e a caixa e clica
+async function trocarEClicar(page, rotulo, texto, botao) {
+  const el = (await campo(page, rotulo)).asElement();
+  if (!el) return null;
+  await el.click();
+  await el.evaluate((e) => e.select());
+  await el.type(texto);
+  return page.evaluate((botao) => {
+    const raiz = document.querySelector("#financeiroRaiz");
+    const b = [...raiz.querySelectorAll("button")].find((x) => x.textContent.replace(/\s+/g, " ").trim() === botao && x.offsetParent !== null);
+    const c = raiz.querySelector(".caixa-bloco");
+    const r = { desligado: !!b && b.disabled, caixa: c ? c.innerText.replace(/\s+/g, " ").trim() : null };
+    if (b) b.click();
+    return r;
+  }, botao);
+}
+async function provarRastreioVelho() {
+  // a saída: 70.160 (o 1.403) com Vila Nova e a Rute, troca para 64.436 (o 1.288, as livres do que voltou em parte) e clica na hora
+  let s = await abrir("geral", "notebook");
+  let { page, api } = s;
+  await clicar(page, "Livro de entrada e saída");
+  const ps0 = pedidos(api, "/api/financeiro/blocos/para-saida").length;
+  await clicar(page, "Registrar saída");
+  await esperarPedido(api, "/api/financeiro/blocos/para-saida", "GET", ps0);
+  await calmo(page);
+  await folhaDaSaida(page, api, "70.160");
+  const pc0 = pedidos(api, "/api/financeiro/blocos/para-saida").length;
+  await escolher(page, "Congregação", "Vila Nova");
+  await esperarPedido(api, "/api/financeiro/blocos/para-saida", "GET", pc0);
+  await calmo(page);
+  await escolher(page, "Entregue a", "Rute Santos · tesoureira de Vila Nova");
+  const e0 = pedidos(api, "/api/financeiro/blocos/entregar", "POST").length;
+  const r0 = pedidos(api, "/api/financeiro/blocos/rastreio").length;
+  let v = await trocarEClicar(page, "Primeira folha do bloco", "64.436", "Registrar a saída");
+  ok(v && v.desligado, "saída: trocou o número, o botão fica parado até o bloco novo chegar", v);
+  ok(v && !(v.caixa || "").includes("1.403"), "saída: a caixa do bloco anterior some na troca", v);
+  await espera(250);
+  ok(pedidos(api, "/api/financeiro/blocos/entregar", "POST").length === e0, "saída: o clique antes do rastreio novo não grava o bloco anterior",
+    pedidos(api, "/api/financeiro/blocos/entregar", "POST").slice(e0).map((p) => p.corpo));
+  const rn = await esperarPedido(api, "/api/financeiro/blocos/rastreio", "GET", r0);
+  ok(rn && rn.busca.folha === "64436", "saída: o rastreio do número novo", rn && rn.busca);
+  await calmo(page);
+  const cx = await caixaSaida(page);
+  ok(cx && !cx.erro && cx.texto.startsWith("Bloco 1.288"), "saída: com o bloco novo, a caixa dele", cx);
+  await clicar(page, "Registrar a saída");
+  const ent = await esperarPedido(api, "/api/financeiro/blocos/entregar", "POST", e0);
+  ok(ent && ent.corpo.primeiraFolha === 64436 && ent.corpo.folha === 64436, "saída: grava o bloco do número digitado, com a folha digitada junto", ent && ent.corpo);
+  await fechar(s, "rastreio velho na saída");
+  // a entrada: 68.010 (o 1.360, de Bela Vista) com a Lia, troca para 66.001 (o 1.320, de Vila Nova) e clica na hora
+  s = await abrir("geral", "notebook");
+  ({ page, api } = s);
+  await clicar(page, "Livro de entrada e saída");
+  await folhaDaSaida(page, api, "68.010");
+  await escolher(page, "Devolvido por", "Lia Fontes · tesoureira de Bela Vista");
+  const d0 = pedidos(api, "/api/financeiro/blocos/devolver", "POST").length;
+  const r1 = pedidos(api, "/api/financeiro/blocos/rastreio").length;
+  v = await trocarEClicar(page, "Primeira folha do bloco", "66.001", "Registrar a entrada");
+  ok(v && v.desligado, "entrada: trocou o número, o botão fica parado até o bloco novo chegar", v);
+  ok(v && !(v.caixa || "").includes("1.360"), "entrada: a caixa do bloco anterior some na troca", v);
+  await espera(250);
+  ok(pedidos(api, "/api/financeiro/blocos/devolver", "POST").length === d0, "entrada: o clique antes do rastreio novo não devolve o bloco anterior",
+    pedidos(api, "/api/financeiro/blocos/devolver", "POST").slice(d0).map((p) => p.corpo));
+  const rn2 = await esperarPedido(api, "/api/financeiro/blocos/rastreio", "GET", r1);
+  ok(rn2 && rn2.busca.folha === "66001", "entrada: o rastreio do número novo", rn2 && rn2.busca);
+  await calmo(page);
+  const cx2 = await caixaSaida(page);
+  ok(cx2 && !cx2.erro && cx2.texto.startsWith("Bloco 1.320"), "entrada: com o bloco novo, a caixa dele", cx2);
+  await escolher(page, "Devolvido por", "Rute Santos · tesoureira de Vila Nova");
+  await clicar(page, "Registrar a entrada");
+  const dv = await esperarPedido(api, "/api/financeiro/blocos/devolver", "POST", d0);
+  ok(dv && JSON.stringify(dv.corpo) === JSON.stringify({ primeiraFolha: 66001, folha: 66001, pessoa: { membroId: 101 }, parcial: false }),
+    "entrada: devolve o bloco do número digitado, com a folha digitada junto", dv && dv.corpo);
+  await fechar(s, "rastreio velho na entrada");
+}
+
 (async () => {
   srv = await criarServidor({ raiz: RAIZ, csp: true, permissoes: modelo.permissoes });
   nav = await puppeteer.launch({
@@ -1255,6 +1332,7 @@ async function provarSaida() {
     if (!SO || SO === "desfazer") { console.log("Desfazer e o histórico da folha"); await provarDesfazer(); }
     if (!SO || SO === "livro") { console.log("Livro de entrada e saída"); await provarLivro(); }
     if (!SO || SO === "saida") { console.log("Registrar saída"); await provarSaida(); }
+    if (!SO || SO === "rastreio") { console.log("O rastreio velho (trocar o número e clicar na hora)"); await provarRastreioVelho(); }
     if (!SO || SO === "vazios") { console.log("As listas vazias"); await provarVazios(); }
     if (!SO || SO === "aviso") { console.log("O aviso das telas novas"); await provarAviso(); }
   } finally {

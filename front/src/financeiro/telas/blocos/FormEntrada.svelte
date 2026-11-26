@@ -25,8 +25,12 @@
   const quemEntra = ponte().sessao().nome;
 
   let folhaDigitada = $state("");
-  let rastreio = $state.raw<Rastreio | null>(null);
-  let erroRastreio = $state("");
+  const folhaAtual = $derived(soNumeros(folhaDigitada));
+  // a resposta do rastreio vale só para o número que a pessoa digitou: trocou o número, a do anterior sai de cena (a caixa some e o botão espera)
+  // até a do novo chegar; clicar antes devolveria o bloco do número anterior (portão da parte 2, I1)
+  let lido = $state.raw<{ folha: string; rastreio: Rastreio | null; erro: string } | null>(null);
+  const rastreio = $derived(lido && lido.folha === folhaAtual ? lido.rastreio : null);
+  const erroRastreio = $derived(lido && lido.folha === folhaAtual ? lido.erro : "");
   let como = $state<"completa" | "parcial">("completa");
   let brancoDigitado = $state("");
   let quem = $state("");
@@ -37,18 +41,18 @@
   // o rastreio vem sozinho quando a pessoa para de digitar (só os algarismos: "68.001" é a folha 68001)
   let seqRastreio = 0;
   $effect(() => {
-    const folha = soNumeros(folhaDigitada);
+    const folha = folhaAtual;
     const meu = ++seqRastreio;
-    if (!folha) { rastreio = null; erroRastreio = ""; return; }
+    if (!folha) { lido = null; return; }
     const t = setTimeout(async () => {
       const r = await pedir<Rastreio>("/financeiro/blocos/rastreio" + qs({ folha }));
       if (meu !== seqRastreio) return;
       quem = ""; outroNome = ""; falta = ""; como = "completa";
-      if (!r.ok) { rastreio = null; erroRastreio = r.cancelado ? "" : r.mensagem; brancoDigitado = ""; return; }
-      erroRastreio = "";
-      rastreio = { bloco: r.dados.bloco, contagem: r.dados.contagem, pessoas: r.dados.pessoas, primeiraEmBranco: r.dados.primeiraEmBranco ?? null,
+      if (!r.ok) { lido = { folha, rastreio: null, erro: r.cancelado ? "" : r.mensagem }; brancoDigitado = ""; return; }
+      const novo: Rastreio = { bloco: r.dados.bloco, contagem: r.dados.contagem, pessoas: r.dados.pessoas, primeiraEmBranco: r.dados.primeiraEmBranco ?? null,
         inexistentes: r.dados.inexistentes ?? [], volta: r.dados.volta ?? null };
-      brancoDigitado = rastreio.primeiraEmBranco ? numero(rastreio.primeiraEmBranco) : "";
+      lido = { folha, rastreio: novo, erro: "" };
+      brancoDigitado = novo.primeiraEmBranco ? numero(novo.primeiraEmBranco) : "";
     }, 400);
     return () => clearTimeout(t);
   });
@@ -67,11 +71,14 @@
   const posicaoDigitada = $derived(rastreio && branco >= rastreio.bloco.primeiraFolha && branco <= rastreio.bloco.ultimaFolha ? posicao(branco, rastreio.bloco.primeiraFolha) : 0);
 
   function limpar(): void {
-    folhaDigitada = ""; rastreio = null; erroRastreio = ""; como = "completa"; brancoDigitado = ""; quem = ""; outroNome = ""; falta = "";
+    folhaDigitada = ""; lido = null; como = "completa"; brancoDigitado = ""; quem = ""; outroNome = ""; falta = "";
   }
 
   async function registrar(): Promise<void> {
     if (gravando || !rastreio || !podeVoltar) return;
+    // o bloco da caixa tem de ser o do número no campo; a folha digitada vai junto, e o servidor confere de novo
+    const b = rastreio.bloco, folha = Number(folhaAtual);
+    if (folha < b.primeiraFolha || folha > b.ultimaFolha) return;
     let pessoa: { membroId: number } | { nome: string };
     if (quem === "outra") {
       if (!outroNome.trim()) { falta = "Escreva o nome de quem trouxe o bloco."; return; }
@@ -84,8 +91,8 @@
     if (como === "parcial" && !branco) { falta = "Informe a primeira folha em branco do bloco."; return; }
     falta = "";
     gravando = true;
-    const corpo = como === "parcial" ? { primeiraFolha: rastreio.bloco.primeiraFolha, pessoa, parcial: true, primeiraEmBranco: branco }
-      : { primeiraFolha: rastreio.bloco.primeiraFolha, pessoa, parcial: false };
+    const corpo = como === "parcial" ? { primeiraFolha: b.primeiraFolha, folha, pessoa, parcial: true, primeiraEmBranco: branco }
+      : { primeiraFolha: b.primeiraFolha, folha, pessoa, parcial: false };
     const r = await pedir<{ mensagem: string }>("/financeiro/blocos/devolver", { metodo: "POST", corpo });
     gravando = false;
     if (!r.ok) { avisarFalha(r); return; }

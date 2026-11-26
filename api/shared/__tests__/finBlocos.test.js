@@ -492,3 +492,18 @@ describe("a saída (r30-blocos-saida)", () => {
     expect((await chamar({ acao: "para-saida", metodo: "POST", token: GERAL() })).status).toBe(404);
   });
 });
+describe("a folha digitada vai junto (portão da parte 2, I1)", () => {
+  test("sem a folha digitada (pedido antigo), nada muda; com ela, só número inteiro positivo", () => {
+    for (const v of [undefined, null, ""]) expect(regra.folhaDigitada(v)).toEqual({ folha: null, erro: null });
+    expect(regra.folhaDigitada(64436)).toEqual({ folha: 64436, erro: null });
+    for (const v of ["64436", "abc", -1, 0, 1.5, "1 OR 1=1", 99999999999, {}, []]) expect(regra.folhaDigitada(v)).toEqual({ folha: null, erro: "A folha digitada não confere." });
+  });
+  test("a folha digitada tem de ser do bloco que a primeira folha aponta (a resposta de um número anterior gravaria o bloco errado)", () => {
+    const b = { numero: 1403, primeiraFolha: 70151, ultimaFolha: 70200 };
+    expect(regra.folhaForaDoBloco(null, b)).toBeNull();
+    expect(regra.folhaForaDoBloco(70151, b)).toBeNull();
+    expect(regra.folhaForaDoBloco(70200, b)).toBeNull();
+    expect(regra.folhaForaDoBloco(64436, b)).toBe("A folha 64.436 não é do bloco 1.403: confira o número.");
+    expect(regra.folhaForaDoBloco(70201, b)).toBe("A folha 70.201 não é do bloco 1.403: confira o número.");
+  });
+});

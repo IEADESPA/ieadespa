@@ -320,8 +320,17 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
   ok(r.status === 200 && r.body.bloco.numero === 1410 && r.body.bloco.situacao === "na-geral" && r.body.bloco.chegouEm === "2026-11-01" && r.body.bloco.parcial === false
     && JSON.stringify(r.body.bloco.faixa) === JSON.stringify({ primeiraFolha: 70501, ultimaFolha: 70550 }),
     "qualquer folha acha o bloco que nunca saiu: a faixa desde a primeira folha e a chegada", r.body.bloco);
-  r = await POST(H, "entregar", geral, { primeiraFolha: 70501, congregacaoId: VILA_NOVA, pessoa: { membroId: TESOUREIRA_LOCAL }, data: "2026-11-20" });
-  ok(r.status === 200 && r.body.mensagem === `Bloco 1.410 entregue a ${vn.Nome}. Está no livro.`, "o 1.410 sai para Vila Nova (a confirmação da r30)", r.body);
+  // a folha digitada vai junto (portão da parte 2, I1): a de outro bloco é a tela com a resposta de um número anterior, e o servidor recusa
+  const antesDigitada = await retratoFin();
+  r = await POST(H, "entregar", geral, { primeiraFolha: 70501, folha: 70160, congregacaoId: VILA_NOVA, pessoa: { membroId: TESOUREIRA_LOCAL }, data: "2026-11-20" });
+  ok(r.status === 422 && r.body.mensagem === "A folha 70.160 não é do bloco 1.410: confira o número.", "a saída com a folha digitada de outro bloco: recusa e diz por quê", r.body);
+  for (const folha of ["70520", -1, 1.5, "1 OR 1=1"]) {
+    r = await POST(H, "entregar", geral, { primeiraFolha: 70501, folha, congregacaoId: VILA_NOVA, pessoa: { membroId: TESOUREIRA_LOCAL }, data: "2026-11-20" });
+    ok(r.status === 422 && r.body.mensagem === "A folha digitada não confere.", `a folha digitada que não é número (${JSON.stringify(folha)}): 422`, r.body);
+  }
+  ok((await retratoFin()) === antesDigitada, "as recusas da folha digitada não mexeram no banco");
+  r = await POST(H, "entregar", geral, { primeiraFolha: 70501, folha: 70520, congregacaoId: VILA_NOVA, pessoa: { membroId: TESOUREIRA_LOCAL }, data: "2026-11-20" });
+  ok(r.status === 200 && r.body.mensagem === `Bloco 1.410 entregue a ${vn.Nome}. Está no livro.`, "o 1.410 sai para Vila Nova, com a folha digitada do bloco (a confirmação da r30)", r.body);
   // o livro inteiro, de 5 em 5 (a saída do 1.410, de 20/11, vem depois das reentregas de 21/11)
   const todas = [];
   for (let pg = 1; pg <= 10; pg++) {
@@ -347,10 +356,12 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
   ok(r.status === 422 && r.body.mensagem === "A folha 70.530 já está lançada: a primeira em branco vem depois dela.", "a primeira em branco digitada já está lançada (o texto da r30)", r.body);
   r = await POST(H, "devolver", geral, { primeiraFolha: 70501, pessoa: { nome: "Rute Santos" }, parcial: true, primeiraEmBranco: 70536, data: "2026-11-22" });
   ok(r.status === 422 && r.body.mensagem === "A folha 70.536 já está cancelada: a primeira em branco vem depois dela.", "e a que já está cancelada", r.body);
+  r = await POST(H, "devolver", geral, { primeiraFolha: 70501, folha: 70551, pessoa: { membroId: TESOUREIRA_LOCAL }, parcial: true, primeiraEmBranco: 70537, data: "2026-11-22" });
+  ok(r.status === 422 && r.body.mensagem === "A folha 70.551 não é do bloco 1.410: confira o número.", "a entrada com a folha digitada de outro bloco: recusa e diz por quê (I1)", r.body);
   ok((await retratoFin()) === antesDev, "as recusas não mexeram no banco");
   r = await GET(H, "rastreio", geral, { folha: 70501 });
   ok(r.status === 200 && r.body.primeiraEmBranco === 70537, "o rastreio sugere a 70.537, a seguinte à última com destino", r.body.primeiraEmBranco);
-  r = await POST(H, "devolver", geral, { primeiraFolha: 70501, pessoa: { membroId: TESOUREIRA_LOCAL }, parcial: true, primeiraEmBranco: 70537, data: "2026-11-22" });
+  r = await POST(H, "devolver", geral, { primeiraFolha: 70501, folha: 70501, pessoa: { membroId: TESOUREIRA_LOCAL }, parcial: true, primeiraEmBranco: 70537, data: "2026-11-22" });
   ok(r.status === 200 && r.body.mensagem === "Bloco 1.410 de volta, parcial: as folhas 70.537 a 70.550 estão livres para outra entrega.", "o 1.410 de volta, parcial", r.body);
   const todasDev = [];
   for (let pg = 1; pg <= 10; pg++) {

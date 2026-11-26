@@ -50,6 +50,39 @@ describe("o dia do lançamento: o mês de agora ou o anterior, nunca depois de h
   });
 });
 
+describe("o mês que a tela pede", () => {
+  test("vazio é o de agora; um mês que passou vale; depois de agora e o lixo não", () => {
+    expect(r.mesDaTela(undefined, "2026-12-02")).toBe("2026-12-01");
+    expect(r.mesDaTela("", "2026-12-02")).toBe("2026-12-01");
+    expect(r.mesDaTela("2026-11", "2026-12-02")).toBe("2026-11-01");
+    expect(r.mesDaTela("2025-01", "2026-12-02")).toBe("2025-01-01");
+    for (const v of ["2027-01", "2026-13", "2026-00", "2026-1", "2026-11-01", "1999-12", "' OR 1=1 --", 202611, ["2026-11"], {}]) expect(r.mesDaTela(v, "2026-12-02")).toBeNull();
+  });
+  test("o último dia do mês", () => {
+    expect(r.ultimoDia("2026-11-01")).toBe("2026-11-30");
+    expect(r.ultimoDia("2028-02-01")).toBe("2028-02-29");
+    expect(r.ultimoDia("2026-12-01")).toBe("2026-12-31");
+  });
+});
+
+describe("a correção", () => {
+  test("o motivo é obrigatório e os campos seguem a regra da linha", () => {
+    const base = { tipo: "DIZIMO", forma: "PIX", valor: "205,00", pessoa: { membroId: 700128 }, motivo: "  digitei 250 no lugar de 205 " };
+    expect(r.validarCorrecao(base)).toEqual({ ok: true, motivo: "digitei 250 no lugar de 205", campos: { tipo: "DIZIMO", forma: "PIX", valor: 20500, voluntaria: null, membroId: 700128, nome: null } });
+    expect(r.validarCorrecao({ ...base, motivo: "   " }).mensagem).toBe("Escreva o motivo da correção.");
+    expect(r.validarCorrecao({ ...base, motivo: "x".repeat(301) }).mensagem).toBe("O motivo tem no máximo 300 letras.");
+    expect(r.validarCorrecao({ ...base, valor: "-1" }).mensagem).toBe("Informe o valor.");
+    expect(r.validarCorrecao({ ...base, pessoa: undefined }).mensagem).toBe("O dízimo precisa de quem deu (do cadastro ou o nome digitado).");
+    expect(r.validarCorrecao(null).ok).toBe(false);
+  });
+  test("o que mudou", () => {
+    const antes = { tipo: "DIZIMO", forma: "PIX", valor: 25000, voluntaria: null, membroId: 700128, nome: null };
+    expect(r.mudancas(antes, { ...antes })).toEqual([]);
+    expect(r.mudancas(antes, { ...antes, valor: 20500, forma: "ESPECIE" })).toEqual(["forma", "valor"]);
+    expect(r.mudancas(antes, { ...antes, membroId: null, nome: "Maria O." })).toEqual(["membroId", "nome"]);
+  });
+});
+
 describe("a linha da planilha", () => {
   const dizimo = { folha: 70165, referente: "ESTE_MES", tipo: "DIZIMO", forma: "PIX", valor: "320,00", voluntaria: "30,00", pessoa: { membroId: 700128 } };
   test("o dízimo com a voluntária junto", () => {

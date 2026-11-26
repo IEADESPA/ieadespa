@@ -79,6 +79,18 @@ function diaDoLancamento(dia, hoje, mandouOAnterior) {
   return { ok: true, dia: d, mes };
 }
 
+/** o mês pedido pela tela ("2026-11"; vazio = o de agora) → "2026-11-01"; null quando não vale (lixo, mês que não existe, depois de agora) */
+function mesDaTela(v, hoje) {
+  const agora = mesDe(hoje);
+  if (!tem(v)) return agora;
+  if (typeof v !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(v)) return null;
+  const mes = `${v}-01`;
+  return mes >= "2020-01-01" && mes <= agora ? mes : null;
+}
+
+/** o último dia do mês ("2026-11-01" → "2026-11-30"): o dia que a tela propõe para lançar no mês anterior */
+const ultimoDia = (mes) => new Date(Date.parse(`${mesSeguinte(mes)}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
+
 // ---- a linha ----
 
 /** quem deu: o membro do cadastro ({ membroId }) ou o nome digitado ({ nome }), nunca os dois; nada = sem nome */
@@ -283,7 +295,7 @@ function tiraDoBloco({ bloco, lancamentos, excecoes, lancadasSemDados, proxima, 
 module.exports = {
   TIPOS, FORMAS, REFERENTES, MAX_CENTAVOS, MAX_NOME, MAX_MOTIVO,
   lerValor, decimalDoBanco, centavosDoBanco, reais,
-  mesDe, mesSeguinte, mesAnterior, mesSoma, nomeDoMes, dataValida, diaDoLancamento,
+  mesDe, mesSeguinte, mesAnterior, mesSoma, nomeDoMes, dataValida, diaDoLancamento, mesDaTela, ultimoDia,
   lerPessoa, validarLinha, validarCorrecao, mudancas,
   montarPlanilha, totaisDoMes, posicoesEmTexto, tiraDoBloco
 };

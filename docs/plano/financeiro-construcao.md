@@ -251,3 +251,68 @@ incremento 1b. A produção só com o OK dele, numa missão própria, com a troc
 7. (24/11) Os pendentes da devolução completa (o recibo ainda não lançado "passa normalmente", regra de 24/11; o bloco devolvido não
    muda mais): também ganham destino pelo lançamento do incremento 3? É a leitura do construtor, não decisão; confirmar no desenho do
    lançamento.
+
+## 7. O incremento 3 (lançar dízimos e ofertas): o plano da construção (26/11/2026)
+
+**O desenho:** r24 `r24-lancamento` op. 1, "aprovado como está" (rodada 24), da página da rodada 26 (a página saiu de
+`design/propostas`; a cópia está no histórico do Git, commit `04d9cf47`). Quatro vistas: a **planilha** (a congregação; a Tesouraria
+Geral "lançando por" uma congregação), a **linha de lançar** (poucas entradas: o valor grande, as opções em botões com as teclas D, C,
+V, P e E), o **celular** (a linha de lançar em cartão) e a **área**, que só acompanha (o `r20LancArea`: a última entrega, o último
+lançamento, o lançado no mês, o bloco e a folha agora, o que precisa). Com a resposta 3 de 22/11: **sem "marcada em novembro"**.
+
+**Fora do incremento 3** (cada um no seu): o dízimo digital ("Pix ligado", "Há N dízimos digitais para ligar", "Salvar: ligue antes",
+incremento 4); o pré-repasse e o repasse (5, esperando o desenho da rodada 27); o fechamento do mês (desenho próprio).
+
+**As regras que valem** (seção "Rodadas 21 e 22" do plano da fase 10 e as respostas de 22/11):
+
+- Cada folha do bloco é uma linha, na ordem do papel; os blocos seguem de um mês para o outro, até acabar o bloco e começar o novo.
+- Na hora de lançar só existem "Este mês" e "Mês posterior"; ninguém marca "mês anterior". O dízimo soma no mês a que se refere.
+- O mês começa na 1ª folha marcada "mês posterior" no mês anterior: essas vêm listadas, com o nome e o valor obrigatórios; as que
+  somaram no mês anterior vêm com a tarja "referente ao mês anterior", sozinhas, e ninguém digita nada; depois, a sequência do mês.
+  No mês anterior, a folha marcada "mês posterior" fica só com a linha "referente ao mês posterior", sem nome e sem valor.
+- O dizimista é procurado no cadastro de membros; se não for achado, digita-se o nome ("nome digitado"). A oferta de culto pode ir
+  sem nome. A oferta voluntária pode ir junto do dízimo ("+ Voluntária") ou sozinha.
+- A folha arrancada ou cancelada vai junto, obrigatória, na planilha (com o motivo). A hora entra sozinha ao salvar; o dia do
+  lançamento vem com hoje e pode ser outro (o dízimo de novembro entregue em 02/12 se lança em novembro, recebido no dia 30).
+- A folha sem destino de uma entrega que já voltou ganha destino pelo lançamento, com a `SaidaId` da entrega original (decisão N3 de
+  24/11, acima), mesmo com o bloco já na Geral ou com outra congregação.
+
+**O servidor primeiro (não espera as perguntas de tela):**
+
+1. Migração **204** (conferido em 26/11: nenhum ramo usa a 204; o acesso usa a 300 a 302; os centros de custo de dezembro pegam o
+   número depois desta), idempotente: `FinLancamentos` (a folha, a `SaidaId`, o dia, a hora, o tipo, a forma, o valor e a voluntária
+   em `DECIMAL(14,2)`, o membro ou o nome digitado, "este mês" ou "mês posterior", o mês em que soma calculado no servidor, quem
+   registrou e se foi a Geral; uma linha ativa por folha). A folha lançada continua em `FinFolhas` com `LANCADA`. Atenção: a
+   semeadura da homologação e os roteiros e2e 200 a 202 gravam `LANCADA` direto em `FinFolhas`; uma chave obrigatória para o
+   lançamento os quebraria (ou eles ganham o lançamento junto).
+2. A regra pura em `shared/finLancamentos.js`, com os testes antes (TDD): o mês em que soma (com o "hoje" de Belém, o mesmo
+   `hojeBrasilia` da entrega), onde o mês começa, as tarjas, o valor "250,00" lido sem número quebrado.
+3. A rota `FinLancamentos` (`financeiro/lancamentos/{acao?}`), com a sessão e o escopo; o e2e 204 no LocalDB `fin` com a bateria de
+   segurança (cada nível, outra congregação, injeção, lixo, o "403 igual" para o que existe e o que não existe) e a corrida de duas
+   gravações na mesma folha (a 2ª recusada).
+
+**Depois, as telas** (um commit cada): a planilha; a linha de lançar e o celular; a área. A prova do plano da fase 10: 20 lançamentos
+seguidos só com o teclado. O item "Lançamentos" do menu fica em `front/src/financeiro/estado.svelte.ts` (o mesmo ponto em que o ramo
+dos centros de custo vai mexer em dezembro).
+
+**Perguntas antes de construir** (regra que não está escrita; cada uma muda o servidor ou a tela):
+
+1. **Corrigir depois de salvar.** A tesoureira salvou a 70.161 com R$ 250,00 e era R$ 205,00. Com o mês aberto, ela corrige na própria
+   linha (a trilha guarda quem mudou e o valor de antes) ou vale o estorno do resto do Financeiro (a linha contrária com o motivo e uma
+   linha nova)?
+2. **A procura do dizimista.** A irmã Ana, de Cidade Jardim, deixou o dízimo em Vila Nova. A tesoureira de Vila Nova acha a Ana na
+   procura (a Igreja inteira, só o nome e o número) ou só os membros de Vila Nova, e a Ana entra como nome digitado?
+3. **O dia do lançamento.** Até quando se lança num mês que passou? Proposta: só o mês atual e o anterior, nunca depois de hoje, até o
+   fechamento (que vem com o desenho dele).
+4. **A folha arrancada ou cancelada na planilha.** O desenho mostra "Arrancada · motivo" na linha. A tesoureira marca ali mesmo (como
+   na aba Folhas do bloco) ou a planilha só mostra o que já foi marcado nas Folhas?
+
+E, para a conversa principal (não é regra de negócio):
+
+- (5) **O que fica no lugar de "marcada em novembro"** nos 4 pontos do desenho: a coluna "Referente a" (proposta: "—", como as outras
+  linhas), o texto sob "Folha (sozinha)" na linha de lançar (proposta: nada), o "6. Referente a" travado (proposta: "dezembro") e o
+  selo do cartão do celular (proposta: nada). O fundo azul da linha sai também?
+- (6) **O quadro "Pré-repasse de dezembro"** (planilha) e a coluna **"Entrega"** (área) são do repasse (incremento 5, desenho da 27):
+  ficam fora até lá, ou mostram só o lançado?
+- (7) **O seletor "Lançando por / Trocar"** (r20 `r20-seletor`) não existe em `front/src/comum/` (nem no ramo do Membros); o plano o deu
+  ao agente de Membros. Sem ele, a Geral não lança por uma congregação. Quem o faz?

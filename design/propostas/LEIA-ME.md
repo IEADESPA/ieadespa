@@ -10,6 +10,11 @@ Tudo aqui é **público**: só nomes e números de mentira, nenhum dado de membr
 
 | Arquivo | O que é |
 | --- | --- |
+| `propostas-r35/index.html` | A página da **rodada 35**, a última do Módulo 3 (os perfis de acesso de cada cargo com a passagem, afastar do cargo, o último domingo e a ceia geral, a assinatura reforçada do termo, as áreas e os números com a congregação nova e o ponto de culto novo, mudar de área, fechar ou juntar, e os termos guardados), 202 KB, só com a 35. Gerada; não editar à mão |
+| `r35-base.js` | As peças novas da 35 (o menu com “Acessos dos cargos” e “Perfis de acesso”, quem está vendo, a chave de ligar, a etiqueta da situação do acesso, a caixa “não mexe no rol”); o resto vem do código da 32 à 34 que continua na página |
+| `r35-perfis.js`, `r35-afastar.js`, `r35-agenda.js`, `r35-assinar.js`, `r35-igrejas.js`, `r35-mudar.js`, `r35-guardados.js` | As 7 telas da 35 (35 perfis, 70 desenhos) |
+| `r35-lista.js` | A explicação da rodada (`EXPLICA_R35`, com as 9 perguntas que o plano não responde), a de cada tela (com os “Para conferir”) e a lista que junta as telas |
+| `montar-r35.js`, `conferir-r35.js` | Montam a 35 a partir da página da 34 e conferem cada desenho. Nos fontes da 35, “ceia” vale em “Santa Ceia”, “ceia local” e “ceia geral” (as palavras dele). A única exceção da lista do Módulo 3 é o cartão dos níveis dormindo na tela das áreas (vista pela Geral): a frase `R35_DORMINDO_TXT` |
 | `propostas-r34/index.html` | A página da **rodada 34** (Módulo 3, os ajustes da 33: os cultos com a agenda personalizada, com culto só da Sede, só das congregações e o tipo de cada domingo; e o termo de posse de todos que trabalham, por cargo, com o Presidente e o Secretário Geral assinando em lote), 159 KB, só com a 34. Gerada; não editar à mão. Publicada numa página nova (25/11/2026) |
 | `r34-base.js` | As peças novas da 34 (o menu com os modelos do termo e os termos para assinar, quem está vendo: a Sede, o Presidente, o Secretário Geral e a Débora, e a etiqueta de para quem é o culto); o resto vem do código da 32 e da 33 que continua na página |
 | `r34-cultos.js`, `r34-posse.js` | As 2 telas da 34: a agenda personalizada (a semana com para quem é cada culto, os domingos do mês, Vila Nova e a Sede cada uma com a sua agenda, o pedido do tipo de um domingo) e o termo de posse por cargo (o aceite da 1ª secretária, os modelos por cargo, o balcão na congregação, as páginas do Presidente e do Secretário Geral, o PDF com as quatro assinaturas, a área e a página do QR) |
@@ -56,8 +61,8 @@ as auditorias. As escolhas do responsável ficam no banco da própria página (c
 Na pasta `design/propostas`, com o Node.js:
 
 ```bash
-node montar-r34.js     # grava propostas-r34/index.html; no fim, as duas contagens de palavras proibidas em 0 e "sobrou da 33: nada"
-node conferir-r34.js   # no fim, "com problema 0"
+node montar-r35.js     # grava propostas-r35/index.html; no fim, as duas contagens de palavras proibidas em 0 e "sobrou da 34: nada"
+node conferir-r35.js   # no fim, "com problema 0"
 ```
 
 O `montar-r31.js` usa o TypeScript (do projeto ou o global do npm).
@@ -67,6 +72,7 @@ nunca dentro do desenho: o que está no desenho é o que o construtor faz.
 
 ## Publicar
 
+- **A página da rodada 35**: `https://claude.ai/artifact/G6iCv25ZBDB6bcK9pjYHYC` ("Propostas de tela · rodada 35"), publicada em 26/11/2026, com o banco (`db`) das escolhas (ids `r35-*` e `geral-r35`).
 - **A página da rodada 34**: `https://claude.ai/artifact/6sztidgaZ5r3a46jdZYzfi` ("Propostas de tela · rodada 34"),
   publicada em 25/11/2026 (versão 2, id 1795631022-db04), com o banco (`db`) das escolhas (testado: gravar e apagar).
 - **As páginas das rodadas anteriores**, nunca mais republicadas, cada uma com o seu banco: a
@@ -82,19 +88,22 @@ nunca dentro do desenho: o que está no desenho é o que o construtor faz.
 
 ## A próxima rodada
 
-1. Copie `montar-r34.js` para `montar-r35.js`: a base passa a ser `propostas-r34/index.html` (a publicada), a lista da
-   34 sai (a linha `TELAS.unshift(...TELAS_R34...)` é trocada pelos fontes da 35), os nomes `r34` viram `r35` e entra
-   no alto o link da página da 34 (6szt…), antes dos outros. O código da 32 a 34 que a 35 reaproveitar fica na base;
-   o que a poda já tirou (o mapa e a virada da 33, por exemplo) se copia da página antiga.
+1. Copie `montar-r35.js` para `montar-r36.js`: a base passa a ser `propostas-r35/index.html` (a publicada), a lista da
+   35 sai (a linha `TELAS.unshift(...TELAS_R35...)` é trocada pelos fontes da 36), os nomes `r35` viram `r36` e entra
+   no alto o link da página da 35, antes dos outros. O código da 32 à 35 que a 36 reaproveitar fica na base; o que a
+   poda já tirou se copia da página antiga. A 35 fechou a Estrutura: a 36 é do próximo módulo da ordem fixa.
 2. As telas novas em `r35-*.js` e a explicação em `r35-lista.js`: só no claro, cada nível, celular com a barra do
    telefone. Quando ele se confunde com muitas opções, uma versão única bem explicada.
-3. `node montar-r35.js` e um `conferir-r35.js` (cópia do da 34), os dois com zero problema. Confira também que não
-   sobrou nada da 34 na página (`TELAS_R34`, `geral-r34`).
+3. `node montar-r36.js` e um `conferir-r36.js` (cópia do da 35), os dois com zero problema. Confira também que não
+   sobrou nada da 35 na página (`TELAS_R35`, `geral-r35`).
 4. Publique numa página nova, só com a 35, e registre: commit dos fontes e esta seção com o endereço novo.
 5. Uma página por rodada, sem teto de tamanho a vigiar: a 32 tem 145 KB, e só a página nova é lida antes de publicar.
 6. O conferidor não mede transbordo: meça no Edge (o `medir.js` da pasta de fotos da rodada, só no claro) e olhe as
    fotos do pior caso (a mensagem de erro, o seletor aberto, o celular com o formulário), sem fotografar tudo. Na 34, o `medir.js` ganhou a conferência do botão esmagado (a
-   altura desenhada menor que a pedida), que o transbordo não pega.
+   altura desenhada menor que a pedida), que o transbordo não pega; na cópia da 34 as barras do padrão se perderam e ela
+   nunca casava (consertada na 35, `C:/tmp/ieadespa-desenho-r35-fotos/ferr/medir.js`). O "esmagado" da folha em PDF no
+   celular é efeito do `zoom` (608 × 0,8326 = 506), não defeito. O medir pode dar limpo e a foto mostrar corte: quem
+   decide é a foto.
 
 Para as fotos de conferência no Windows: o Edge sem janela, sempre com `--disable-gpu` e com um `--user-data-dir` próprio
 (com o Edge do dia a dia aberto, sem ele a foto não sai). A foto aparece um instante depois de o comando voltar. A página

@@ -1375,6 +1375,24 @@ guardadas para quando o módulo 3 começar. O levantamento completo do desenhist
       - uma frase no próprio termo: a pessoa declara que aceita assinar pelo sistema.
     - **Confirmar com o advogado da igreja antes da produção.** Se ele pedir mais, a assinatura pelo gov.br (gratuita) entra
       como opção para os termos que pedirem.
+- **A rodada 35 (26/11/2026), a última do Módulo 3, publicada numa página nova:** `https://claude.ai/artifact/G6iCv25ZBDB6bcK9pjYHYC`, com 7 telas (35
+  perfis, 70 desenhos):
+  - **os perfis de acesso de cada cargo:** a Geral cuida de um perfil por cargo (os módulos em que o cargo entra, os de
+    hoje); o alcance vem do nível; exige 90 dias de membro e o termo aceito; os acessos de cada congregação e da área; a
+    recusa de quem não tem os 90 dias; o "meu acesso"; o acesso sem cargo, com prazo e motivo, dado pela Geral; e **a
+    passagem** de quem já tem acesso (412 hoje, em 5 grupos; ninguém fica sem entrar no dia de ligar);
+  - **afastar do cargo:** pela secretaria do nível do cargo, com o motivo; o cargo fica "afastado", sem o acesso; a
+    pessoa continua membro ativo; depois, devolver o acesso ou pôr outro;
+  - **a agenda** com a regra do último domingo (à tarde, a reunião do Ministério; à noite, a Santa Ceia, a ceia local) e
+    as ceias gerais marcadas pela Geral (a ceia local sai sozinha naquele domingo);
+  - **a assinatura reforçada** (o PIN mais o código por e-mail, a frase de aceite, a cópia no e-mail; no balcão sem
+    e-mail, o documento com foto; no lote, um código só) e a linha nova do PDF;
+  - **o que a 32 deixou para depois:** as áreas e os números (com os níveis acima da área desligados, só a Geral vê), a
+    congregação nova e o ponto de culto novo, mudar de área, fechar ou juntar (com a numeração que desce) e os termos
+    guardados.
+  - 9 perguntas que o plano não respondia ficaram na explicação da página (a passagem, os papéis de outros módulos,
+    afastar o dirigente, o acesso sem cargo, os cargos da Geral, a reunião do Ministério e a ceia geral, o balcão sem
+    e-mail e o lote, o prazo de guarda dos termos e o saldo da congregação que fecha).
 - **O painel da Estrutura ("quem precisa de atenção"):** o cargo vago, o cargo vencendo, os dados velhos e o termo de
   posse pendente, e todos os avisos do módulo. Cada nível vê os seus tipos de aviso, como no Financeiro.
 - **A Sede:** fica numa área, a **Área 1 ("Distrito Sede")**, com os pontos de culto dela. É área de uma congregação

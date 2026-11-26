@@ -10,6 +10,11 @@ Tudo aqui é **público**: só nomes e números de mentira, nenhum dado de membr
 
 | Arquivo | O que é |
 | --- | --- |
+| `propostas-r35/index.html` | A página da **rodada 35**, a última do Módulo 3 (os perfis de acesso de cada cargo com a passagem, afastar do cargo, o último domingo e a ceia geral, a assinatura reforçada do termo, as áreas e os números com a congregação nova e o ponto de culto novo, mudar de área, fechar ou juntar, e os termos guardados), 202 KB, só com a 35. Gerada; não editar à mão |
+| `r35-base.js` | As peças novas da 35 (o menu com “Acessos dos cargos” e “Perfis de acesso”, quem está vendo, a chave de ligar, a etiqueta da situação do acesso, a caixa “não mexe no rol”); o resto vem do código da 32 à 34 que continua na página |
+| `r35-perfis.js`, `r35-afastar.js`, `r35-agenda.js`, `r35-assinar.js`, `r35-igrejas.js`, `r35-mudar.js`, `r35-guardados.js` | As 7 telas da 35 (35 perfis, 70 desenhos) |
+| `r35-lista.js` | A explicação da rodada (`EXPLICA_R35`, com as 9 perguntas que o plano não responde), a de cada tela (com os “Para conferir”) e a lista que junta as telas |
+| `montar-r35.js`, `conferir-r35.js` | Montam a 35 a partir da página da 34 e conferem cada desenho. Nos fontes da 35, “ceia” vale em “Santa Ceia”, “ceia local” e “ceia geral” (as palavras dele). A única exceção da lista do Módulo 3 é o cartão dos níveis dormindo na tela das áreas (vista pela Geral): a frase `R35_DORMINDO_TXT` |
 | `propostas-r34/index.html` | A página da **rodada 34** (Módulo 3, os ajustes da 33: os cultos com a agenda personalizada, com culto só da Sede, só das congregações e o tipo de cada domingo; e o termo de posse de todos que trabalham, por cargo, com o Presidente e o Secretário Geral assinando em lote), 159 KB, só com a 34. Gerada; não editar à mão. Publicada numa página nova (25/11/2026) |
 | `r34-base.js` | As peças novas da 34 (o menu com os modelos do termo e os termos para assinar, quem está vendo: a Sede, o Presidente, o Secretário Geral e a Débora, e a etiqueta de para quem é o culto); o resto vem do código da 32 e da 33 que continua na página |
 | `r34-cultos.js`, `r34-posse.js` | As 2 telas da 34: a agenda personalizada (a semana com para quem é cada culto, os domingos do mês, Vila Nova e a Sede cada uma com a sua agenda, o pedido do tipo de um domingo) e o termo de posse por cargo (o aceite da 1ª secretária, os modelos por cargo, o balcão na congregação, as páginas do Presidente e do Secretário Geral, o PDF com as quatro assinaturas, a área e a página do QR) |
@@ -56,8 +61,8 @@ as auditorias. As escolhas do responsável ficam no banco da própria página (c
 Na pasta `design/propostas`, com o Node.js:
 
 ```bash
-node montar-r34.js     # grava propostas-r34/index.html; no fim, as duas contagens de palavras proibidas em 0 e "sobrou da 33: nada"
-node conferir-r34.js   # no fim, "com problema 0"
+node montar-r35.js     # grava propostas-r35/index.html; no fim, as duas contagens de palavras proibidas em 0 e "sobrou da 34: nada"
+node conferir-r35.js   # no fim, "com problema 0"
 ```
 
 O `montar-r31.js` usa o TypeScript (do projeto ou o global do npm).

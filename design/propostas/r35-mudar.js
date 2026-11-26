@@ -14,8 +14,8 @@ function r35Mudar(p, cel) {
 }
 // o pastor da área nova vê Recanto chegar
 function r35MuArea(p, cel) {
-  const L = [['5', 'Esperança'], ['11', 'Morada Nova'], ['19', 'Jardim América'], ['26', 'Liberdade II'], ['35', 'Vale Verde'], ['40', 'Ipiranga'], ['30', 'Recanto']];
-  const lista = L.map((x, i) => r28Pes(p, r35Num(p, x[0], x[0] === '30'), x[1], x[0] === '30' ? 'chega em 01/03, vinda da Área 2 · Ev. Caio Barbosa' : 'congregação', '', { i: cel ? i : i > 1, alt: cel ? 40 : 42, sel: x[0] === '30' })).join('');
+  const L = [['5', 'Esperança', 'Pr. Rubens Melo'], ['11', 'Morada Nova', 'Ev. Tiago Nunes'], ['19', 'Jardim América', 'Pb. Silas Moura'], ['26', 'Liberdade II', 'Ev. Abner Cruz'], ['35', 'Vale Verde', 'Pb. Enoque Leal'], ['40', 'Ipiranga', 'Pr. Jairo Bento'], ['30', 'Recanto', '']];
+  const lista = L.map((x, i) => r28Pes(p, r35Num(p, x[0], x[0] === '30'), x[1], x[0] === '30' ? 'chega em 01/03, vinda da Área 2 · Ev. Caio Barbosa' : x[2], '', { i: cel ? i : i > 1, alt: cel ? 40 : 42, sel: x[0] === '30' })).join('');
   const aviso = r16aAviso(p, '<strong>Recanto (nº 30) passa para a sua área em 01/03/2027.</strong> Os relatórios de antes continuam com a Área 2; os de março em diante vêm para você.', 'alerta');
   if (cel) return r32EsCel(p, 'Ficha da área', `${aviso}${r32Car(p, 'A Área 5', '', lista, 1)}`);
   const tit = r18Tit(p, 'As congregações da Área 5', `6, e Recanto chega em 01/03 · ${R35_MU_HOJE}`);
@@ -23,11 +23,11 @@ function r35MuArea(p, cel) {
 }
 // a Geral fecha Monte Sião e junta a Vila Nova
 function r35Juntar(p, cel) {
-  const campos = `${r17Campo(p, 'Fecha', 'Monte Sião (nº 12) · Área 2 · sem dirigente', { icone: 'cadeado', auto: 1 })}${r33Esc(p, ['Fechar e juntar a outra', 'Só fechar'], 'Fechar e juntar a outra')}<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${r17Campo(p, 'Quem recebe', 'Vila Nova (nº 7)', { icone: 'igreja', obrig: 1 })}${r17Campo(p, 'Em', '28/02/2027', { icone: 'calendario', obrig: 1 })}</div>`;
+  const campos = `${r17Campo(p, 'Fecha', 'Monte Sião (nº 12) · Área 2 · sem dirigente', { icone: 'cadeado', auto: 1 })}<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${r17Campo(p, 'Quem recebe', 'Vila Nova (nº 7)', { icone: 'igreja', obrig: 1 })}${r17Campo(p, 'Em', '28/02/2027', { icone: 'calendario', obrig: 1 })}</div>`;
   const vai = r28Vai(p, [['pessoas', '<strong>Os 64 membros passam de uma vez para Vila Nova</strong>, com a ficha inteira.'], ['casa', 'O ponto de culto de Monte Sião passa para Vila Nova.'], ['chave', 'Os 4 cargos de Monte Sião acabam, e o acesso deles acaba junto.'], ['doc', 'O histórico e o dinheiro de antes ficam com o nome “Monte Sião (nº 12, fechada em 28/02/2027)”.'], ['igreja', 'A numeração desce: as 34 congregações depois da 12 descem um número.']], cel);
   if (cel) return r32EsCel(p, 'Fechar ou juntar', `${campos}${r32Car(p, 'O que vai acontecer', '', vai, 1)}${r35Pin(p, 'Fechar com o meu PIN', 1)}`);
   const tit = r18Tit(p, 'Fechar ou juntar: Monte Sião', `só a Secretaria Geral · a Geral escolhe a que recebe · ${R35_MU_HOJE}`, m8Linha(p, 'Cancelar', 'voltar'));
-  return r35Es(p, 'geral', 'Áreas e números', `${tit}${r17Dois(r18Col(r32Car(p, 'O que fecha e quem recebe', '', `<div style="display:flex;flex-direction:column;gap:10px;padding-top:4px">${campos}</div>`), r28Mais(p, 'Ver a numeração nova ›')), r18Col(r32Car(p, 'O que vai acontecer', '', vai), r35Pin(p, 'Fechar e juntar com o meu PIN')), '1fr 1.1fr')}`, ['Áreas e números', 'Monte Sião', 'Fechar ou juntar']);
+  return r35Es(p, 'geral', 'Áreas e números', `${tit}${r17Dois(r18Col(r32Car(p, 'O que fecha e quem recebe', '', `<div style="display:flex;flex-direction:column;gap:10px;padding-top:4px">${campos}</div>`), r32Car(p, 'Monte Sião hoje', '', r31Fatos(p, [['Membros', '64, todos passam'], ['Ponto de culto', '1, no Morada Verde'], ['Cargos', '4 com acesso (o dirigente está vago)'], ['Número', '12, que sai da lista']])), r28Mais(p, 'Ver a numeração nova ›')), r18Col(r32Car(p, 'O que vai acontecer', '', vai), r35Pin(p, 'Fechar e juntar com o meu PIN')), '1fr 1.1fr')}`, ['Áreas e números', 'Monte Sião', 'Fechar ou juntar']);
 }
 // a numeração nova depois do fechamento
 const R35_NUM = [['13', '12', 'São Jorge'], ['14', '13', 'Morada do Sol'], ['15', '14', 'Bela Vista'], ['16', '15', 'Cidade Nova'], ['17', '16', 'Alvorada'], ['18', '17', 'Jardim Ipê'], ['46', '45', 'Nova Carajás']];

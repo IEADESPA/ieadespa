@@ -16,6 +16,7 @@ const REFERENTES = ["ESTE_MES", "MES_POSTERIOR"];
 const MAX_CENTAVOS = 9999999999;   // R$ 99.999.999,99: muito acima de qualquer folha, e cabe com folga no DECIMAL(14,2)
 const MAX_NOME = 120;
 const MAX_MOTIVO = 300;
+const MAX_ID = 2147483647;        // o INT do banco: o número do membro maior que isso nunca chega ao SQL (o CAST daria erro 500)
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 const VALOR_TEXTO = /^(\d{1,3}(\.\d{3})+|\d+)(,\d{1,2})?$/;
 
@@ -101,7 +102,7 @@ function lerPessoa(p) {
   const nome = tem(p.nome) ? p.nome.trim().replace(/\s+/g, " ") : "";
   const comId = tem(p.membroId);
   if (comId && nome) return { ok: false, mensagem: "escolha o membro do cadastro ou digite o nome, não os dois." };
-  if (comId) return Number.isInteger(p.membroId) && p.membroId > 0 ? { ok: true, membroId: p.membroId, nome: null } : { ok: false, mensagem: "o membro escolhido não confere." };
+  if (comId) return Number.isInteger(p.membroId) && p.membroId > 0 && p.membroId <= MAX_ID ? { ok: true, membroId: p.membroId, nome: null } : { ok: false, mensagem: "o membro escolhido não confere." };
   if (nome.length > MAX_NOME) return { ok: false, mensagem: `o nome tem no máximo ${MAX_NOME} letras.` };
   return { ok: true, membroId: null, nome: nome || null };
 }
@@ -144,6 +145,32 @@ function validarLinha(l, { preencher = false } = {}) {
   const c = lerCampos(l, preencher);
   if (!c.ok) return erro(c.mensagem);
   return { ok: true, linha: { folha: l.folha, referente: preencher ? "MES_POSTERIOR" : "ESTE_MES", ...c.campos } };
+}
+
+// A decisão 4 corrigida (26/11/2026): a cancelada, a arrancada e a inexistente se marcam na própria planilha, com o motivo; a aba Folhas continua
+// marcando também, e as duas gravam pela mesma regra do servidor (finBlocosDb.marcarExcecaoNaTransacao: o mesmo histórico e o mesmo desfazer da
+// r30). A extraviada fica só na aba Folhas. O motivo é a observação da folha (a mesma coluna, até 300 letras).
+const EXCECOES_NA_PLANILHA = { cancelada: "CANCELADA", arrancada: "ARRANCADA", inexistente: "INEXISTENTE" };
+const MAX_OBSERVACAO = 300;
+
+/** a linha da planilha que marca a folha: { folha, excecao: { oQueAconteceu, observacao } } → { folha, destino, observacao } */
+function excecaoNaPlanilha(l) {
+  if (!l || typeof l !== "object" || !Number.isInteger(l.folha) || l.folha <= 0) return { ok: false, mensagem: "Confira o número da folha." };
+  const erro = (m) => ({ ok: false, mensagem: `Folha ${milhar(l.folha)}: ${m}` });
+  const e = l.excecao;
+  const escolha = "escolha o que aconteceu: cancelada, arrancada ou inexistente.";
+  if (!e || typeof e !== "object" || Array.isArray(e)) return erro(escolha);
+  if (tem(l.referente) || tem(l.tipo) || tem(l.forma) || tem(l.valor) || tem(l.voluntaria) || tem(l.pessoa)) {
+    return erro("a folha marcada fica sem tipo, sem valor e sem quem deu.");
+  }
+  const o = typeof e.oQueAconteceu === "string" ? e.oQueAconteceu.trim().toLowerCase() : "";
+  if (o === "extraviada") return erro("a extraviada se marca na aba Folhas do bloco.");
+  const destino = EXCECOES_NA_PLANILHA[o];
+  if (!destino) return erro(escolha);
+  const observacao = typeof e.observacao === "string" ? e.observacao.trim() : "";
+  if (!observacao) return erro("escreva o motivo (o que aconteceu com a folha).");
+  if (observacao.length > MAX_OBSERVACAO) return erro(`o motivo tem no máximo ${MAX_OBSERVACAO} letras.`);
+  return { ok: true, excecao: { folha: l.folha, destino, observacao } };
 }
 
 /** a correção (a regra da r27: a linha muda e a trilha guarda o antes, o depois, o motivo e quem): os campos novos e o motivo, obrigatório */
@@ -296,6 +323,6 @@ module.exports = {
   TIPOS, FORMAS, REFERENTES, MAX_CENTAVOS, MAX_NOME, MAX_MOTIVO,
   lerValor, decimalDoBanco, centavosDoBanco, reais,
   mesDe, mesSeguinte, mesAnterior, mesSoma, nomeDoMes, dataValida, diaDoLancamento, mesDaTela, ultimoDia,
-  lerPessoa, validarLinha, validarCorrecao, mudancas,
+  lerPessoa, validarLinha, excecaoNaPlanilha, validarCorrecao, mudancas,
   montarPlanilha, totaisDoMes, posicoesEmTexto, tiraDoBloco
 };

@@ -293,6 +293,7 @@ case "$1" in
     migrar 201 2   # a revisão de 23/11/2026: os índices que faltavam, FinFolhasDesfeitas e a Quantidade em blocos (e2e-200 e e2e-201)
     migrar 202 2   # a revisão de 24/11/2026 (m2): a SaidaId e a faixa conferidas no banco (e2e-200 e e2e-201)
     migrar 203 2   # a decisão dele de 24/11/2026: a folha inexistente (o destino com 11 letras e os CHECKs; e2e-202)
+    migrar 204 2   # o incremento 3 (26/11/2026): os lançamentos, a correção e o relatório do mês (e2e-204)
     migrar 205 2   # o portão da parte 2 (26/11/2026, I2): o papel de quem marcou e de quem desfez, gravado na hora (e2e-202)
     base salvar cenario-200
     ;;

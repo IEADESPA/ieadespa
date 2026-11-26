@@ -516,42 +516,50 @@ async function papelNaHora(t, { geral, membroId, congregacaoId }) {
   return l ? regra.papelNoHistorico({ escopoTipo: l.EscopoTipo, papel: l.Papel, congregacao: l.Congregacao, area: l.Area }) : null;
 }
 
+// A exceção da folha dentro de uma transação já aberta: a aba Folhas (registrarFolha) e a planilha de lançamentos (finLancamentosDb.salvar)
+// gravam por aqui, com a mesma regra, o mesmo histórico e o mesmo desfazer da r30 (a decisão 4 corrigida de 26/11/2026). `v` já conferido
+// ({ folha, destino, observacao }). Devolve { sucesso: false, ... } (quem chamou desfaz a transação) ou { sucesso: true, mensagem }.
+async function marcarExcecaoNaTransacao(t, usuario, { geral, v, por }) {
+  // as folhas de um bloco nunca mudam depois do cadastro: acha o bloco sem trava e trava só a linha dele, pela chave (travar a faixa do índice
+  // prendia todos os blocos de folha menor e a corrida com a devolução dava impasse; o e2e-201 pegou)
+  const achado = (await pedidoNaTransacao(t).input("f", sql.Int, v.folha)
+    .query(`SELECT TOP 1 BlocoId FROM FinBlocos WHERE PrimeiraFolha <= @f AND UltimaFolha >= @f ORDER BY PrimeiraFolha DESC`)).recordset[0];
+  // o nome da congregação vem na mesma leitura que trava o bloco: a conferência do escopo não pede outra conexão ao pool com a trava presa (revisão I4)
+  const b = achado && (await pedidoNaTransacao(t).input("id", sql.Int, achado.BlocoId).query(`
+    SELECT b.BlocoId, b.Numero, b.PrimeiraFolha, b.Situacao, b.CongregacaoId, c.Nome AS Congregacao,
+           (SELECT TOP 1 s.PrimeiraFolha FROM FinLivroBlocos s WHERE s.Tipo = 'SAIDA' AND s.BlocoId = b.BlocoId ORDER BY s.RegistroId DESC) AS SaidaDe
+    FROM FinBlocos b WITH (UPDLOCK, ROWLOCK) LEFT JOIN Congregacoes c ON c.CongregacaoId = b.CongregacaoId WHERE b.BlocoId = @id`)).recordset[0];
+  // fora do escopo e "não existe" dão a mesma resposta; o bloco que ainda está na Geral só a Geral sabe que existe (a regra do escopo é a de
+  // escopoRotas.congregacaoNoEscopo: auth.estaNoEscopo pelo nome da congregação)
+  if (!b || (!geral && (!b.CongregacaoId || !auth.estaNoEscopo(usuario, b.Congregacao)))) return { sucesso: false, naoExiste: true };
+  if (b.Situacao === "NA_GERAL") return { sucesso: false, mensagem: `O bloco ${milhar(b.Numero)} ainda está na Tesouraria Geral: a folha só tem destino depois da entrega.` };
+  if (b.Situacao === "DEVOLVIDO") return { sucesso: false, mensagem: `O bloco ${milhar(b.Numero)} já foi devolvido: as folhas dele não mudam mais.` };
+  if (v.folha < Number(b.SaidaDe)) {
+    return { sucesso: false, mensagem: `A folha ${milhar(v.folha)} é de uma entrega anterior do bloco ${milhar(b.Numero)}: aqui só se marcam as folhas desta entrega (a partir da ${milhar(b.SaidaDe)}).` };
+  }
+  const ja = (await pedidoNaTransacao(t).input("f", sql.Int, v.folha).query(`SELECT Destino FROM FinFolhas WHERE Folha = @f`)).recordset[0];
+  if (ja) return MUDOU(`A folha ${milhar(v.folha)} já tem destino (${regra.destinoDaTela(ja.Destino)}).`);
+  // a folha guarda a entrega em que foi usada (a última saída do bloco, que está entregue: regra de 24/11/2026) e o papel de quem marcou, na hora
+  const papel = await papelNaHora(t, { geral, membroId: por, congregacaoId: b.CongregacaoId });
+  const id = (await pedidoNaTransacao(t).input("b", sql.Int, b.BlocoId).input("f", sql.Int, v.folha).input("d", sql.NVarChar(12), v.destino)
+    .input("o", sql.NVarChar(300), v.observacao).input("por", sql.Int, por).input("papel", sql.NVarChar(260), papel)
+    .query(`INSERT INTO FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor, SaidaId, PapelNaHora) OUTPUT INSERTED.FolhaId
+            SELECT @b, @f, @d, @o, @por, (SELECT TOP 1 RegistroId FROM FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = @b ORDER BY RegistroId DESC), @papel`)).recordset[0].FolhaId;
+  await registrarAuditoriaNaTransacao(t, { tabela: "FinFolhas", registroId: id, acao: "FIN_FOLHA_EXCECAO", usuarioId: por,
+    dadosDepois: { bloco: Number(b.Numero), folha: v.folha, destino: v.destino } });
+  const posicao = v.folha - Number(b.PrimeiraFolha) + 1;
+  return { sucesso: true, mensagem: `Folha ${milhar(v.folha)} (${posicao}ª do bloco ${milhar(b.Numero)}) registrada como ${regra.destinoDaTela(v.destino)}.` };
+}
+
 async function registrarFolha(pool, usuario, { geral, dados, por }) {
   const v = regra.excecaoDaFolha(dados);
   if (v.erro) return { sucesso: false, mensagem: v.erro };
   const t = await abrirTransacao(pool);
   let ok = false;
   try {
-    // as folhas de um bloco nunca mudam depois do cadastro: acha o bloco sem trava e trava só a linha dele, pela chave (travar a faixa do índice
-    // prendia todos os blocos de folha menor e a corrida com a devolução dava impasse; o e2e-201 pegou)
-    const achado = (await pedidoNaTransacao(t).input("f", sql.Int, v.folha)
-      .query(`SELECT TOP 1 BlocoId FROM FinBlocos WHERE PrimeiraFolha <= @f AND UltimaFolha >= @f ORDER BY PrimeiraFolha DESC`)).recordset[0];
-    // o nome da congregação vem na mesma leitura que trava o bloco: a conferência do escopo não pede outra conexão ao pool com a trava presa (revisão I4)
-    const b = achado && (await pedidoNaTransacao(t).input("id", sql.Int, achado.BlocoId).query(`
-      SELECT b.BlocoId, b.Numero, b.PrimeiraFolha, b.Situacao, b.CongregacaoId, c.Nome AS Congregacao,
-             (SELECT TOP 1 s.PrimeiraFolha FROM FinLivroBlocos s WHERE s.Tipo = 'SAIDA' AND s.BlocoId = b.BlocoId ORDER BY s.RegistroId DESC) AS SaidaDe
-      FROM FinBlocos b WITH (UPDLOCK, ROWLOCK) LEFT JOIN Congregacoes c ON c.CongregacaoId = b.CongregacaoId WHERE b.BlocoId = @id`)).recordset[0];
-    // fora do escopo e "não existe" dão a mesma resposta; o bloco que ainda está na Geral só a Geral sabe que existe (a regra do escopo é a de
-    // escopoRotas.congregacaoNoEscopo: auth.estaNoEscopo pelo nome da congregação)
-    if (!b || (!geral && (!b.CongregacaoId || !auth.estaNoEscopo(usuario, b.Congregacao)))) return { sucesso: false, naoExiste: true };
-    if (b.Situacao === "NA_GERAL") return { sucesso: false, mensagem: `O bloco ${milhar(b.Numero)} ainda está na Tesouraria Geral: a folha só tem destino depois da entrega.` };
-    if (b.Situacao === "DEVOLVIDO") return { sucesso: false, mensagem: `O bloco ${milhar(b.Numero)} já foi devolvido: as folhas dele não mudam mais.` };
-    if (v.folha < Number(b.SaidaDe)) {
-      return { sucesso: false, mensagem: `A folha ${milhar(v.folha)} é de uma entrega anterior do bloco ${milhar(b.Numero)}: aqui só se marcam as folhas desta entrega (a partir da ${milhar(b.SaidaDe)}).` };
-    }
-    const ja = (await pedidoNaTransacao(t).input("f", sql.Int, v.folha).query(`SELECT Destino FROM FinFolhas WHERE Folha = @f`)).recordset[0];
-    if (ja) return MUDOU(`A folha ${milhar(v.folha)} já tem destino (${regra.destinoDaTela(ja.Destino)}).`);
-    // a folha guarda a entrega em que foi usada (a última saída do bloco, que está entregue: regra de 24/11/2026) e o papel de quem marcou, na hora
-    const papel = await papelNaHora(t, { geral, membroId: por, congregacaoId: b.CongregacaoId });
-    const id = (await pedidoNaTransacao(t).input("b", sql.Int, b.BlocoId).input("f", sql.Int, v.folha).input("d", sql.NVarChar(12), v.destino)
-      .input("o", sql.NVarChar(300), v.observacao).input("por", sql.Int, por).input("papel", sql.NVarChar(260), papel)
-      .query(`INSERT INTO FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor, SaidaId, PapelNaHora) OUTPUT INSERTED.FolhaId
-              SELECT @b, @f, @d, @o, @por, (SELECT TOP 1 RegistroId FROM FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = @b ORDER BY RegistroId DESC), @papel`)).recordset[0].FolhaId;
-    await registrarAuditoriaNaTransacao(t, { tabela: "FinFolhas", registroId: id, acao: "FIN_FOLHA_EXCECAO", usuarioId: por,
-      dadosDepois: { bloco: Number(b.Numero), folha: v.folha, destino: v.destino } });
-    ok = true;
-    const posicao = v.folha - Number(b.PrimeiraFolha) + 1;
-    return { sucesso: true, mensagem: `Folha ${milhar(v.folha)} (${posicao}ª do bloco ${milhar(b.Numero)}) registrada como ${regra.destinoDaTela(v.destino)}.` };
+    const r = await marcarExcecaoNaTransacao(t, usuario, { geral, v, por });
+    ok = r.sucesso === true;
+    return r;
   } finally {
     await fecharTransacao(t, ok);
   }
@@ -864,5 +872,9 @@ async function desfazerFolha(pool, { dados, por }) {
 
 module.exports = {
   listar, resumo, escopoDaTela, cadastrarLote, registrarChegada, paraSaida, entregar, folhasDoBloco, registrarFolha, livroDosBlocos, rastreio, devolver, desfazerFolha,
-  historicoDaFolha
+  historicoDaFolha,
+  // a transação com o XACT_ABORT em cada consulta: o lançamento (shared/finLancamentosDb.js) usa as mesmas
+  abrirTransacao, pedidoNaTransacao, fecharTransacao,
+  // a exceção da folha com a mesma regra na aba Folhas e na planilha (a decisão 4 corrigida de 26/11/2026)
+  marcarExcecaoNaTransacao
 };

@@ -103,6 +103,12 @@ describe("a linha da planilha", () => {
     expect(r.validarLinha({ ...dizimo, pessoa: { membroId: 1, nome: "Fulano" } }).mensagem).toBe("Folha 70.165: escolha o membro do cadastro ou digite o nome, não os dois.");
     expect(r.validarLinha({ ...dizimo, folha: "70.165" }).ok).toBe(false);
     expect(r.validarLinha({ ...dizimo, pessoa: { nome: "x".repeat(121) } }).mensagem).toBe("Folha 70.165: o nome tem no máximo 120 letras.");
+    // o número do membro cabe no INT do banco: 2^40 chegava ao CAST e virava erro 500 (o lixo do e2e-204 pegou)
+    for (const membroId of [2 ** 40, 2147483648, 0, -1, 1.5]) {
+      expect(r.validarLinha({ ...dizimo, pessoa: { membroId } }).mensagem).toBe("Folha 70.165: o membro escolhido não confere.");
+    }
+    expect(r.validarLinha({ ...dizimo, pessoa: { membroId: 2147483647 } }).ok).toBe(true);
+    expect(r.validarCorrecao({ ...dizimo, motivo: "x", pessoa: { membroId: 2 ** 40 } }).mensagem).toBe("O membro escolhido não confere.");
   });
   test("a folha marcada “mês posterior” fica sem nome e sem valor", () => {
     expect(r.validarLinha({ folha: 70161, referente: "MES_POSTERIOR" })).toEqual({ ok: true, linha: { folha: 70161, referente: "MES_POSTERIOR", tipo: null, forma: null, valor: null, voluntaria: null, membroId: null, nome: null } });
@@ -114,6 +120,37 @@ describe("a linha da planilha", () => {
     expect(r.validarLinha(base, { preencher: true }).ok).toBe(true);
     expect(r.validarLinha({ ...base, tipo: "OFERTA_CULTO", pessoa: undefined }, { preencher: true }).mensagem).toBe("Folha 70.161: informe quem deu (a folha veio marcada do mês anterior).");
     expect(r.validarLinha({ ...base, referente: "MES_POSTERIOR" }, { preencher: true }).ok).toBe(true);
+  });
+});
+
+// a decisão 4 corrigida (26/11/2026): a cancelada, a arrancada e a inexistente se marcam na própria planilha, com o motivo, pela mesma regra
+// do servidor que a aba Folhas usa (o histórico e o desfazer da r30)
+describe("a folha marcada na planilha", () => {
+  const arrancada = { folha: 70168, excecao: { oQueAconteceu: "arrancada", observacao: "  Rasgou ao preencher " } };
+  test("a cancelada, a arrancada e a inexistente, com o motivo", () => {
+    expect(r.excecaoNaPlanilha(arrancada)).toEqual({ ok: true, excecao: { folha: 70168, destino: "ARRANCADA", observacao: "Rasgou ao preencher" } });
+    expect(r.excecaoNaPlanilha({ folha: 70169, excecao: { oQueAconteceu: "Cancelada", observacao: "Preenchida errado" } }).excecao.destino).toBe("CANCELADA");
+    expect(r.excecaoNaPlanilha({ folha: 70170, excecao: { oQueAconteceu: "inexistente", observacao: "Saiu da gráfica sem ela" } }).excecao.destino).toBe("INEXISTENTE");
+  });
+  test("a extraviada fica na aba Folhas", () => {
+    expect(r.excecaoNaPlanilha({ folha: 70168, excecao: { oQueAconteceu: "extraviada", observacao: "Sumiu" } }))
+      .toEqual({ ok: false, mensagem: "Folha 70.168: a extraviada se marca na aba Folhas do bloco." });
+  });
+  test("o que falta ou não confere", () => {
+    const sem = "Folha 70.168: escolha o que aconteceu: cancelada, arrancada ou inexistente.";
+    expect(r.excecaoNaPlanilha({ folha: 70168, excecao: { oQueAconteceu: "LANCADA", observacao: "x" } }).mensagem).toBe(sem);
+    expect(r.excecaoNaPlanilha({ folha: 70168, excecao: "arrancada" }).mensagem).toBe(sem);
+    expect(r.excecaoNaPlanilha({ folha: 70168, excecao: [] }).mensagem).toBe(sem);
+    expect(r.excecaoNaPlanilha({ folha: 70168, excecao: { oQueAconteceu: "arrancada", observacao: "   " } }).mensagem).toBe("Folha 70.168: escreva o motivo (o que aconteceu com a folha).");
+    expect(r.excecaoNaPlanilha({ folha: 70168, excecao: { oQueAconteceu: "arrancada", observacao: 5 } }).mensagem).toBe("Folha 70.168: escreva o motivo (o que aconteceu com a folha).");
+    expect(r.excecaoNaPlanilha({ folha: 70168, excecao: { oQueAconteceu: "arrancada", observacao: "x".repeat(301) } }).mensagem).toBe("Folha 70.168: o motivo tem no máximo 300 letras.");
+    expect(r.excecaoNaPlanilha({ ...arrancada, folha: "70.168" })).toEqual({ ok: false, mensagem: "Confira o número da folha." });
+  });
+  test("a folha marcada não leva tipo, valor nem quem deu", () => {
+    const misturada = "Folha 70.168: a folha marcada fica sem tipo, sem valor e sem quem deu.";
+    for (const campo of [{ referente: "ESTE_MES" }, { tipo: "DIZIMO" }, { forma: "PIX" }, { valor: "10,00" }, { voluntaria: "1" }, { pessoa: { membroId: 700128 } }]) {
+      expect(r.excecaoNaPlanilha({ ...arrancada, ...campo }).mensagem).toBe(misturada);
+    }
   });
 });
 

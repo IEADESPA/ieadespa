@@ -7,7 +7,9 @@ const handlers = { setores: "GestaoSetoresTecnicos/index.js", vistorias: "Gestao
   // Trava 7-C (decisões de 23/10/2026): o fornecedor ligado à matrícula e a saída com os avisos do voluntário (e2e-46)
   fornecedores: "GestaoFornecedores/index.js", saidas: "GestaoSaidas/index.js",
   // FASE 10, Financeiro (e2e-200): os blocos de recibo
-  finBlocos: "FinBlocos/index.js" };
+  finBlocos: "FinBlocos/index.js",
+  // FASE 10, Financeiro, incremento 3 (e2e-204): o lançamento
+  finLancamentos: "FinLancamentos/index.js" };
 (async () => {
   const pool = await obterPool();                      // a ponte já está de pé e conectada
   const espera = () => spec.t0 - Date.now();

@@ -251,7 +251,7 @@ incremento 1b. A produção só com o OK dele, numa missão própria, com a troc
   02/11/2026.").
 - **M5.** O aviso embaixo, no celular, a 16 px das bordas, como o aprovado.
 - **M6.** O livro visto pela congregação diz o nome dela na saída ("entregue a Rute Santos (Vila Nova)"), como a 1ª linha do aprovado; o
-  desenho mistura as duas formas (as linhas de baixo vêm sem) e ficou uma regra só, a do pedido do coordenador.
+  desenho mistura as duas formas (as linhas de baixo vêm sem) e ficou uma regra só, a do pedido do coordenador (**para conferir**).
 
 ### Perguntas abertas do incremento 2 (para ele)
 
@@ -324,8 +324,11 @@ dos centros de custo vai mexer em dezembro).
    Vila Nova; nada mais da ficha).
 3. **O dia do lançamento:** só o mês de agora e o anterior, nunca depois de hoje; o anterior só enquanto a congregação não mandou
    aquele relatório (o envio vem com o desenho dele; a 204 deixa o ponto de encaixe, `FinRelatoriosMes`).
-4. **A folha arrancada ou cancelada:** a planilha só mostra ("Arrancada · motivo"); marcar é na aba Folhas (r30), com um atalho da
-   linha até lá.
+4. **A folha cancelada, arrancada ou inexistente** (corrigida em 26/11/2026) se **marca na própria planilha**, com o motivo, como na
+   aba Folhas, e com o mesmo histórico e o mesmo desfazer da r30 (o desfazer, só a Tesouraria Geral). A aba Folhas continua marcando
+   também; as duas gravam pela mesma regra no servidor (`finBlocosDb.marcarExcecaoNaTransacao`). A extraviada fica só na aba Folhas.
+   Na planilha a marca segue a ordem do bloco, como o lançamento, e vale só na entrega em curso: a folha sem destino de uma entrega que
+   já voltou só se lança, como na aba Folhas (para conferir).
 5. **"Marcada em novembro" sai** dos 4 pontos ("—" na coluna "Referente a", nada sob "Folha (sozinha)", "dezembro" no "6. Referente a"
    travado, nada no cartão do celular), e o tom azul da linha também, como no mural.
 6. **O "Pré-repasse" e a coluna "Entrega" da área:** até o incremento 5, só o que foi lançado, sem número de repasse inventado.

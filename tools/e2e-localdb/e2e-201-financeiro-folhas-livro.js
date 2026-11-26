@@ -250,7 +250,8 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   try { await q(CONFERENCIAS.map(([t, c]) => `ALTER TABLE ${t} WITH CHECK CHECK CONSTRAINT ${c}`).join("; ")); }
   catch (e) { conferiu = false; console.log(e.message); }
   ok(conferiu && Number(await escalar(`SELECT COUNT(*) FROM sys.check_constraints WHERE name IN (${CONFERENCIAS.map(([, c]) => `'${c}'`).join(", ")}) AND is_disabled = 0 AND is_not_trusted = 0`)) === 4
-    && Number(await escalar(`SELECT COUNT(*) FROM sys.foreign_keys WHERE name LIKE 'FK_Fin%DoBloco' AND is_disabled = 0 AND is_not_trusted = 0`)) === 4,
+    && Number(await escalar(`SELECT COUNT(*) FROM sys.foreign_keys WHERE name IN ('FK_FinLivroBlocos_SaidaDoBloco', 'FK_FinFolhas_SaidaDoBloco', 'FK_FinFolhasDesfeitas_SaidaDoBloco',
+      'FK_FinLivroBlocos_FaixaDoBloco') AND is_disabled = 0 AND is_not_trusted = 0`)) === 4,
   "depois do acerto, a conferência do banco liga de novo e vale para todas as linhas (as chaves da 202 também)");
   ok((await fotoLivro()) === livroAntes && (await fotoFolhas()) === folhasAntes,
     "a 201 e a 202 (duas vezes cada) refazem a faixa das saídas, a primeira folha do bloco, a saída de cada entrada e a entrega de cada folha");

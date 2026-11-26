@@ -12,15 +12,19 @@
 // ESCOPO: a regra do CPF repetido — as duas fichas no escopo de quem junta (a congregação, a área); fora disso, só a Secretaria Geral. Fora do escopo e
 // inexistente respondem igual ("não encontrada"). O CPF nunca sai inteiro e o motivo de uma saída disciplinar só para quem tem "disciplina" (shared/juntarFichas.js).
 const auth = require("../shared/auth");
-const { getPool } = require("../shared/db");
+const { getPool, sql } = require("../shared/db");
 const { pessoaAlcancavel, ehGeral } = require("../shared/escopoRotas");
 const db = require("../shared/juntarFichasDb");
 const { criarLimitador } = require("../shared/limiteTaxa");
+const nivelDoCargo = require("../shared/nivelDoCargo");
 
 // juntar e desfazer mexem em muitas tabelas: no máximo 10 por minuto por pessoa (por instância)
 const limitador = criarLimitador({ janelaMs: 60000, maximo: 10 });
 const semCache = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 const corpoDe = (req) => (req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {});
+// Juntar ou desfazer mexe no acesso da pessoa (a ficha que sai perde as sessões, os cargos mudam de matrícula e o e-mail escolhido pode trocar): com cargo de
+// liderança vigente, só a secretaria do nível do cargo (ou de cima), com a confirmação recente (428). A regra do acesso parte 3 (25 e 26/11/2026).
+const MSG_NIVEL_JUNTAR = "Esta pessoa tem cargo de liderança de nível acima do seu: só a secretaria do nível do cargo (ou de cima) junta as fichas dela.";
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
@@ -64,6 +68,17 @@ module.exports = async function (context, req) {
       return;
     }
     const corpo = corpoDe(req);
+    // a conferência vem DEPOIS do escopo: fora do escopo e inexistente seguem para a camada, que responde "não encontrada" como antes
+    let fichas = [];
+    if (acao === "juntar") {
+      const pa = await pessoaAlcancavel(pool, usuario, corpo.a), pb = await pessoaAlcancavel(pool, usuario, corpo.b);
+      if (pa && pb && pa.membroId !== pb.membroId) fichas = [pa.membroId, pb.membroId];
+    } else if (ehGeral(usuario)) {
+      const juncaoId = auth.idDeRota(corpo.juncaoId);
+      const j = juncaoId ? (await pool.request().input("id", sql.Int, juncaoId).query(`SELECT MatriculaFica, MatriculaSai FROM JuncoesFichas WHERE JuncaoId = @id`)).recordset[0] : null;
+      if (j) fichas = [Number(j.MatriculaFica), Number(j.MatriculaSai)];
+    }
+    for (const membroId of fichas) if (!(await nivelDoCargo.conferirAtoSobreLideranca(pool, sql, req, context, usuario, membroId, MSG_NIVEL_JUNTAR))) return;
     responder(acao === "juntar" ? await db.juntar(pool, usuario, corpo) : await db.desfazer(pool, usuario, corpo));
     return;
   }

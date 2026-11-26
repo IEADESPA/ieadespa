@@ -173,7 +173,7 @@ describe("rotas de verdade obedecem o escopo DA PERMISSÃO", () => {
 describe("LoginSecretaria monta uma concessão por cargo e por delegação", () => {
   const NOMES_DA_AREA = ["Central", "Vila Nova", "Jardim das Flores", "Parque Industrial", "Bairro Alto", "Campo Verde", "Morada do Sol", "Nova Esperança", "Recanto Feliz", "Boa Vista"];
   function banco({ ativoAte = null, delegacoes = [] } = {}) {
-    quando(/FROM Lideranca l\s+JOIN Papeis p ON p\.PapelId = l\.PapelId\s+JOIN MembroReferencia m/, [{ membroId: 5, escopoTipo: "AREA", escopoId: 3, senhaHash: auth.hashSenha("Senha#1"), departamentoId: null, ativoAte, papelNome: "Pastor de Área", papelNivel: "AREA", permissoesStr: "pessoas,reunioes", nome: "Pr. João" }]);
+    quando(/FROM Lideranca l\s+JOIN Papeis p ON p\.PapelId = l\.PapelId\s+JOIN MembroReferencia m/, [{ membroId: 5, escopoTipo: "AREA", escopoId: 3, senhaHash: auth.hashSenha("Senha#1"), departamentoId: null, ativoAte, papelNome: "Pastor de Área", papelNivel: "AREA", permissoesStr: "pessoas,reunioes", nome: "Pr. João", ativo: 1 }]);
     quando(/UPDATE t SET\s+Falhas = CASE/, [{ EstavaBloqueado: false, Falhas: 1, BloqueadaAgora: false }]);
     quando(/SELECT Nome FROM Congregacoes WHERE AreaId = @id/, NOMES_DA_AREA.map((Nome) => ({ Nome })));
     quando(/SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id/, [{ Nome: "Distante" }]);
@@ -205,7 +205,7 @@ describe("LoginSecretaria monta uma concessão por cargo e por delegação", () 
     expect(escopoRotas.exigirGeral(req(tk), {}, "pessoas")).toBeNull();
   });
   test("tela: cargo Global de escopo limitado + delegação Departamental de escopo TODAS NÃO é geral (nível e escopo de concessões diferentes)", async () => {
-    quando(/FROM Lideranca l\s+JOIN Papeis p ON p\.PapelId = l\.PapelId\s+JOIN MembroReferencia m/, [{ membroId: 5, escopoTipo: "AREA", escopoId: 3, senhaHash: auth.hashSenha("Senha#1"), departamentoId: null, ativoAte: null, papelNome: "Secretário", papelNivel: "GLOBAL", permissoesStr: "pessoas,reunioes", nome: "Pr. João" }]);
+    quando(/FROM Lideranca l\s+JOIN Papeis p ON p\.PapelId = l\.PapelId\s+JOIN MembroReferencia m/, [{ membroId: 5, escopoTipo: "AREA", escopoId: 3, senhaHash: auth.hashSenha("Senha#1"), departamentoId: null, ativoAte: null, papelNome: "Secretário", papelNivel: "GLOBAL", permissoesStr: "pessoas,reunioes", nome: "Pr. João", ativo: 1 }]);
     banco({ delegacoes: [delegacao({ papelNome: "Líder Geral de Departamento", papelNivel: "DEPARTAMENTO", permissoesStr: "pessoas" })] });
     const r = await chamar(hLogin, { corpo: { matricula: 5, senha: "Senha#1" } });
     expect(r.body).toMatchObject({ sucesso: true, nivel: "GLOBAL", escopo: "TODAS", geral: false });

@@ -1,0 +1,1108 @@
+<title>Propostas de tela · rodada 32</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: cabeçalho curto, fila de telas, controles (opção e modo), prévia em escala e a caixa de aprovação embaixo. */
+:root {
+  --bg: #F2F4F8;
+  --sup: #FFFFFF;
+  --texto: #1A2230;
+  --suave: #556070;
+  --borda: #D6DCE5;
+  --titulo: #0A2342;
+  --ouro: #FFB800;
+  --sobre-ouro: #0A2342;
+  --ativo: #0A2342;
+  --sobre-ativo: #FFFFFF;
+  --ok: #166534;
+  --ok-fundo: #DCFCE7;
+  --falta: #7A4A00;
+  --falta-fundo: #FEF3C7;
+  --palco: #E3E7EE;
+  --foco: #1D4ED8;
+  --sombra: 0 18px 40px rgba(10, 35, 66, .16);
+  --letra: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #07152A; --sup: #0E2240; --texto: #E6ECF5; --suave: #A9B6CA; --borda: #24406A; --titulo: #FFFFFF;
+    --ativo: #FFB800; --sobre-ativo: #0A2342; --ok: #BBF7D0; --ok-fundo: #14532D; --falta: #FCD34D; --falta-fundo: #3D2A05;
+    --palco: #0B1C35; --foco: #93B4F8; --sombra: 0 18px 40px rgba(0, 0, 0, .45); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #07152A; --sup: #0E2240; --texto: #E6ECF5; --suave: #A9B6CA; --borda: #24406A; --titulo: #FFFFFF;
+  --ativo: #FFB800; --sobre-ativo: #0A2342; --ok: #BBF7D0; --ok-fundo: #14532D; --falta: #FCD34D; --falta-fundo: #3D2A05;
+  --palco: #0B1C35; --foco: #93B4F8; --sombra: 0 18px 40px rgba(0, 0, 0, .45); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--texto); font-family: var(--letra); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.pagina { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.topo { display: flex; flex-direction: column; gap: 6px; }
+.selo { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--suave); }
+h1 { margin: 0; font-size: clamp(24px, 3vw, 32px); line-height: 1.15; color: var(--titulo); text-wrap: balance; }
+.como { margin: 0; max-width: 70ch; color: var(--suave); }
+.telas { display: flex; flex-direction: column; gap: 14px; }
+.rodada { display: flex; flex-direction: column; gap: 8px; }
+.rodada h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--suave); }
+.telas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.cheia {
+  position: fixed; inset: 0; z-index: 50; background: rgba(4, 12, 24, .95); display: flex; flex-direction: column; gap: 10px;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) max(12px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 10px) max(12px, env(safe-area-inset-left, 0px));
+}
+.cheia-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cheia-barra span { flex: 1; min-width: 0; color: #FFFFFF; font-weight: 600; font-size: 14px; }
+.cheia-area { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.cheia-area .palco { position: absolute; }
+.tela-btn {
+  font: inherit; text-align: left; cursor: pointer; border: 1px solid var(--borda); background: var(--sup); color: var(--texto);
+  border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+.tela-btn small { font-size: 12px; color: var(--suave); }
+.tela-btn strong { font-size: 14.5px; line-height: 1.25; color: var(--titulo); }
+.tela-btn[aria-pressed="true"] { border-color: var(--ativo); box-shadow: inset 0 0 0 1.5px var(--ativo); }
+.marca { align-self: flex-start; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; background: var(--falta-fundo); color: var(--falta); }
+.marca.ok { background: var(--ok-fundo); color: var(--ok); }
+.painel { background: var(--sup); border: 1px solid var(--borda); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.decidido { margin: 0; font-size: 14px; color: var(--suave); }
+.decidido strong { color: var(--titulo); }
+.controles { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.grupo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.grupo-rot { font-size: 13px; font-weight: 600; color: var(--suave); margin-right: 2px; }
+.op-btn, .modo-btn, .acao, .acao-sec, .link-btn {
+  font: inherit; cursor: pointer; border-radius: 10px; min-height: 40px; padding: 0 14px; border: 1px solid var(--borda);
+  background: var(--sup); color: var(--texto); font-weight: 600; font-size: 14px;
+}
+.op-btn[aria-pressed="true"], .modo-btn[aria-pressed="true"] { background: var(--ativo); color: var(--sobre-ativo); border-color: var(--ativo); }
+.op-btn .ok { margin-left: 6px; font-size: 12px; }
+.desc { margin: 0; font-size: 14.5px; color: var(--texto); max-width: 90ch; }
+.desc strong { color: var(--titulo); }
+.quadro { position: relative; width: 100%; background: var(--palco); border-radius: 14px; overflow: hidden; }
+.quadro.real { overflow: auto; }
+.palco { position: absolute; top: 0; transform-origin: top left; box-shadow: var(--sombra); overflow: hidden; font-family: var(--letra); line-height: 1.35; }
+.quadro.real .palco { position: relative; transform: none !important; left: 0 !important; margin: 16px auto; }
+.palco h1, .palco h2, .palco h3, .palco p { margin: 0; }
+.aprovacao { border-top: 1px solid var(--borda); padding-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.situacao { font-size: 15px; color: var(--texto); }
+.situacao strong { color: var(--titulo); }
+label { font-size: 14px; font-weight: 600; color: var(--titulo); }
+textarea {
+  font: inherit; width: 100%; min-height: 76px; resize: vertical; border-radius: 10px; border: 1px solid var(--borda);
+  background: var(--bg); color: var(--texto); padding: 10px 12px;
+}
+.acoes { display: flex; flex-wrap: wrap; gap: 10px; }
+.acao { background: var(--ouro); color: var(--sobre-ouro); border-color: var(--ouro); font-weight: 700; }
+.link-btn { border-color: transparent; background: transparent; color: var(--suave); text-decoration: underline; }
+.aviso { margin: 0; font-size: 14px; color: var(--suave); min-height: 1.5em; }
+.geral { background: var(--sup); border: 1px solid var(--borda); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.geral h2 { margin: 0; font-size: 17px; color: var(--titulo); }
+button:focus-visible, textarea:focus-visible { outline: 3px solid var(--foco); outline-offset: 2px; }
+button:disabled { opacity: .55; cursor: default; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* "Já aprovados": os links para as páginas de arquivo (rodadas 19 a 30 e rodadas 2 a 18), que abrem em outra aba */
+.aprovados { display: flex; flex-direction: column; gap: 6px; }
+.aprovados-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 10px 14px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--borda); background: var(--sup); color: var(--titulo); font: inherit; font-size: 15px; font-weight: 700; text-align: left; text-decoration: none;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.aprovados-tit { flex: 1; min-width: 0; }
+.aprovados-n { font-size: 13px; font-weight: 600; color: var(--suave); white-space: nowrap; }
+.aprovados-ext { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.aprovados-btn:hover { border-color: var(--suave); }
+.aprovados-btn:focus-visible { outline: 3px solid var(--foco); outline-offset: 2px; }
+.aprovados-nota { margin: 0; font-size: 13.5px; color: var(--suave); max-width: 90ch; }
+@media (max-width: 560px) { .aprovados-n { display: none; } }
+/* (sem uso desde a 31: a página nova não tem rodadas recolhidas) */
+.antiga { background: var(--sup); border: 1px solid var(--borda); border-radius: 12px; padding: 2px 16px; }
+.antiga summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--suave); list-style: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.antiga summary::-webkit-details-marker { display: none; }
+.antiga summary::before { content: ""; width: 8px; height: 8px; flex: none; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s ease-out; margin: 0 4px 0 2px; }
+.antiga[open] summary::before { transform: rotate(45deg); }
+.antiga summary:focus-visible { outline: 3px solid var(--foco); outline-offset: 2px; border-radius: 6px; }
+.antiga .telas-grid { padding: 2px 0 14px; }
+@media (prefers-reduced-motion: reduce) { .antiga summary::before { transition: none; } }
+[hidden] { display: none !important; }
+
+/* Rodada 19: a explicação da rodada (fora do desenho das telas), a explicação de cada passo, o contador e o rascunho das observações */
+.explica { background: var(--sup); border: 1px solid var(--borda); border-left: 4px solid var(--ouro); border-radius: 12px; padding: 4px 16px; }
+.explica summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; color: var(--titulo); list-style: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.explica summary::-webkit-details-marker { display: none; }
+.explica summary::before { content: ""; width: 8px; height: 8px; flex: none; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s ease-out; margin: 0 4px 0 2px; }
+.explica[open] summary::before { transform: rotate(45deg); }
+.explica summary:focus-visible { outline: 3px solid var(--foco); outline-offset: 2px; border-radius: 6px; }
+.explica p, .explica ol { margin: 0 0 10px; max-width: 92ch; font-size: 14.5px; line-height: 1.55; color: var(--texto); }
+.explica ol { padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
+.explica strong { color: var(--titulo); }
+.desc .passo-expl { display: block; margin-top: 8px; padding: 9px 12px; border-left: 3px solid var(--ouro); background: var(--sup); border-radius: 0 10px 10px 0; font-size: 14.5px; line-height: 1.5; }
+#obs, #obs-geral { min-height: 150px; max-height: 70vh; }
+.obs-pe { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: -4px; font-size: 13px; color: var(--suave); }
+.obs-pe .rascunho { flex: 1; min-width: 0; }
+.obs-pe .conta { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.obs-pe .conta.perto { color: var(--falta); font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .explica summary::before { transition: none; } }
+</style>
+
+<div class="pagina">
+  <header class="topo">
+    <span class="selo">IEADESPA · FASE 10 · rodada 32</span>
+    <h1>Propostas de tela: escolha tela por tela</h1>
+    <p class="como">1) Escolha a tela. 2) Clique nas opções para comparar. 3) Troque entre o notebook e o celular e, quando aparecer, em "Quem está vendo". 4) Quando gostar de uma, toque em <strong>Aprovo esta opção</strong> e, se quiser, escreva o que mudar. <strong>Tela cheia</strong> mostra a tela inteira, sem cortar. Nada vai para o sistema sem a sua aprovação. Todos os nomes e números aqui são de mentira.</p>
+  </header>
+
+  <nav class="telas" id="telas" aria-label="Telas"></nav>
+
+  <div class="aprovados">
+    <a class="aprovados-btn" href="https://claude.ai/artifact/58VZXcgVGNdrUxoVZRp2c6" target="_blank" rel="noopener"><span class="aprovados-tit">Já aprovados (rodada 31)</span><span class="aprovados-n">abre em outra aba</span><svg class="aprovados-ext" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+    <a class="aprovados-btn" href="https://claude.ai/artifact/KMebnrdoWfAhcz9yeRgjFz" target="_blank" rel="noopener"><span class="aprovados-tit">Já aprovados (rodadas 19 a 30)</span><span class="aprovados-n">abre em outra aba</span><svg class="aprovados-ext" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+    <a class="aprovados-btn" href="https://claude.ai/artifact/G1gj9hzSbdcqAZYcFjmJ1j" target="_blank" rel="noopener"><span class="aprovados-tit">Já aprovados (rodadas 2 a 18)</span><span class="aprovados-n">abre em outra aba</span><svg class="aprovados-ext" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+    <p class="aprovados-nota">Esta página tem só a rodada 32: cada rodada ganha a sua página. A rodada 31, as rodadas 19 a 30 e as rodadas 2 a 18 ficam nas três páginas acima, com as escolhas e as observações guardadas como estavam.</p>
+  </div>
+
+  <section class="painel" aria-live="polite">
+    <p class="decidido" id="decidido"></p>
+    <div class="controles">
+      <div class="grupo" id="opcoes" role="group" aria-label="Opções"></div>
+      <div class="grupo" role="group" aria-label="Ver">
+        <button type="button" class="modo-btn" id="tela-cheia">Tela cheia</button>
+      </div>
+    </div>
+    <div class="grupo" id="dispositivos" role="group" aria-label="Onde ver" hidden></div>
+    <div class="grupo" id="perfis" role="group" aria-label="Quem está vendo" hidden></div>
+    <p class="desc" id="desc"></p>
+    <div class="quadro" id="quadro"><div class="palco" id="palco"></div></div>
+    <div class="aprovacao">
+      <div class="situacao" id="situacao">Carregando as suas escolhas…</div>
+      <label for="obs">O que mudar nesta tela (opcional)</label>
+      <textarea id="obs" maxlength="20000" aria-describedby="obs-conta" placeholder="Ex.: gostei da opção 2, mas quero a foto maior e o botão mais embaixo."></textarea>
+      <div class="obs-pe"><span class="rascunho" id="rascunho" aria-live="polite"></span><span class="conta" id="obs-conta">0 de 20.000 caracteres</span></div>
+      <div class="acoes">
+        <button type="button" class="acao" id="aprovar">Aprovo esta opção</button>
+        <button type="button" class="acao-sec" id="guardar-obs">Guardar só a observação</button>
+        <button type="button" class="link-btn" id="tirar">Tirar a minha aprovação desta tela</button>
+      </div>
+      <p class="aviso" id="aviso" role="status"></p>
+    </div>
+  </section>
+
+  <section class="geral">
+    <h2>Observação geral sobre a rodada 32</h2>
+    <label for="obs-geral">Cores, letras, o que gostou ou não gostou em todas as telas (as das rodadas 2 a 30 continuam guardadas nas páginas de "Já aprovados")</label>
+    <textarea id="obs-geral" maxlength="20000" aria-describedby="geral-conta"></textarea>
+    <div class="obs-pe"><span class="rascunho" id="rascunho-geral" aria-live="polite"></span><span class="conta" id="geral-conta">0 de 20.000 caracteres</span></div>
+    <div class="acoes"><button type="button" class="acao-sec" id="guardar-geral">Guardar observação geral</button></div>
+    <p class="aviso" id="aviso-geral" role="status"></p>
+  </section>
+</div>
+
+<div class="cheia" id="cheia" hidden role="dialog" aria-modal="true" aria-label="Tela cheia">
+  <div class="cheia-barra">
+    <span id="cheia-titulo"></span>
+    <button type="button" class="modo-btn" id="cheia-anterior">‹ Opção anterior</button>
+    <button type="button" class="modo-btn" id="cheia-proxima">Próxima opção ›</button>
+    <button type="button" class="acao" id="cheia-fechar">Fechar</button>
+  </div>
+  <div class="cheia-area" id="cheia-area"><div class="palco" id="cheia-palco"></div></div>
+</div>
+
+<script>
+const I = {
+  casa: 'M3 11l9-7 9 7M5 10v10h14V10',
+  pasta: 'M3 7h6l2 2h10v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  pessoa: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c1.5-4 4.5-6 8-6s6.5 2 8 6',
+  pessoas: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2 20c1-3.5 3.8-5.5 7-5.5s6 2 7 5.5M16 4.5a3.5 3.5 0 0 1 0 6.5M18 14.8c2 .7 3.4 2.4 4 5.2',
+  dinheiro: 'M3 6h18v12H3zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6.5 9h.01M17.5 15h.01',
+  livro: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5M8 7h7',
+  calendario: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
+  escudo: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
+  megafone: 'M3 10v4h4l6 4V6l-6 4zM17 9a4 4 0 0 1 0 6',
+  coracao: 'M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z',
+  globo: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9z',
+  mapa: 'M9 4L3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14',
+  sino: 'M6 16v-5a6 6 0 1 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0',
+  busca: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4',
+  seta: 'M9 6l6 6-6 6',
+  setaBaixo: 'M6 9l6 6 6-6',
+  voltar: 'M15 6l-6 6 6 6',
+  digital: 'M12 11v4M8.5 8.5a5 5 0 0 1 7 0M6 13c0-3.3 2.7-6 6-6s6 2.7 6 6v1M9 14c0-1.7 1.3-3 3-3s3 1.3 3 3c0 2-.5 4-1.5 6M9 17c.3 1.3.3 2.5 0 3.5',
+  check: 'M5 12l5 5 9-10',
+  cartao: 'M3 6h18v12H3zM7 10h4M7 14h6M15 10h3',
+  balanca: 'M12 3v18M6 21h12M6 7h12M6 7l-3 6a3 3 0 0 0 6 0zM18 7l-3 6a3 3 0 0 0 6 0z',
+  lua: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z',
+  sol: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',
+  planilha: 'M4 4h16v16H4zM4 10h16M4 15h16M10 4v16',
+  mais: 'M12 5v14M5 12h14',
+  grafico: 'M4 20V11M10 20V5M16 20v-7M21 20H3',
+  doc: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h6',
+  relogio: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
+  maleta: 'M4 8h16v12H4zM9 8V5h6v3M4 13h16',
+  igreja: 'M12 2v4M10 4h4M12 6l6 5v10H6V11zM10 21v-5h4v5',
+  filtro: 'M3 5h18l-7 8v6l-4-2v-4z'
+};
+const ic = (n, cor, t = 20, w = 1.8) => `<svg width="${t}" height="${t}" viewBox="0 0 24 24" fill="none" stroke="${cor}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none"><path d="${I[n]}"/></svg>`;
+function P(modo) {
+  const e = modo === 'escuro';
+  return e ? {
+    e, fundo: '#0B1F3A', sup: '#102A4C', lateral: '#061629', lateralCartao: '#0E2748', ativo: '#13294A', topo: '#0E2748', borda: '#23406A',
+    texto: '#E8EEF7', titulo: '#FFFFFF', suave: '#B8C4D6', campo: '#0A1F3D', campoBorda: '#3C5A82', icone: '#FFC933', link: '#93B4F8',
+    ouroTinta: '#2A2410', ouroBorda: '#5C4A12', linha: '#1A3557'
+  } : {
+    e, fundo: '#F4F6FA', sup: '#FFFFFF', lateral: '#0A2342', lateralCartao: '#13294A', ativo: '#16365E', topo: '#FFFFFF', borda: '#DDE2EA',
+    texto: '#1B2430', titulo: '#0A2342', suave: '#5F6673', campo: '#F7F8FA', campoBorda: '#C9CFD8', icone: '#0A2342', link: '#1D4ED8',
+    ouroTinta: '#FFF4D6', ouroBorda: '#F2D27A', linha: '#EEF1F5'
+  };
+}
+const MODS = {
+  pessoas: ['#1D4ED8', '#93B4F8', '#E3ECFD', '#1E3A6E'],
+  financas: ['#0F766E', '#5EEAD4', '#DDF3EF', '#0F3D3A'],
+  ministerio: ['#6D28D9', '#C4B5FD', '#EDE7FB', '#34205E'],
+  departamentos: ['#BE185D', '#F9A8D4', '#FCE7F3', '#4A1530'],
+  ebd: ['#0369A1', '#7DD3FC', '#DFF1FA', '#0C3A52'],
+  expansao: ['#C2410C', '#FDBA74', '#FDEBDD', '#4A2410'],
+  territorio: ['#15803D', '#86EFAC', '#DCFCE7', '#14532D'],
+  agenda: ['#A21CAF', '#F0ABFC', '#FBE7FB', '#4A1650'],
+  governanca: ['#7A5800', '#FFC933', '#FFF4D6', '#3D2E05'],
+  protecao: ['#B91C1C', '#FCA5A5', '#FEE2E2', '#4C1717'],
+  comunicacao: ['#4338CA', '#A5B4FC', '#E8EAFD', '#26265E'],
+  cuidado: ['#B45309', '#FCD34D', '#FEF3C7', '#3D2A05']
+};
+const mc = (p, k) => ({ cor: p.e ? MODS[k][1] : MODS[k][0], fundo: p.e ? MODS[k][3] : MODS[k][2] });
+const logo = (t, borda = '#FFB800') => `<div style="width:${t}px;height:${t}px;border-radius:50%;background:#FFFFFF;border:${Math.max(2, Math.round(t / 32))}px solid ${borda};display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none"><img src="logo.png" alt="" style="width:${Math.round(t * 0.8)}px;height:${Math.round(t * 0.8)}px;object-fit:contain"></div>`;
+const campo = (p, rot, val, senha) => `<span style="display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600;color:${p.titulo}">${rot}<span style="height:46px;border:1px solid ${p.campoBorda};border-radius:10px;background:${p.campo};display:flex;align-items:center;padding:0 14px;font-weight:400;font-size:15px;color:${senha ? p.texto : p.suave};letter-spacing:${senha ? '.2em' : '0'}">${val}</span></span>`;
+const statusBar = cor => `<div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:15px;font-weight:600;color:${cor}"><span>9:41</span><span style="width:24px;height:11px;border-radius:3px;border:1.5px solid ${cor}"></span></div>`;
+function lateralSimples(p, o) {
+  const clara = o.lateral === 'clara';
+  const L = clara
+    ? { bg: p.e ? '#0E2748' : '#FFFFFF', txt: p.texto, sub: p.suave, borda: `border-right:1px solid ${p.borda};`, ativoBg: p.ouroTinta, ativoTxt: p.titulo, ativoIc: p.titulo, cartao: p.fundo, ic: p.suave, nome: p.titulo }
+    : { bg: p.lateral, txt: '#D5DEEA', sub: '#B9C6D8', borda: '', ativoBg: p.ativo, ativoTxt: '#FFFFFF', ativoIc: '#FFB800', cartao: p.lateralCartao, ic: '#D5DEEA', nome: '#FFFFFF' };
+  const item = it => it.ativo
+    ? `<span style="display:flex;align-items:center;gap:12px;height:44px;padding:0 12px;border-radius:10px;background:${L.ativoBg};border-left:4px solid #FFB800;color:${L.ativoTxt};font-size:15px;font-weight:600">${ic(it.ic, L.ativoIc, 20, 1.9)}${it.nome}</span>`
+    : `<span style="display:flex;align-items:center;gap:12px;height:44px;padding:0 16px;border-radius:10px;color:${L.txt};font-size:15px">${ic(it.ic, L.ic, 20)}${it.nome}</span>`;
+  return `<nav style="width:248px;flex:none;padding:20px 14px;background:${L.bg};${L.borda}display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 6px 18px">${logo(42)}<span style="font-size:16px;font-weight:800;letter-spacing:.04em;color:${L.nome}">IEADESPA</span></div>
+    ${o.itens.map(item).join('')}
+    <div style="flex:1"></div>
+    ${cartaoUsuario(L, o.usuario)}
+  </nav>`;
+}
+const cartaoUsuario = (L, u) => `<div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;background:${L.cartao}"><div style="width:34px;height:34px;border-radius:17px;background:#FFB800;color:#0A2342;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none">${u.ini}</div><div style="display:flex;flex-direction:column;min-width:0"><span style="font-size:14px;font-weight:600;color:${L.nome}">${u.nome}</span><span style="font-size:12px;color:${L.sub}">${u.papel}</span></div></div>`;
+function barraTopo(p, trilha, marinho) {
+  const bg = marinho ? (p.e ? '#061629' : '#0A2342') : p.topo;
+  const cor = marinho ? '#FFFFFF' : p.titulo, sub = marinho ? '#C9D4E3' : p.suave;
+  const campoBg = marinho ? 'rgba(255,255,255,.08)' : p.campo, campoBorda = marinho ? 'rgba(255,255,255,.22)' : p.campoBorda;
+  const partes = trilha.map((t, i) => i === trilha.length - 1 ? `<span style="font-size:15px;font-weight:600;color:${cor}">${t}</span>` : `<span style="font-size:15px;color:${sub}">${t}</span>${ic('seta', sub, 14, 2)}`).join('');
+  return `<header style="height:64px;flex:none;padding:0 28px;background:${bg};border-bottom:1px solid ${marinho ? bg : p.borda};display:flex;align-items:center;gap:10px">
+    ${partes}<div style="flex:1"></div>
+    <span style="width:300px;height:40px;border:1px solid ${campoBorda};border-radius:10px;background:${campoBg};display:flex;align-items:center;gap:8px;padding:0 12px;font-size:14px;color:${sub}">${ic('busca', sub, 18)}Buscar pessoa ou módulo<span style="margin-left:auto;font-size:12px;border:1px solid ${campoBorda};border-radius:6px;padding:1px 6px">Ctrl K</span></span>
+    <span style="width:40px;height:40px;border:1px solid ${campoBorda};border-radius:10px;background:${campoBg};display:flex;align-items:center;justify-content:center">${ic(p.e ? 'sol' : 'lua', marinho ? '#FFC933' : p.icone, 20)}</span>
+    <span style="position:relative;width:40px;height:40px;border:1px solid ${campoBorda};border-radius:10px;background:${campoBg};display:flex;align-items:center;justify-content:center">${ic('sino', marinho ? '#FFFFFF' : p.icone, 20)}<span style="position:absolute;top:8px;right:9px;width:8px;height:8px;border-radius:4px;background:#FFB800"></span></span>
+  </header>`;
+}
+function casca(p, o) {
+  return `<div style="width:1280px;height:800px;display:flex;position:relative;background:${p.fundo};color:${p.texto}">
+    ${o.lateralHtml || lateralSimples(p, o)}
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column">
+      ${barraTopo(p, o.trilha, o.topoMarinho)}
+      ${o.faixa ? `<div style="height:6px;flex:none;background:${o.faixa}"></div>` : ''}
+      <div style="flex:1;min-height:0;padding:24px 32px;display:flex;flex-direction:column;gap:20px;overflow:hidden;position:relative">${o.conteudo}</div>
+    </main>
+    ${o.sobre || ''}
+  </div>`;
+}
+const LIDER = { ini: 'JS', nome: 'João da Silva', papel: 'Secretaria Geral' };
+function nivel(p, grande) {
+  const seg = (t, a) => a
+    ? `<span style="flex:${grande ? 1 : 'none'};height:${grande ? 46 : 38}px;padding:0 18px;border-radius:9px;background:${p.e ? '#FFB800' : '#0A2342'};color:${p.e ? '#0A2342' : '#FFFFFF'};display:flex;align-items:center;justify-content:center;font-size:${grande ? 15.5 : 14.5}px;font-weight:700">${t}</span>`
+    : `<span style="flex:${grande ? 1 : 'none'};height:${grande ? 46 : 38}px;padding:0 18px;border-radius:9px;color:${p.texto};display:flex;align-items:center;justify-content:center;font-size:${grande ? 15.5 : 14.5}px;font-weight:600">${t}</span>`;
+  return `<div style="display:flex;${grande ? 'width:100%;' : ''}padding:4px;gap:4px;border-radius:12px;background:${p.e ? '#0A1F3D' : '#E8ECF2'};border:1px solid ${p.borda}">${seg('Local', false)}${seg('Área', true)}${seg('Geral', false)}</div>`;
+}
+const aba = (p, t, a) => a
+  ? `<span style="height:32px;padding:0 12px;border-radius:8px;background:${p.e ? '#FFB800' : '#0A2342'};color:${p.e ? '#0A2342' : '#FFFFFF'};display:flex;align-items:center;font-size:13.5px;font-weight:700;white-space:nowrap">${t}</span>`
+  : `<span style="height:32px;padding:0 12px;border-radius:8px;border:1px solid ${p.borda};color:${p.texto};display:flex;align-items:center;font-size:13.5px;font-weight:600;white-space:nowrap">${t}</span>`;
+const TELAS = [];
+const ehCel = d => d === 'celular';
+function cascaCel(p, o) {
+  const barraBg = o.corBarra || p.sup, barraTx = o.corBarra ? '#FFFFFF' : p.titulo, barraIc = o.corBarra ? '#FFFFFF' : p.icone;
+  return `<div style="width:390px;height:844px;display:flex;flex-direction:column;position:relative;background:${o.fundo || p.fundo};color:${p.texto};overflow:hidden">
+    <div style="background:${barraBg}">${statusBar(barraTx)}</div>
+    <div style="height:56px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;background:${barraBg};${o.corBarra ? '' : `border-bottom:1px solid ${p.borda};`}">
+      ${ic(o.voltar ? 'voltar' : 'menu', barraIc, 24, 2)}<span style="flex:1;min-width:0;font-size:17px;font-weight:700;color:${barraTx};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${o.titulo}</span>
+      ${ic('busca', barraIc, 22, 2)}<span style="position:relative;display:flex">${ic('sino', barraIc, 22, 2)}${o.avisos ? `<span style="position:absolute;top:-6px;right:-8px;min-width:18px;height:18px;border-radius:9px;background:#FFB800;color:#0A2342;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center">${o.avisos}</span>` : ''}</span>
+    </div>
+    ${o.faixa ? `<div style="height:5px;flex:none;background:${o.faixa}"></div>` : ''}
+    <div style="flex:1;min-height:0;overflow:hidden;padding:16px;display:flex;flex-direction:column;gap:14px">${o.conteudo}</div>
+    ${o.baixo || ''}
+    ${o.sobre || ''}
+  </div>`;
+}
+I.menu = 'M4 6h16M4 12h16M4 18h16';
+I.fechar = 'M6 6l12 12M18 6L6 18';
+const chipFiltro = (p, t, ativo) => `<span style="height:32px;padding:0 12px;border-radius:16px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;${ativo ? `background:${p.e ? '#FFB800' : '#0A2342'};color:${p.e ? '#0A2342' : '#FFFFFF'};` : `border:1px solid ${p.borda};color:${p.texto};`}">${t}${ativo ? ic('fechar', p.e ? '#0A2342' : '#FFFFFF', 13, 2.6) : ''}</span>`;
+const CORES_MOD = {
+  financas: p => p.e ? { menu: '#082B28', ativo: '#0F3D3A', cor: '#5EEAD4', cab: 'rgba(255,255,255,.10)', sub: '#A7E5DA' } : { menu: '#0B4A44', ativo: '#126058', cor: '#0F766E', cab: 'rgba(255,255,255,.12)', sub: '#B6E6DE' },
+  catalogo: p => p.e ? { menu: '#2E2405', ativo: '#45370A', cor: '#FFC933', cab: 'rgba(255,255,255,.10)', sub: '#EADBA6' } : { menu: '#5A4100', ativo: '#73550A', cor: '#7A5800', cab: 'rgba(255,255,255,.12)', sub: '#F0DFA8' }
+};
+function menuCor(p, k, { titulo, escopo, grupos, usuario }) {
+  const C = CORES_MOD[k](p);
+  const corpo = grupos.map(g => `<div style="display:flex;align-items:center;gap:8px;height:36px;padding:0 8px;font-size:12.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#FFFFFF">${ic(g[2] ? 'setaBaixo' : 'seta', C.sub, 15, 2.4)}<span style="flex:1">${g[0]}</span>${g[2] ? '' : `<span style="font-size:11.5px;color:${C.sub}">${g[1].length}</span>`}</div>${g[2] ? g[1].map(f => f[2]
+    ? `<span style="display:flex;align-items:center;gap:12px;height:40px;margin-left:14px;padding:0 10px;border-radius:9px;background:${C.ativo};border-left:4px solid #FFB800;color:#FFFFFF;font-size:14.5px;font-weight:600">${ic(f[0], '#FFB800', 19, 2)}${f[1]}</span>`
+    : `<span style="display:flex;align-items:center;gap:12px;height:40px;margin-left:14px;padding:0 14px;color:#E6F2EF;font-size:14.5px">${ic(f[0], C.sub, 19)}${f[1]}</span>`).join('') : ''}`).join('');
+  return `<nav style="width:256px;flex:none;padding:18px 12px;background:${C.menu};display:flex;flex-direction:column;gap:2px;height:100%">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 8px 8px">${logo(36)}<span style="font-size:15px;font-weight:800;letter-spacing:.04em;color:#FFFFFF">IEADESPA</span></div>
+    <span style="display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;font-size:13px;color:${C.sub}">${ic('voltar', C.sub, 16, 2)}Menu principal</span>
+    <div style="margin:6px 0 8px;border-radius:14px;padding:12px 14px;background:${C.cab};display:flex;flex-direction:column;gap:3px"><span style="font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${C.sub}">Módulo</span><span style="font-size:18px;font-weight:800;color:#FFFFFF">${titulo}</span><span style="font-size:12.5px;color:${C.sub}">${escopo}</span></div>
+    ${corpo}<div style="flex:1"></div>${cartaoUsuario({ cartao: 'rgba(255,255,255,.08)', nome: '#FFFFFF', sub: C.sub }, usuario)}
+  </nav>`;
+}
+const TES = { ini: 'RS', nome: 'Rute Santos', papel: 'Tesoureira · Vila Nova' };
+I.cadeado = 'M6 11h12v10H6zM8 11V8a4 4 0 0 1 8 0v3';
+I.lapis = 'M4 20h4L19 9l-4-4L4 16zM13 7l4 4';
+I.chave = 'M15.5 12a4.5 4.5 0 1 0-4.2-2.9L3 17.4V21h3.6v-2.4H9v-2.4h2.4l1.9-1.9a4.5 4.5 0 0 0 2.2.7z';
+I.celular = 'M8 2h8a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM11 18h2';
+I.notebook = 'M4 5h16v10H4zM2 19h20';
+I.engrenagem = 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z';
+I.qr = 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z';
+I.ajudaQ = 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01';
+I.alerta = 'M12 3l10 18H2zM12 10v5M12 18v.01';
+CORES_MOD.pessoas = p => p.e ? { menu: '#0B1B3F', ativo: '#14306B', cor: '#93B4F8', cab: 'rgba(255,255,255,.10)', sub: '#B9CCF5' } : { menu: '#163A8C', ativo: '#1F4BAE', cor: '#1D4ED8', cab: 'rgba(255,255,255,.12)', sub: '#C7D7FB' };
+const m8Verm = p => (p.e ? '#FCA5A5' : '#B91C1C');
+const m8Verde = p => (p.e ? '#86EFAC' : '#166534');
+const m8Ouro = (p, t, icone, alt = 40) => `<span style="height:${alt}px;padding:0 16px;border-radius:10px;background:#FFB800;color:#0A2342;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;white-space:nowrap;flex:none">${icone ? ic(icone, '#0A2342', 18, 2.2) : ''}${t}</span>`;
+const m8Linha = (p, t, icone) => `<span style="height:40px;padding:0 14px;border-radius:10px;border:1px solid ${p.campoBorda};color:${p.titulo};display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;white-space:nowrap;flex:none">${icone ? ic(icone, p.icone, 17, 2) : ''}${t}</span>`;
+const m8Info = (p, html) => `<div style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:${p.e ? '#13294A' : '#EEF4FF'};border:1px solid ${p.e ? '#2B4A7A' : '#C7D7FB'};font-size:13.5px;line-height:1.45;color:${p.texto}">${ic('ajudaQ', p.link, 18, 2)}<div style="flex:1">${html}</div></div>`;
+const BARRA_SISTEMA = `<div style="height:48px;flex:none;background:#000000;display:flex;align-items:center;justify-content:space-around;padding:0 70px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E5E7EB" stroke-width="2" stroke-linejoin="round"><path d="M16 5L7 12l9 7z"/></svg><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E5E7EB" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E5E7EB" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></div>`;
+const comBarraDoCelular = html => (/^\s*<div style="width:390px;height:844px/.test(html) ? `<div style="width:390px;height:844px;display:flex;flex-direction:column;background:#000000">${html.replace('height:844px', 'height:796px')}${BARRA_SISTEMA}</div>` : html);
+const R12_ITENS = { membro: [['casa', 'Início'], ['igreja', 'Minha vida'], ['sino', 'Avisos', 2]], lider: [['casa', 'Início'], ['maleta', 'Trabalho'], ['igreja', 'Minha vida'], ['sino', 'Avisos', 3]] };
+function r12Abas(p, itens, ativo, estilo) {
+  const marinho = p.e ? '#0E2748' : '#0A2342';
+  const bolinha = n => (n ? `<span style="min-width:17px;height:17px;border-radius:9px;background:#FFB800;color:#0A2342;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px">${n}</span>` : '');
+  if (estilo === 'pilulas') return `<div style="display:flex;flex:none;gap:6px;padding:10px 12px;background:${p.sup};border-bottom:1px solid ${p.borda}">${itens.map(it => `<span style="flex:1;min-width:0;height:36px;border-radius:18px;display:flex;align-items:center;justify-content:center;gap:4px;font-size:12.5px;white-space:nowrap;font-weight:${it[1] === ativo ? 700 : 600};${it[1] === ativo ? 'background:#FFB800;color:#0A2342;' : `background:${p.linha};color:${p.texto};`}">${it[1]}${bolinha(it[2])}</span>`).join('')}</div>`;
+  if (estilo === 'icones') return `<div style="display:flex;flex:none;background:${p.sup};border-bottom:1px solid ${p.borda}">${itens.map(it => `<span style="flex:1;height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;position:relative;font-size:11.5px;font-weight:${it[1] === ativo ? 700 : 500};color:${it[1] === ativo ? p.titulo : p.suave};${it[1] === ativo ? 'box-shadow:inset 0 -3px 0 #FFB800;' : ''}">${ic(it[0], it[1] === ativo ? p.titulo : p.suave, 21, it[1] === ativo ? 2 : 1.8)}${it[1]}${it[2] ? `<span style="position:absolute;top:6px;left:calc(50% + 6px)">${bolinha(it[2])}</span>` : ''}</span>`).join('')}</div>`;
+  return `<div style="display:flex;flex:none;background:${marinho};padding:0 6px">${itens.map(it => `<span style="flex:1;height:44px;display:flex;align-items:center;justify-content:center;gap:5px;font-size:13px;white-space:nowrap;font-weight:${it[1] === ativo ? 700 : 500};color:${it[1] === ativo ? '#FFFFFF' : '#C7D7FB'};${it[1] === ativo ? 'box-shadow:inset 0 -3px 0 #FFB800;' : ''}">${it[1]}${bolinha(it[2])}</span>`).join('')}</div>`;
+}
+const TES_A2 = { ini: 'MP', nome: 'Marcos Paiva', papel: 'Tesouraria · Área 2' };
+const NIV13 = {
+  local: { usuario: TES, escopo: 'Congregação Vila Nova', titulo: 'Congregação Vila Nova', ent: 'R$ 18.420', sai: 'R$ 9.870', saldo: 'R$ 8.550', rep: 'R$ 2.763', repRot: 'Repasse a pagar (15%)',
+    fat: 1, tarefas: [['calendario', 'Fechar outubro', 'prazo 10/11 · falta conciliar o extrato', 'Fechar'], ['planilha', 'Lançar os dízimos de terça, 17/11', 'as folhas que chegaram', 'Lançar'], ['alerta', 'Conciliar o extrato de outubro', '3 diferenças com o banco', 'Conciliar']], meu: 3, tudo: 3, tudoRot: 'Tudo da congregação' },
+  area: { usuario: TES_A2, escopo: 'Área 2 · 12 congregações', titulo: 'Área 2 · 12 congregações', ent: 'R$ 198.300', sai: 'R$ 121.640', saldo: 'R$ 76.660', rep: '10 de 12', repRot: 'Repasses de outubro pagos',
+    fat: 11, tarefas: [['calendario', '3 fechamentos de outubro atrasados', 'Monte Sião, Bela Vista e Jardim das Oliveiras', 'Lembrar'], ['dinheiro', '2 repasses de outubro em aberto', 'Bela Vista e Cidade Jardim', 'Ver'], ['doc', 'Conferir 9 fechamentos entregues', 'antes de mandar para a Geral', 'Conferir']], meu: 3, tudo: 14, tudoRot: 'Tudo da área' },
+  geral: { usuario: LIDER, escopo: 'Tesouraria Geral · Igreja toda', titulo: 'Igreja toda · 45 congregações', ent: 'R$ 1.024.900', sai: 'R$ 640.210', saldo: 'R$ 384.690', rep: '38 de 45', repRot: 'Repasses de outubro pagos',
+    fat: 55, tarefas: [['doc', '9 fechamentos conferidos pelas áreas', 'esperando a Tesouraria Geral', 'Conferir'], ['dinheiro', '7 repasses de outubro em aberto', '3 há mais de 30 dias', 'Ver'], ['grafico', 'Demonstração de outubro', 'pronta para o Conselho', 'Abrir']], meu: 3, tudo: 61, tudoRot: 'Tudo da Igreja' }
+};
+const FIN13 = {
+  tarefa: [['Tesouraria do dia a dia', ['Lançamentos', 'Dizimistas', 'Saídas', 'Fechamento do mês', 'Conciliação bancária', 'Fechamentos da área']], ['Contas e bancos', ['Contas a receber', 'Investimentos', 'Seguros', 'Obrigações']],
+    ['Planejamento', ['Orçamento', 'Campanhas', 'Obras', 'Plano (PDQ)']], ['Patrimônio', ['Patrimônio', 'Imóveis', 'Frota', 'Cessões', 'Receitas acessórias']], ['Pessoas e repasses', ['Prebenda', 'Repasses', 'Repasses da área', 'Rateio geral']],
+    ['Relatórios', ['Visão geral', 'Situação do tesouro', 'Demonstrações', 'Relatório do mês', 'Consolidado', 'Consolidado da área']], ['Regras e cadastros', ['Plano de contas', 'Parâmetros', 'Parâmetros monetários', 'Imunidade']]],
+  quando: [['Toda semana', ['Lançamentos', 'Dizimistas']], ['Todo mês', ['Saídas', 'Fechamento do mês', 'Conciliação bancária', 'Repasses', 'Prebenda', 'Contas a receber', 'Relatório do mês', 'Fechamentos da área', 'Repasses da área', 'Consolidado da área']],
+    ['De vez em quando', ['Orçamento', 'Campanhas', 'Obras', 'Patrimônio', 'Imóveis', 'Frota', 'Seguros', 'Investimentos', 'Cessões', 'Receitas acessórias', 'Obrigações', 'Imunidade', 'Plano (PDQ)', 'Demonstrações', 'Consolidado', 'Situação do tesouro', 'Rateio geral', 'Visão geral']],
+    ['Configuração', ['Plano de contas', 'Parâmetros', 'Parâmetros monetários']]],
+  nivel: [['Da congregação', ['Lançamentos', 'Dizimistas', 'Saídas', 'Fechamento do mês', 'Conciliação bancária', 'Contas a receber', 'Campanhas', 'Obras', 'Patrimônio', 'Relatório do mês']],
+    ['Da área', ['Fechamentos da área', 'Repasses da área', 'Consolidado da área']],
+    ['Da Tesouraria Geral', ['Repasses', 'Prebenda', 'Rateio geral', 'Orçamento', 'Investimentos', 'Seguros', 'Obrigações', 'Imunidade', 'Imóveis', 'Frota', 'Cessões', 'Receitas acessórias', 'Plano (PDQ)', 'Situação do tesouro', 'Demonstrações', 'Consolidado', 'Visão geral', 'Plano de contas', 'Parâmetros', 'Parâmetros monetários']]]
+};
+const VE13 = { local: ['Lançamentos', 'Dizimistas', 'Saídas', 'Fechamento do mês', 'Conciliação bancária', 'Contas a receber', 'Campanhas', 'Obras', 'Patrimônio', 'Relatório do mês', 'Repasses', 'Visão geral'],
+  area: ['Lançamentos', 'Dizimistas', 'Saídas', 'Fechamento do mês', 'Conciliação bancária', 'Contas a receber', 'Campanhas', 'Obras', 'Patrimônio', 'Relatório do mês', 'Repasses', 'Visão geral', 'Fechamentos da área', 'Repasses da área', 'Consolidado da área', 'Consolidado'] };
+const ICO13 = { 'Lançamentos': 'planilha', 'Dizimistas': 'pessoas', 'Saídas': 'dinheiro', 'Fechamento do mês': 'calendario', 'Conciliação bancária': 'check', 'Relatório do mês': 'doc', 'Visão geral': 'grafico' };
+if (!FIN13.tarefa[0][1].includes('Blocos de recibo')) FIN13.tarefa[0][1].splice(2, 0, 'Blocos de recibo');
+if (!FIN13.quando[0][1].includes('Blocos de recibo')) FIN13.quando[0][1].push('Blocos de recibo');
+if (!FIN13.nivel[0][1].includes('Blocos de recibo')) FIN13.nivel[0][1].splice(2, 0, 'Blocos de recibo');
+['local', 'area'].forEach(k => ['Blocos de recibo', 'Cessões', 'Situação do tesouro'].forEach(x => { if (!VE13[k].includes(x)) VE13[k].push(x); }));
+Object.assign(ICO13, { 'Blocos de recibo': 'livro', 'Situação do tesouro': 'grafico', 'Saídas': 'dinheiro', 'Contas a receber': 'calendario', 'Demonstrações': 'doc', 'Consolidado': 'grafico', 'Repasses': 'seta', 'Prebenda': 'pessoa', 'Rateio geral': 'balanca', 'Investimentos': 'grafico', 'Cessões': 'igreja' });
+const r16aTab = (p, cols, cab, linhas) => `<div style="background:${p.sup};border:1px solid ${p.borda};border-radius:14px;overflow:hidden"><div style="display:grid;grid-template-columns:${cols};gap:10px;padding:0 16px;height:38px;align-items:center;font-size:12.5px;font-weight:700;color:${p.suave};background:${p.fundo}">${cab.map(c => `<span>${c}</span>`).join('')}</div>${linhas.map(l => `<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:0 16px;min-height:44px;align-items:center;border-top:1px solid ${p.linha};font-size:13.5px;color:${p.texto}">${l.map((c, i) => `<span style="${i === 0 ? `font-weight:600;color:${p.titulo};` : ''}min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c}</span>`).join('')}</div>`).join('')}</div>`;
+const r16aListaCel = (p, itens) => `<div style="background:${p.sup};border:1px solid ${p.borda};border-radius:14px;padding:0 12px">${itens.map((it, i) => `<div style="display:flex;align-items:center;gap:10px;min-height:52px;${i ? `border-top:1px solid ${p.linha};` : ''}"><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:${p.titulo};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${it[0]}</div><div style="font-size:12px;color:${p.suave};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${it[1]}</div></div>${it[2] || ''}</div>`).join('')}</div>`;
+const r16aAviso = (p, html, tipo) => tipo === 'alerta' ? `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;background:${p.e ? '#2A2410' : '#FFF8E1'};border:1px solid ${p.e ? '#5C4A12' : '#F2D27A'};font-size:13px;line-height:1.4;color:${p.texto}">${ic('alerta', p.e ? '#FFC933' : '#7A5800', 17, 2)}<div>${html}</div></div>` : m8Info(p, html).replace('padding:12px 14px', 'padding:10px 12px').replace('font-size:13.5px', 'font-size:13px');
+const r16bAperta = h => h.replace('padding:24px 32px;display:flex;flex-direction:column;gap:20px', 'padding:18px 28px;display:flex;flex-direction:column;gap:12px');
+const R17_GRUPOS = [['Tesouraria do dia a dia', 'Resumo da tesouraria'], ['Contas e bancos', 'Resumo de contas'], ['Planejamento', 'Resumo do planejamento'], ['Patrimônio', 'Resumo do patrimônio'], ['Pessoas e repasses', 'Resumo dos repasses'], ['Relatórios', 'Resumo dos relatórios'], ['Regras e cadastros', 'Resumo das regras']];
+R17_GRUPOS.forEach(([g, r]) => { const G = FIN13.tarefa.find(x => x[0] === g); if (G && !G[1].includes(r)) G[1].unshift(r); ICO13[r] = 'grafico'; });
+(() => { const G = FIN13.tarefa.find(x => x[0] === 'Regras e cadastros'); if (G && !G[1].includes('Tipos de entrada e saída')) G[1].splice(2, 0, 'Tipos de entrada e saída'); ICO13['Tipos de entrada e saída'] = 'planilha'; })();
+['local', 'area'].forEach(k => R17_GRUPOS.map(g => g[1]).concat(['Obrigações', 'Orçamento', 'Demonstrações', 'Receitas acessórias', 'Plano de contas', 'Tipos de entrada e saída', 'Parâmetros', 'Imunidade']).forEach(r => { if (!VE13[k].includes(r)) VE13[k].push(r); }));
+I.imprimir = I.imprimir || 'M6 9V3h12v6M6 18H4v-7h16v7h-2M7 14h10v7H7z';
+const r17Dois = (a, b, prop = '1.3fr 1fr') => `<div style="display:grid;grid-template-columns:${prop.split(' ').map(x => `minmax(0,${x})`).join(' ')};gap:14px;align-items:start">${a}${b}</div>`;
+const r17Campo = (p, rot, val, o = {}) => `<div style="display:flex;flex-direction:column;gap:4px;min-width:0;${o.larg ? `grid-column:span ${o.larg};` : ''}"><span style="font-size:12.5px;font-weight:600;color:${p.titulo};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${rot}${o.obrig ? `<span style="color:${m8Verm(p)}">*</span>` : ''}${o.nota ? `<span style="font-weight:400;color:${p.suave}"> · ${o.nota}</span>` : ''}</span><span style="min-height:38px;border:${o.auto ? '1px dashed' : '1px solid'} ${p.campoBorda};border-radius:9px;background:${o.auto ? 'transparent' : p.campo};display:flex;align-items:center;gap:8px;padding:0 11px;font-size:13.5px;color:${o.vazio ? p.suave : p.texto}">${o.icone ? ic(o.icone, p.suave, 15, 2) : ''}${val}</span></div>`;
+const R17_TONS = { verde: ['#DDF3EF', '#0F766E', '#0F3D3A', '#5EEAD4'], azul: ['#E3ECFD', '#1D4ED8', '#13294A', '#93C5FD'], ouro: ['#FFF4D1', '#8A5A00', '#3A2E0B', '#FCD34D'], roxo: ['#EFE7FD', '#6D28D9', '#2A1D4A', '#C4B5FD'], verm: ['#FDE4E4', '#B91C1C', '#4C1717', '#FCA5A5'] };
+I.banco = I.banco || 'M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18';
+I.recibo = I.recibo || 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h4';
+I.impressora = I.impressora || 'M7 8V3h10v5M5 8h14a2 2 0 0 1 2 2v6h-4v4H7v-4H3v-6a2 2 0 0 1 2-2zM9 15h6';
+I.transferir = I.transferir || 'M4 8h13M13 4l4 4-4 4M20 16H7M11 12l-4 4 4 4';
+I.tendencia = I.tendencia || 'M3 17l6-6 4 4 8-8M15 7h6v6';
+I.obra = I.obra || 'M3 21h18M6 21V10h12v11M9 10V6h6v4M10 14h4';
+I.casas = I.casas || 'M3 21V11l6-5 6 5v10M9 21v-5M15 9l3-3 3 3v12h-6';
+I.prancheta = I.prancheta || 'M8 4h8v3H8zM6 5H5v16h14V5h-1M9 12h6M9 16h4';
+I.tarefa = I.tarefa || 'M4 4h16v16H4zM8 12l3 3 5-6';
+ICO13['Despesas congregacionais'] = 'recibo';
+const r18Tit = (p, t, s, dir = '') => `<div style="display:flex;align-items:center;gap:14px"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><h1 style="font-size:22px;font-weight:700;color:${p.titulo};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t}</h1><p style="font-size:13.5px;color:${p.suave};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s}</p></div><div style="display:flex;gap:10px;align-items:center;flex:none">${dir}</div></div>`;
+const r18Col = (...partes) => `<div style="display:flex;flex-direction:column;gap:12px;min-width:0">${partes.join('')}</div>`;
+const r18Etiq = (p, t, tom = 'verde') => { const T = R17_TONS[tom]; return `<span style="display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:12px;font-size:12px;font-weight:700;white-space:nowrap;flex:none;background:${p.e ? T[2] : T[0]};color:${p.e ? T[3] : T[1]}">${t}</span>`; };
+function r18Qr(t, semente = 7, cor = '#0A2342') {
+  const n = 25; let s = semente * 7919 + 13, d = '';
+  const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const canto = (x < 8 && y < 8) || (x >= n - 8 && y < 8) || (x < 8 && y >= n - 8);
+    let liga;
+    if (canto) {
+      const fx = x < 8 ? x : x - (n - 7), fy = y < 8 ? y : y - (n - 7);
+      liga = fx >= 0 && fx <= 6 && fy >= 0 && fy <= 6 && (fx === 0 || fx === 6 || fy === 0 || fy === 6 || (fx >= 2 && fx <= 4 && fy >= 2 && fy <= 4));
+    } else liga = rnd() > 0.5;
+    if (liga) d += `M${x + 1} ${y + 1}h1v1h-1z`;
+  }
+  return `<svg width="${t}" height="${t}" viewBox="0 0 ${n + 2} ${n + 2}" aria-hidden="true" style="flex:none;display:block;background:#FFFFFF;shape-rendering:crispEdges"><path d="${d}" fill="${cor}"/></svg>`;
+}
+const r18PpCab = (tit, sub, dir) => `<div style="display:flex;align-items:center;gap:9px;border-bottom:2px solid #0A2342;padding-bottom:7px">${logo(26)}<div style="flex:1;min-width:0;line-height:1.25"><div style="font-size:11.5px;font-weight:800">${tit}</div><div style="font-size:9px;color:#5B6678">${sub}</div></div>${dir || ''}</div>`;
+const r18PpQr = (t, cod, txt) => `<div style="display:flex;align-items:center;gap:10px;border:1px solid #D5DBE5;border-radius:6px;padding:6px 8px">${r18Qr(t, 11)}<div style="flex:1;min-width:0;font-size:8.8px;color:#3B4A63;line-height:1.35">${txt || 'Para conferir se este papel é verdadeiro, aponte a câmera do celular para o código.'} Ou abra <strong>conferir.ieadespa.org.br</strong> e digite <strong style="font-size:10px;color:#0A2342;letter-spacing:.04em">${cod}</strong>.</div></div>`;
+I.envelope = I.envelope || 'M3 6h18v12H3zM3 7l9 7 9-7';
+I.alvo = I.alvo || 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z';
+I.saida = I.saida || 'M3 7h13v10H3zM9.5 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 12h4M20 10l2 2-2 2';
+I.queda = I.queda || 'M3 7l6 6 4-4 8 8M15 17h6v-6';
+I.bandeja = I.bandeja || 'M3 13l3-8h12l3 8v6H3zM3 13h5l1 2h6l1-2h5';
+ICO13['Caixa único'] = 'bandeja';
+ICO13['Para o contador'] = 'maleta';
+const r20Nota = (p, html) => `<span style="font-size:12px;color:${p.suave};line-height:1.4">${html}</span>`;
+
+/* ================================================================ RODADA 21 (Financeiro: os acertos que ele pediu na rodada 20, 20/11/2026) ================================================================ */
+// Os tipos de oferta são só “Oferta de culto” (genérica) e “Oferta voluntária” (pode vir junto do dízimo). O mural tem 50 nomes por folha, sem
+// importar o bloco, e cada folha tem a própria validação. O conferir ganha os comprovantes de Pix pelo sistema e a virada do mês. O rateio vira
+// duas páginas e só divide os 60% da Geral. O tesouro mostra só os centros de custo da Geral. O caixa único, só da Geral, em 4 passos.
+// Ícones que faltavam, no mesmo traço do iconeSvg() da casca (app/modulos/casca.js).
+I.camera = I.camera || 'M3 8h4l2-3h6l2 3h4v11H3zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z';
+I.clipe = I.clipe || 'M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.4 8.4a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6';
+const r21Ouro = (p, t, ico, alt = 42) => m8Ouro(p, t, ico, alt).replace('flex:none', 'justify-content:center');
+const r21Linha = (p, t, ico) => m8Linha(p, t, ico).replace('flex:none', 'justify-content:center');
+// o extrato da conta geral em volta do Pix que está sendo conferido
+const R21_EXT = {
+  '70.082': [['08h33', 'PIX · CÍCERO GOMES', 95], ['08h47', 'PIX · ANA BEATRIZ MOREIRA', 410, 1], ['09h02', 'PIX · CARLOS EDUARDO SOUZA', 300], ['09h15', 'PIX · BRUNA FARIAS', 60]],
+  '70.114': [['06h12', 'PIX · DALVA RIBEIRO', 120], ['06h50', 'PIX · GABRIEL NUNES', 420, 1], ['07h31', 'PIX · EDSON MOTA', 75], ['08h02', 'PIX · HILDA PAIVA', 210]]
+};
+// o Pix de agora (o 4º de dezembro) contra o extrato: o mesmo extrato da rodada 21
+R21_EXT['70.166'] = R21_EXT['70.114'];
+
+const R22_REGRA = 'Troque o nível nos botões logo acima da tela. Nada de rolagem; no celular, pílulas no alto e nada preso embaixo. Nomes e números de mentira.';
+// a bola do passo, sempre com o número: ok (verde), agora (ouro), depois (contorno)
+const r27Bola = (p, n, est, t = 26) => `<span style="width:${t}px;height:${t}px;border-radius:${t / 2}px;flex:none;display:flex;align-items:center;justify-content:center;font-size:${t > 24 ? 13 : 12}px;font-weight:800;${est === 'ok' ? `background:${m8Verde(p)};color:${p.e ? '#0B1F3A' : '#FFFFFF'};` : est === 'agora' ? 'background:#FFB800;color:#0A2342;' : `border:1.5px solid ${p.campoBorda};color:${p.suave};`}">${n}</span>`;
+// um cartão com o título e, à direita, uma etiqueta
+const r27Cartao = (p, tit, dir, corpo, extra = '') => `<div style="background:${p.sup};border:1px solid ${p.borda};border-radius:14px;padding:11px 14px;display:flex;flex-direction:column;gap:8px;min-width:0;flex:none;${extra}"><div style="display:flex;align-items:center;gap:8px;min-height:24px"><strong style="font-size:15px;color:${p.titulo};flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tit}</strong>${dir || ''}</div>${corpo}</div>`;
+// o caminho em passos (no celular: as bolas e o passo de agora escrito embaixo)
+function r27Caminho(p, passos, o = {}) {
+  if (o.cel) {
+    const at = Math.max(0, passos.findIndex(x => x[2] === 'agora')), a = passos[at];
+    return `<div style="display:flex;flex-direction:column;gap:6px;flex:none"><div style="display:flex;align-items:center;gap:4px">${passos.map((x, i) => `${i ? `<span style="flex:1;height:2px;background:${x[2] === 'depois' ? p.borda : m8Verde(p)}"></span>` : ''}${r27Bola(p, i + 1, x[2], 22)}`).join('')}</div><div style="font-size:12.5px;color:${p.texto};line-height:1.35"><strong style="color:${p.titulo}">Passo ${at + 1} de ${passos.length}:</strong> ${a[0]} · ${a[1]}</div></div>`;
+  }
+  return `<div style="display:flex;align-items:stretch;gap:6px;flex:none">${passos.map((x, i) => `<div style="flex:1;min-width:0;display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:12px;background:${x[2] === 'agora' ? (p.e ? '#3A2E0B' : '#FFF4D1') : p.sup};border:1px solid ${x[2] === 'agora' ? '#FFB800' : p.borda}">${r27Bola(p, i + 1, x[2], 22)}<div style="min-width:0;line-height:1.2"><div style="font-size:12.5px;font-weight:700;color:${p.titulo};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x[0]}</div><div style="font-size:11.5px;color:${p.suave}">${x[1]}</div></div></div>`).join('')}</div>`;
+}
+// o Conselho Fiscal entra no Financeiro com o próprio acesso: vê o fechamento, os saldos de abertura e os relatórios
+NIV13.conselho = { usuario: { ini: 'PM', nome: 'Paulo Mendes', papel: 'Conselho Fiscal' }, escopo: 'Conselho Fiscal · a Igreja toda' };
+VE13.conselho = ['Fechamento do mês', 'Conciliação bancária', 'Relatório do mês', 'Visão geral', 'Situação do tesouro', 'Demonstrações', 'Consolidado', 'Saldos de abertura'];
+ICO13['Saldos de abertura'] = 'livro';
+
+/* ---------------- 4. IMPORTAR OS MEMBROS DO SISTEMA PAGO (Membros) ---------------- */
+// O cabeçalho que o sistema pago exporta (18/11): MATRÍCULA;NOME;IGREJA;SEXO;NASCIMENTO;ESTADO CIVIL;E-MAIL;CELULAR;MÃE;PAI;CPF.
+// Aqui com 2 colunas a mais, para mostrar o mapa flexível: ESCOLARIDADE (aceita) e PROFISSÃO (não usar: só nos Setores Técnicos).
+// Os números: 5.049 linhas, 2 vazias; 5.047 pessoas = 4.862 novas + 12 matrículas a acertar + 173 possíveis repetidas; 1 sem
+// congregação (o "IEADESPA - GERAL", que também é uma das 12, porque veio com a matrícula 0).
+const R27_SEC = { geral: LIDER, local: { ini: 'DL', nome: 'Débora Lima', papel: 'Secretaria · Vila Nova' }, area: { ini: 'EP', nome: 'Elias Prado', papel: 'Secretaria · Área 2' } };
+const r27Azul = p => mc(p, 'pessoas').cor;
+// o membro comum: Minha vida (notebook e celular, com as pílulas do membro)
+const r28Mv = (p, u, trilha, conteudo) => r16bAperta(casca(p, { itens: [{ ic: 'casa', nome: 'Início' }, { ic: 'igreja', nome: 'Minha vida', ativo: 1 }, { ic: 'pessoa', nome: 'Meu Perfil' }], usuario: u, trilha: ['Minha vida'].concat(trilha), conteudo }));
+function r28MvCel(p, titulo, conteudo) {
+  const marca = '<div style="flex:1;min-height:0;overflow:hidden;padding:16px;display:flex;flex-direction:column;gap:14px">';
+  const h = cascaCel(p, { titulo, conteudo }), i = h.indexOf(marca);
+  return i < 0 ? h : h.slice(0, i) + r12Abas(p, R12_ITENS.membro, 'Minha vida', 'pilulas') + '<div style="flex:1;min-height:0;overflow:hidden;padding:12px 14px;display:flex;flex-direction:column;gap:10px">' + h.slice(i + marca.length);
+}
+const R28_DEP = { Varões: '#1D4ED8', Senhoras: '#BE185D', Jovens: '#6D28D9', Adolescentes: '#0369A1', Crianças: '#15803D' };
+// a bolinha com as iniciais (quem fica só com o nome: tracejada)
+const r28Av = (p, ini, dep, t = 32) => `<span style="width:${t}px;height:${t}px;border-radius:${t / 2}px;flex:none;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:${t > 30 ? 12 : 11}px;font-weight:800;${dep ? `background:${R28_DEP[dep] || '#1D4ED8'};color:#FFFFFF;` : `border:1.5px dashed ${p.campoBorda};color:${p.suave};`}">${ini}</span>`;
+// uma pessoa numa lista: a bolinha, o nome, a linha de baixo e o que fica à direita
+const r28Pes = (p, av, tit, sub, dir, o = {}) => `<div style="display:flex;align-items:center;gap:10px;min-height:${o.alt || 44}px;${o.i ? `border-top:1px solid ${p.linha};` : ''}${o.sel ? `background:${p.e ? '#3A2E0B' : '#FFF8E1'};box-shadow:inset 3px 0 0 #FFB800;margin:0 -14px;padding:0 14px;` : ''}">${av}<div style="flex:1;min-width:0;line-height:1.25"><div style="font-size:13.5px;font-weight:600;color:${p.titulo};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tit}</div><div style="font-size:11.5px;color:${p.suave};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</div></div>${dir || ''}</div>`;
+const r28Bt = (p, t, i) => r21Linha(p, t, i).replace('justify-content:center', 'justify-content:center;flex:1;min-width:0');
+const r28Mais = (p, t) => `<span style="font-size:12.5px;font-weight:700;color:${p.link};white-space:nowrap">${t}</span>`;
+// uma linha do "o que vai acontecer": o ícone e o texto
+const r28Vai = (p, L, cel) => `<div style="display:flex;flex-direction:column">${L.map((x, i) => `<div style="display:flex;align-items:flex-start;gap:10px;padding:${cel ? 6 : 7}px 0;${i ? `border-top:1px solid ${p.linha};` : ''}"><span style="width:26px;height:26px;border-radius:8px;flex:none;background:${p.e ? '#1E3A6E' : '#E3ECFD'};display:flex;align-items:center;justify-content:center">${ic(x[0], r27Azul(p), 15, 2)}</span><span style="flex:1;min-width:0;font-size:${cel ? 12.5 : 13}px;line-height:1.35;color:${p.texto};padding-top:3px">${x[1]}</span></div>`).join('')}</div>`;
+const R29_DIR = { local: { ini: 'AN', nome: 'Pr. Abel Nogueira', papel: 'Dirigente · Vila Nova' }, area: { ini: 'DT', nome: 'Pr. Davi Teixeira', papel: 'Pastor da Área 2' }, geral: LIDER };
+// os números pequenos no alto de uma lista (notebook) ou em quadradinhos (celular)
+const r29Nums = (p, L, cel) => cel
+  ? `<div style="display:flex;gap:8px;flex:none">${L.map(x => `<div style="flex:1;min-width:0;background:${p.sup};border:1px solid ${p.borda};border-radius:12px;padding:7px 10px;line-height:1.2"><strong style="font-size:19px;color:${p.titulo}">${x[0]}</strong><div style="font-size:11.5px;color:${p.suave};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x[1]}</div></div>`).join('')}</div>`
+  : `<div style="display:flex;gap:10px;flex:none">${L.map(x => `<div style="flex:1;min-width:0;background:${p.sup};border:1px solid ${p.borda};border-radius:14px;padding:10px 14px;line-height:1.25"><strong style="font-size:24px;color:${x[2] ? x[2](p) : p.titulo}">${x[0]}</strong><div style="font-size:12.5px;color:${p.suave};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x[1]}</div></div>`).join('')}</div>`;
+// a mensagem que aparece embaixo depois de gravar (a do servidor)
+const r30Toast = (p, html, cel) => `<div style="position:absolute;left:50%;bottom:${cel ? 6 : 4}px;transform:translateX(-50%);display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:12px;background:${p.e ? '#115E59' : '#0F766E'};color:#FFFFFF;font-size:${cel ? 13 : 13.5}px;font-weight:600;line-height:1.35;box-shadow:0 10px 28px rgba(0,0,0,${p.e ? .45 : .22});z-index:4;${cel ? 'width:330px;' : 'white-space:nowrap;'}">${ic('check', '#FFFFFF', 17, 2.4)}<span style="min-width:0">${html}</span></div>`;
+
+/* ================= RODADA 31 (24/11/2026): Membros › a saída e a volta, com as respostas dele à 29 ================= */
+// Respostas de 24/11: o destino é só a cidade e o estado, nunca o nome da igreja (em branco, Parauapebas - PA); a carta é
+// individual e traz o histórico (a chegada e a saída, os batismos, as consagrações e os cargos, com as datas), sem assinatura
+// (o QR, o protocolo e os nomes impressos bastam); os filhos menores ganham carta própria; o congregado sai "em Paz";
+// "Observação" é só para quem está sem comunhão ou em disciplina, com o tempo e sem o motivo; o QR confere pela impressão
+// digital guardada e pelo protocolo e, depois do apagamento, não mostra mais os dados. Nomes e números de mentira.
+
+/* ---------------- 1. A CARTA COM O HISTÓRICO (PDF, A4) ---------------- */
+// os fatos em duas colunas, com o valor quebrando a linha (nada cortado com reticências: o histórico aparece inteiro)
+const r31Fatos = (p, L, cel) => `<div style="display:flex;flex-direction:column">${L.map((x, i) => `<div style="display:grid;grid-template-columns:${cel ? 96 : 124}px minmax(0,1fr);gap:10px;padding:${cel ? 5 : 6}px 0;${i ? `border-top:1px solid ${p.linha};` : ''}"><span style="font-size:12.5px;color:${p.suave};line-height:1.4">${x[0]}</span><span style="font-size:13px;font-weight:600;color:${p.titulo};line-height:1.4;min-width:0">${Array.isArray(x[1]) ? x[1].map(v => `<div>${v}</div>`).join('') : x[1]}</span></div>`).join('')}</div>`;
+const r31Chip = (p, t, on) => chipFiltro(p, t, on).replace(/<svg[\s\S]*?<\/svg>/, '').replace('height:32px', 'height:28px').replace('padding:0 12px', 'padding:0 10px').replace('font-size:13px', 'font-size:12.5px');
+/* ================= RODADA 32: ESTRUTURA E TERRITÓRIOS (MÓDULO 3), O COMEÇO ================= */
+// A base comum das telas da 32: a casca do módulo (a cor verde do território), quem está vendo em cada nível e os dados
+// de mentira que continuam os da 29 e da 31 (Vila Nova sem tesoureiro desde 25/11, quando o Carlos saiu; Monte Sião sem
+// dirigente desde 02/11). Hoje, nos desenhos, é 02/12/2026: o mês do aviso de "cargo vencendo".
+const R32_HOJE = '02/12/2026';
+CORES_MOD.estrutura = p => ({ menu: '#0E4D2C', ativo: '#16663F', cor: '#15803D', cab: 'rgba(255,255,255,.12)', sub: '#BBF0CD' });
+const R32_VERDE = '#15803D';
+const R32_ESC = { local: 'Congregação Vila Nova · nº 7', area: 'Área 2 · 12 congregações', geral: 'Secretaria Geral · 45 congregações' };
+const R32_USU = { local: R29_DIR.local, area: R29_DIR.area, geral: LIDER, sec: R27_SEC.local, pres: { ini: 'SA', nome: 'Pr. Samuel Araújo', papel: 'Presidente' } };
+const R32_MARTA = { ini: 'MS', nome: 'Marta Souza', papel: 'Membro · Vila Nova' };
+// o menu do módulo: o painel, as igrejas, a diretoria e, só para a Geral, a estrutura da igreja
+function r32Grupos(k, ativo) {
+  const G = [['Painel', [['grafico', 'Painel da estrutura']]], ['Igrejas', [['igreja', k === 'area' ? 'Ficha da área' : 'Ficha da congregação'], ['relogio', 'Cultos e pontos'], ['mapa', 'Mapa']]], ['Diretoria', [['maleta', 'Diretoria e cargos'], ['doc', 'Termos de posse']]]];
+  if (k === 'geral') G.push(['Só a Geral', [['casas', 'Áreas e números'], ['mais', 'Congregação nova']]]);
+  return G.map(g => { const tem = g[1].some(f => f[1] === ativo); return [g[0], g[1].map(f => (f[1] === ativo ? f.concat([1]) : f)), tem]; });
+}
+const r32Es = (p, k, ativo, conteudo, trilha, usu) => r16bAperta(casca(p, { lateralHtml: menuCor(p, 'estrutura', { titulo: 'Estrutura', escopo: usu === R32_USU.pres ? 'Presidente · igreja toda' : R32_ESC[k], grupos: r32Grupos(k, ativo), usuario: usu || R32_USU[k] }), trilha: ['Estrutura'].concat(trilha || [ativo]), faixa: R32_VERDE, conteudo }));
+function r32EsCel(p, titulo, conteudo) {
+  const marca = '<div style="flex:1;min-height:0;overflow:hidden;padding:16px;display:flex;flex-direction:column;gap:14px">';
+  const h = cascaCel(p, { titulo, corBarra: '#16663F', conteudo }), i = h.indexOf(marca);
+  return i < 0 ? h : h.slice(0, i) + r12Abas(p, R12_ITENS.lider, 'Trabalho', 'pilulas') + '<div style="flex:1;min-height:0;overflow:hidden;padding:12px 14px;display:flex;flex-direction:column;gap:10px">' + h.slice(i + marca.length);
+}
+// peças pequenas: o ícone verde de cada linha, o cartão compacto, a etiqueta do mandato e o filtro "só o que eu preciso resolver"
+const r32Ic = (p, nome, tom) => `<span style="width:32px;height:32px;border-radius:9px;flex:none;background:${tom === 'verm' ? '#FDE4E4' : tom === 'ouro' ? '#FFF4D1' : '#DCFCE7'};display:flex;align-items:center;justify-content:center">${ic(nome, tom === 'verm' ? '#B91C1C' : tom === 'ouro' ? '#8A5A00' : R32_VERDE, 17, 2)}</span>`;
+const r32Car = (p, tit, dir, corpo, cel) => r27Cartao(p, tit, dir, corpo, cel ? 'padding:8px 12px;gap:2px' : 'gap:2px');
+const r32Filtro = (p, cel) => `<div style="display:flex;gap:6px;flex:none">${r31Chip(p, 'Só o que eu preciso resolver', 1)}${r31Chip(p, cel ? 'Tudo' : 'Tudo do meu nível', 0)}</div>`;
+const r32Num = (n, t, tom) => [n, t, tom ? (p => R17_TONS[tom][1]) : null];
+// a diretoria de 2026 de Vila Nova (todos vencem na virada do ano; o 1º tesoureiro está vago desde 25/11)
+const R32_DIR_VN = [['Dirigente', 'Pr. Abel Nogueira', 'AN'], ['Vice-dirigente', 'Pb. Ivan Castro', 'IC'], ['1º secretário', 'Débora Lima', 'DL'], ['2º secretário', 'Paulo Mendes', 'PM'], ['1º tesoureiro', '', ''], ['2º tesoureiro', 'Sueli Rocha', 'SR']];
+const R32_CULTOS_VN = [['Domingo', '8h30', 'Escola Bíblica Dominical'], ['Domingo', '18h', 'Culto da família'], ['Terça', '19h30', 'Culto de oração'], ['Quinta', '19h30', 'Culto de ensino'], ['Sábado', '19h30', 'Jovens · 1º e 3º sábados']];
+const R32_PONTOS_VN = [['Altamira', 'Quinta, 19h30', 'na casa da irmã Lúcia', 'Dc. Otávio Lima'], ['Nova Carajás', 'Sábado, 19h', 'na casa do irmão Edson', 'Pb. Ivan Castro']];
+// as 12 congregações da Área 2, pelo número de abertura (a ordem é pelo número, não pelo nome)
+const R32_CONG_A2 = [['7', 'Vila Nova', 'Pr. Abel Nogueira', 1, 'conferido há 6 meses', 'ouro'], ['9', 'Cidade Jardim', 'Ev. Marcos Pinto', 0, 'termo pendente', 'ouro'], ['12', 'Monte Sião', '', 3, 'sem dirigente desde 02/11', 'verm'], ['15', 'Bela Vista', 'Pb. Sérgio Alves', 0, 'em dia', 'verde'], ['18', 'Jardim Ipê', 'Ev. Hélio Martins', 0, 'em dia', 'verde'], ['21', 'Nova Esperança', 'Pb. Gilmar Sousa', 0, 'sem conferir há 8 meses', 'ouro'], ['24', 'Primavera', 'Pr. Josué Lima', 0, 'em dia', 'verde'], ['27', 'Betel', 'Pb. Adão Ferreira', 2, 'tesoureiros vagos', 'ouro']];
+// o "Para conferir" das telas da 32 que vem da sessão de 23/11, pelas regras dele (fica na explicação, fora do desenho)
+const R32_PC_SITE = 'o endereço, os horários, o telefone e a foto são atualizados pela congregação, pela área e pela Geral, e o site muda sozinho';
+// as 9 áreas (45 congregações): [nome, congregações, cultos por semana, pontos de culto, para conferir, cargos vagos, sem dirigente, termos pendentes, diretoria de 2027 pronta]
+const R32_AREAS = [['Área 1 · Distrito Sede', 1, 9, 3, 0, 0, 0, 0, 1], ['Área 2', 12, 58, 19, 3, 8, 1, 1, 0], ['Área 3', 5, 22, 6, 1, 2, 0, 0, 1], ['Área 4', 6, 27, 8, 2, 3, 0, 1, 0], ['Área 5', 4, 18, 5, 0, 1, 0, 0, 2], ['Área 6', 5, 23, 7, 2, 4, 0, 1, 0], ['Área 7', 4, 19, 5, 2, 3, 1, 0, 0], ['Área 8', 4, 18, 4, 1, 1, 0, 0, 0], ['Área 9', 4, 20, 4, 0, 0, 0, 0, 0]];
+const r32N = (p, n, tom) => (n ? r18Etiq(p, String(n), tom) : `<span style="color:${p.suave}">0</span>`);
+
+/* ---------------- 1. A FICHA DA CONGREGAÇÃO (E A DA ÁREA) ---------------- */
+// Uma página por congregação: o número de abertura, a diretoria com o mandato, os cultos, os pontos de culto, o endereço
+// e os números de pessoas. Cada um vê a sua parte: o membro, o endereço, os horários e o dirigente; a secretaria, os números
+// de pessoas; o dinheiro e o patrimônio, só a tesouraria e a Geral. O pastor de área abre a ficha da área.
+const R32_CONG_A2_MAIS = [['30', 'Morada do Sol', 'Ev. Rogério Dias', 0, 'em dia', 'verde'], ['33', 'Shalom', 'Pb. Natan Ribeiro', 0, 'em dia', 'verde'], ['36', 'Recanto', 'Ev. Caio Barbosa', 1, 'secretário vago', 'ouro'], ['40', 'Morro Verde', 'Pb. Lauro Freitas', 0, 'em dia', 'verde']];
+const r32Abas = (p, itens, ativo) => `<div style="display:flex;gap:2px;border-bottom:1px solid ${p.borda};flex:none">${itens.map(t => `<span style="height:36px;padding:0 14px;display:flex;align-items:center;white-space:nowrap;font-size:14px;font-weight:${t === ativo ? 700 : 500};color:${t === ativo ? p.titulo : p.suave};${t === ativo ? `box-shadow:inset 0 -3px 0 ${R32_VERDE};` : ''}">${t}</span>`).join('')}</div>`;
+const r32Pils = (p, itens, ativo) => `<div style="display:flex;gap:6px;flex:none;overflow:hidden">${itens.map(t => r31Chip(p, t, ativo === true || t === ativo)).join('')}</div>`;
+const r32Av = (p, ini, t) => r28Av(p, ini, 'Crianças', t);
+function r32DirLinhas(p, L, cel, vagoSub) {
+  return L.map((x, i) => (x[1]
+    ? r28Pes(p, r32Av(p, x[2], cel ? 30 : 32), x[1], x[0], cel ? '' : r20Nota(p, 'até 31/12/2026'), { i, alt: cel ? 42 : 44 })
+    : r28Pes(p, r32Ic(p, 'maleta', 'verm'), x[0], vagoSub || 'vago desde 25/11 · o Carlos saiu', r28Mais(p, 'Preencher ›'), { i, alt: cel ? 42 : 44 }))).join('');
+}
+const r32CultoLinhas = (p, L, cel) => L.map((x, i) => `<div style="display:flex;align-items:center;gap:10px;min-height:${cel ? 34 : 38}px;${i ? `border-top:1px solid ${p.linha};` : ''}"><span style="width:${cel ? 104 : 112}px;flex:none;font-size:13px;font-weight:700;color:${p.titulo}">${x[0]}, ${x[1]}</span><span style="flex:1;min-width:0;font-size:13px;color:${p.texto};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x[2]}</span></div>`).join('');
+// o ponto de culto: a liderança vê o responsável e a casa; o membro e o site, só o bairro e o horário
+const r32PontoLinhas = (p, cel, lider) => R32_PONTOS_VN.map((x, i) => r28Pes(p, r32Ic(p, 'casa'), `${x[0]} · ${x[1]}`, lider ? `${x[3]} · ${x[2]}` : 'culto no lar ligado a Vila Nova', '', { i, alt: cel ? 44 : 46 })).join('');
+const r32Grade3 = (a, b, c, prop = '1.1fr 1fr 0.9fr') => `<div style="display:grid;grid-template-columns:${prop.split(' ').map(x => `minmax(0,${x})`).join(' ')};gap:14px;align-items:start">${a}${b}${c}</div>`;
+const R32_END = [['Endereço', 'Rua Sete, 410 · bairro Vila Nova'], ['Cidade', 'Parauapebas - PA · 68515-000'], ['Telefone', '(94) 99100-0707 · secretaria'], ['No site', 'ieadespa.org.br/vila-nova']];
+// a ficha no notebook: a congregação (local e Geral) ou a área (o pastor de área)
+function r32FichaNote(p, k) {
+  if (k === 'area') return r32FichaArea(p);
+  const geral = k === 'geral';
+  const dir = r32Car(p, 'Diretoria de 2026', r18Etiq(p, '1 vago', 'verm'), `${r32DirLinhas(p, R32_DIR_VN)}${r20Nota(p, 'Todo cargo vence em 31/12. Em dezembro, monte a diretoria de 2027.')}`);
+  const cultos = r32Car(p, 'Cultos', r28Mais(p, 'Editar ›'), r32CultoLinhas(p, R32_CULTOS_VN));
+  const pontos = r32Car(p, 'Pontos de culto', r18Etiq(p, '2', 'verde'), r32PontoLinhas(p, 0, 1));
+  const end = r32Car(p, 'Endereço e contato', r28Mais(p, 'Editar ›'), r31Fatos(p, R32_END));
+  const gente = r32Car(p, 'As pessoas', r20Nota(p, 'o dirigente e a secretaria veem'), r31Fatos(p, geral ? [['Pessoas', '312 membros · 41 congregados · 58 crianças']] : [['Membros', '312, em comunhão 296'], ['Congregados', '41'], ['Crianças', '58']]));
+  const din = geral
+    ? r32Car(p, 'Dinheiro e patrimônio', '', `${r31Fatos(p, [['Novembro', 'R$ 18.420,00 repassados · fechado'], ['Patrimônio', 'templo próprio e 1 terreno']])}${r20Nota(p, 'Só a tesouraria e a Geral veem.')}`)
+    : r16aAviso(p, 'O dinheiro e o patrimônio de Vila Nova ficam no Financeiro, para a tesouraria e a Geral.');
+  const acoes = geral ? `${m8Linha(p, 'Mudar de área', 'transferir')}${m8Linha(p, 'Fechar ou juntar', 'saida')}` : m8Linha(p, 'Ver no site', 'globo');
+  const tit = r18Tit(p, 'Vila Nova · congregação nº 7', `Área 2 · aberta em 14/03/1998 · dados conferidos em 14/05/2026${geral ? ' · você vê tudo, como a Geral' : ''}`, acoes);
+  return r32Es(p, k, 'Ficha da congregação', `${tit}${r32Abas(p, ['Resumo', 'Diretoria', 'Cultos e pontos de culto', 'Endereço e site', 'Histórico'], 'Resumo')}${r32Grade3(r18Col(dir), r18Col(cultos, pontos), r18Col(end, gente, din))}`, geral ? ['Congregações', 'Vila Nova'] : ['Vila Nova']);
+}
+// a ficha da área, para o pastor de área: a diretoria da área e as 12 congregações pelo número
+function r32FichaArea(p) {
+  const dirA = r32Car(p, 'Diretoria da Área 2', r18Etiq(p, '1 vago', 'verm'), `${r32DirLinhas(p, [['Pastor de área', 'Pr. Davi Teixeira', 'DT'], ['Secretário da área', 'Elias Prado', 'EP'], ['Tesoureiro da área', '', '']], 0, 'vago desde 16/11 · a Sílvia saiu')}${r20Nota(p, 'A diretoria da área, o pastor de área põe; o dirigente que falta, você ou a Geral.')}`);
+  const info = r32Car(p, 'A área', '', r31Fatos(p, [['Número', 'Área 2 · 12 congregações'], ['Pontos de culto', '19, em 11 congregações'], ['Pessoas', '2.104 membros e 266 congregados']]));
+  const L = R32_CONG_A2.concat(R32_CONG_A2_MAIS).sort((a, b) => a[0] - b[0]);
+  const tab = r16aTab(p, '40px minmax(0,1fr) minmax(0,1.1fr) 52px minmax(0,1.25fr)', ['Nº', 'Congregação', 'Dirigente', 'Vagos', 'Situação'], L.map(x => [x[0], x[1], x[2] || r18Etiq(p, 'sem dirigente', 'verm'), x[3] ? r18Etiq(p, String(x[3]), x[5] === 'verm' ? 'verm' : 'ouro') : '0', r18Etiq(p, x[4], x[5])]));
+  const tit = r18Tit(p, 'Área 2 · ficha da área', `12 congregações, pela ordem do número de abertura · ${R32_HOJE}`, m8Linha(p, 'Ver no mapa', 'mapa'));
+  return r32Es(p, 'area', 'Ficha da área', `${tit}${r17Dois(r18Col(dirA, info), tab, '0.85fr 1.6fr')}`, ['Área 2']);
+}
+// o membro: o endereço, os horários e o dirigente (da dele e das outras, como no site)
+function r32FichaMembro(p, cel) {
+  const end = r32Car(p, 'Onde fica', r28Mais(p, 'Como chegar ›'), `${r31Fatos(p, [['Endereço', 'Rua Sete, 410 · bairro Vila Nova'], ['Dirigente', 'Pr. Abel Nogueira'], ['Secretaria', '(94) 99100-0707']], cel)}`, cel);
+  const cultos = r32Car(p, 'Os cultos', '', r32CultoLinhas(p, R32_CULTOS_VN, cel), cel);
+  const pontos = r32Car(p, 'Os pontos de culto', '', r32PontoLinhas(p, cel, 0), cel);
+  const outras = r32Car(p, 'As outras congregações', '', `${r17Campo(p, '', 'Procurar pelo nome ou pelo bairro', { icone: 'busca', vazio: 1 })}${[['Cidade Jardim · nº 9', '1,8 km · Ev. Marcos Pinto'], ['Bela Vista · nº 15', '2,6 km · Pb. Sérgio Alves'], ['Sede · nº 1', '4,1 km · Área 1, Distrito Sede']].map((x, i) => r28Pes(p, r32Ic(p, 'igreja'), x[0], x[1], r28Mais(p, 'Ver ›'), { i: i + 1, alt: 42 })).join('')}`, cel);
+  if (cel) return r28MvCel(p, 'Minha congregação', `<div style="line-height:1.25;flex:none"><div style="font-size:18px;font-weight:800;color:${p.titulo}">Vila Nova</div><div style="font-size:12.5px;color:${p.suave}">congregação nº 7 · Área 2</div></div>${end}${cultos}${pontos}`);
+  const tit = r18Tit(p, 'Minha congregação: Vila Nova', 'congregação nº 7 · Área 2 · o que você vê é o mesmo que está no site', m8Linha(p, 'Ver no site', 'globo'));
+  return r28Mv(p, R32_MARTA, ['Minha congregação'], `${tit}${r32Grade3(r18Col(end, pontos), r18Col(cultos), r18Col(outras), '1fr 1fr 1fr')}`);
+}
+function r32FichaCel(p, k) {
+  if (k === 'area') {
+    const dirA = r32Car(p, 'Diretoria da Área 2', r18Etiq(p, '1 vago', 'verm'), r32DirLinhas(p, [['Pastor de área', 'Pr. Davi Teixeira', 'DT'], ['Secretário da área', 'Elias Prado', 'EP'], ['Tesoureiro da área', '', '']], 1, 'vago desde 16/11'), 1);
+    const L = R32_CONG_A2.slice(0, 6).map(x => [`${x[0]} · ${x[1]}`, x[2] || 'sem dirigente', r18Etiq(p, x[4].replace(' desde 02/11', '').replace('sem conferir há 8 meses', 'conferir').replace('conferido há 6 meses', 'conferir'), x[5])]);
+    return r32EsCel(p, 'Ficha da área', `${dirA}<div style="display:flex;align-items:center;flex:none"><strong style="flex:1;font-size:14.5px;color:${p.titulo}">As 12 congregações</strong>${r28Mais(p, 'Ver todas ›')}</div>${r16aListaCel(p, L)}`);
+  }
+  const geral = k === 'geral';
+  const cab = `<div style="line-height:1.25;flex:none"><div style="font-size:18px;font-weight:800;color:${p.titulo}">Vila Nova · nº 7</div><div style="font-size:12.5px;color:${p.suave}">Área 2 · conferida em 14/05/2026</div></div>`;
+  const dir = r32Car(p, 'Diretoria de 2026', r18Etiq(p, '1 vago', 'verm'), r32DirLinhas(p, R32_DIR_VN, 1), 1);
+  const resto = r16aListaCel(p, [['Cultos', '5 por semana · domingo, terça, quinta e sábado', r28Mais(p, '›')], ['Pontos de culto', 'Altamira e Nova Carajás', r28Mais(p, '›')], geral ? ['Dinheiro e patrimônio', 'novembro: R$ 18.420,00 · fechado', r28Mais(p, '›')] : ['As pessoas', '312 membros · 41 congregados', r28Mais(p, '›')]]);
+  return r32EsCel(p, 'Ficha da congregação', `${cab}${r32Pils(p, ['Resumo', 'Diretoria', 'Cultos', 'Endereço'], 'Resumo')}${dir}${resto}`);
+}
+const r32Ficha = (p, k, d) => (k === 'membro' ? r32FichaMembro(p, ehCel(d)) : ehCel(d) ? r32FichaCel(p, k) : r32FichaNote(p, k));
+const PERFIS32_FICHA = [['membro', 'Membro · a minha congregação'], ['local', 'Dirigente de Vila Nova · a ficha dela'], ['area', 'Pastor da Área 2 · a ficha da área'], ['geral', 'Secretaria Geral · a ficha com o dinheiro']];
+
+/* ---------------- 2. OS CULTOS E OS PONTOS DE CULTO ---------------- */
+// A congregação (e a área e a Geral) atualiza os cultos e os pontos de culto, e o site muda sozinho. A cada 6 meses a
+// congregação confirma num toque que está tudo certo; passou do prazo, vai para o painel como "para conferir".
+const r32Lapis = p => `<span style="width:30px;height:30px;border-radius:8px;flex:none;border:1px solid ${p.borda};display:flex;align-items:center;justify-content:center">${ic('lapis', p.icone, 15, 2)}</span>`;
+function r32CultosEdit(p, cel, sel) {
+  const linhas = R32_CULTOS_VN.map((x, i) => r28Pes(p, r32Ic(p, 'relogio'), `${x[0]}, ${i === 3 && sel ? '20h' : x[1]}`, x[2], cel ? '' : r32Lapis(p), { i, alt: cel ? 40 : 42, sel: sel && i === 3 })).join('');
+  return r32Car(p, 'Cultos', r28Mais(p, '+ Novo culto'), linhas, cel);
+}
+const r32PontosEdit = (p, cel) => r32Car(p, 'Pontos de culto', r28Mais(p, '+ Novo ponto'), `${R32_PONTOS_VN.map((x, i) => r28Pes(p, r32Ic(p, 'casa'), `${x[0]} · ${x[1]}`, `${x[3]} · ${x[2]}`, cel ? '' : r32Lapis(p), { i, alt: cel ? 42 : 46 })).join('')}${r20Nota(p, cel ? 'O endereço da casa, só a liderança vê.' : 'O responsável e o endereço da casa, só a liderança vê. No site vai só o bairro e o horário.')}`, cel);
+// como aparece no site: o mesmo que está aqui, sem a casa do ponto de culto
+function r32Site(p) {
+  const l = (a, b) => `<div style="display:flex;gap:10px;padding:5px 0;border-top:1px solid #EEF1F5;font-size:12.5px"><strong style="width:118px;flex:none;color:#0A2342">${a}</strong><span style="color:#3B4A63">${b}</span></div>`;
+  return `<div style="border:1px solid ${p.borda};border-radius:14px;overflow:hidden;background:#FFFFFF;flex:none"><div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#0A2342">${logo(22)}<span style="font-size:12px;color:#C9D4E3">ieadespa.org.br/vila-nova</span></div><div style="padding:10px 14px;display:flex;flex-direction:column;gap:2px"><div style="font-size:17px;font-weight:800;color:#0A2342">Congregação Vila Nova</div><div style="font-size:12px;color:#5B6678;padding-bottom:6px">Rua Sete, 410 · bairro Vila Nova · dirigente: Pr. Abel Nogueira</div><div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#5B6678;padding:4px 0">CULTOS</div>${R32_CULTOS_VN.map(x => l(`${x[0]}, ${x[1]}`, x[2])).join('')}<div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#5B6678;padding:8px 0 4px">PONTOS DE CULTO</div>${R32_PONTOS_VN.map(x => l(x[1], `bairro ${x[0]}`)).join('')}</div></div>`;
+}
+const r32Atrasado = (p, cel) => r16aAviso(p, cel ? '<strong>Passou dos 6 meses</strong> desde a última conferência (14/05). Confira e toque em “Está tudo certo”.' : '<strong>Passou dos 6 meses desde a última conferência, em 14/05/2026.</strong> Confira os cultos e os pontos de culto e toque em “Está tudo certo”: o painel deixa de cobrar.', 'alerta');
+function r32CultosLocal(p, cel, editar) {
+  const ok = r21Ouro(p, 'Está tudo certo', 'check', cel ? 44 : 40);
+  if (cel) {
+    if (editar) return r32EsCel(p, 'Editar o culto', `${r17Campo(p, 'Dia', 'Quinta', { icone: 'calendario' })}${r17Campo(p, 'Hora', '20h', { icone: 'relogio' })}${r17Campo(p, 'Nome do culto', 'Culto de ensino')}${r17Campo(p, 'Repete', 'Toda semana')}${r21Ouro(p, 'Salvar', 'check', 44)}${r21Linha(p, 'Tirar este culto', 'fechar')}${r30Toast(p, 'Salvo. O site já mostra quinta, às 20h.', 1)}`).replace('padding:12px 14px;display:flex;flex-direction:column;gap:10px">', 'padding:12px 14px;display:flex;flex-direction:column;gap:10px;position:relative">');
+    return r32EsCel(p, 'Cultos e pontos', `${r32Atrasado(p, 1)}${r32CultosEdit(p, 1)}${r32PontosEdit(p, 1)}${ok}`);
+  }
+  const dir = editar
+    ? r32Car(p, 'Editar o culto', r18Etiq(p, 'mudou a hora', 'ouro'), `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:4px">${r17Campo(p, 'Dia', 'Quinta', { icone: 'calendario' })}${r17Campo(p, 'Hora', '20h', { icone: 'relogio', nota: 'era 19h30' })}${r17Campo(p, 'Nome do culto', 'Culto de ensino', { larg: 2 })}${r17Campo(p, 'Repete', 'Toda semana', { larg: 2 })}</div><div style="display:flex;gap:10px;padding-top:8px">${r21Ouro(p, 'Salvar', 'check', 40).replace('display:flex', 'flex:1;display:flex')}${r28Bt(p, 'Tirar este culto', 'fechar')}</div>${r20Nota(p, 'Ao salvar, o site muda sozinho. Fica registrado quem mudou e quando.')}`)
+    : `<div style="display:flex;flex-direction:column;gap:6px"><strong style="font-size:14.5px;color:${p.titulo}">Como aparece no site</strong>${r32Site(p)}${r20Nota(p, 'É o que está à esquerda, sem o responsável e sem a casa do ponto de culto. Muda sozinho quando alguém salva.')}</div>`;
+  const tit = r18Tit(p, 'Cultos e pontos de culto de Vila Nova', `o que está aqui vai para o site sozinho · a congregação, a área e a Geral atualizam · ${R32_HOJE}`, editar ? '' : ok);
+  return r32Es(p, 'local', 'Cultos e pontos', `${tit}${editar ? '' : r32Atrasado(p)}${r17Dois(r18Col(r32CultosEdit(p, 0, editar), r32PontosEdit(p, 0)), dir, '1.15fr 1fr')}${editar ? r30Toast(p, 'Salvo. O site já mostra quinta, às 20h.') : ''}`, ['Vila Nova', 'Cultos e pontos de culto'], R32_USU.sec);
+}
+// a área: as 12 congregações, quando cada uma conferiu; a área também corrige
+const R32_CONF_A2 = { '7': ['14/05/2026', 'há 6 meses', 'ouro'], '12': ['30/04/2026', 'há 7 meses', 'ouro'], '21': ['02/04/2026', 'há 8 meses', 'ouro'] };
+function r32CultosArea(p, cel) {
+  const L = R32_CONG_A2.concat(R32_CONG_A2_MAIS).sort((a, b) => a[0] - b[0]).map((x, i) => { const c = R32_CONF_A2[x[0]] || [`${String(10 + (i * 7) % 18).padStart(2, '0')}/${i % 2 ? '10' : '09'}/2026`, 'em dia', 'verde']; return [x[0], x[1], String([5, 4, 6, 4, 3, 5, 4, 6, 5, 4, 5, 7][i]), String([2, 1, 3, 2, 0, 2, 1, 2, 1, 2, 1, 2][i]), c[0], r18Etiq(p, c[1], c[2])]; });
+  if (cel) return r32EsCel(p, 'Cultos e pontos', `${r32Filtro(p, 1)}${r16aAviso(p, '3 congregações passaram dos 6 meses sem conferir. A área também pode corrigir.')}${r16aListaCel(p, L.filter(x => /há/.test(x[5])).concat(L.filter(x => !/há/.test(x[5])).slice(0, 3)).map(x => [`${x[0]} · ${x[1]}`, `${x[2]} cultos · ${x[3]} pontos · conferido em ${x[4]}`, x[5]]))}`);
+  const tab = r16aTab(p, '44px minmax(0,1.2fr) 90px 110px 110px minmax(0,1fr)', ['Nº', 'Congregação', 'Cultos', 'Pontos de culto', 'Conferido em', 'Situação'], L.map(x => [x[0], x[1], x[2] + ' por semana', x[3], x[4], x[5]]));
+  const tit = r18Tit(p, 'Cultos e pontos de culto da Área 2', `quando cada congregação conferiu · a área também corrige, e o site muda sozinho · ${R32_HOJE}`, r32Filtro(p));
+  return r32Es(p, 'area', 'Cultos e pontos', `${tit}${tab}`, ['Área 2', 'Cultos e pontos de culto']);
+}
+// a Geral: a igreja toda, por área, e o que está no site
+function r32CultosGeral(p, cel) {
+  const N = [r32Num('45', 'congregações no site'), r32Num('214', 'cultos por semana'), r32Num('61', 'pontos de culto'), r32Num('11', 'passaram dos 6 meses', 'ouro')];
+  const nums = r29Nums(p, cel ? N.slice(1).map(x => [x[0], x[1].replace('passaram dos 6 meses', 'sem conferir')]) : N, cel);
+  if (cel) return r32EsCel(p, 'Cultos e pontos', `${nums}${r16aListaCel(p, R32_AREAS.slice(0, 7).map(x => [x[0], `${x[1]} congregações · ${x[2]} cultos · ${x[3]} pontos`, r32N(p, x[4], 'ouro')]))}`);
+  const tab = r16aTab(p, 'minmax(0,1.4fr) 120px 120px 130px minmax(0,1fr)', ['Área', 'Congregações', 'Cultos', 'Pontos de culto', 'Passaram dos 6 meses'], R32_AREAS.map(x => [x[0], x[1], x[2] + ' por semana', x[3], r32N(p, x[4], 'ouro')]));
+  const tit = r18Tit(p, 'Cultos e pontos de culto da igreja toda', `o que está no site, por área · tocar numa área abre as congregações dela · ${R32_HOJE}`, r32Filtro(p));
+  return r32Es(p, 'geral', 'Cultos e pontos', `${tit}${nums}${tab}`, ['Cultos e pontos de culto']);
+}
+const r32Cultos = (p, k, d) => { const cel = ehCel(d); return k === 'editar' ? r32CultosLocal(p, cel, 1) : k === 'area' ? r32CultosArea(p, cel) : k === 'geral' ? r32CultosGeral(p, cel) : r32CultosLocal(p, cel, 0); };
+const PERFIS32_CULTOS = [['local', 'Secretaria de Vila Nova · conferir'], ['editar', 'Secretaria de Vila Nova · mudar a hora'], ['area', 'Pastor da Área 2 · as 12 congregações'], ['geral', 'Secretaria Geral · a igreja toda']];
+
+/* ---------------- 3. O PAINEL: O QUE ESTÁ DESATUALIZADO ---------------- */
+// A primeira tela do módulo, "quem precisa de atenção primeiro": o cargo vago, o cargo vencendo, o dado velho e o termo de
+// posse pendente. Cada nível vê os seus tipos de aviso, como no Financeiro, e o filtro "só o que eu preciso resolver".
+const R32_PRECISA = {
+  local: [['maleta', 'verm', '1º tesoureiro vago', 'desde 25/11 · o Carlos saiu', 'Preencher ›'], ['calendario', 'ouro', 'A diretoria de 2027', 'os 6 cargos vencem em 31/12 · faltam 29 dias', 'Montar ›'], ['relogio', 'ouro', 'Cultos e pontos de culto', 'conferidos em 14/05 · passou dos 6 meses', 'Conferir ›']],
+  area: [['igreja', 'verm', 'Dirigente de Monte Sião', 'desde 02/11 · você ou a Geral', 'Pôr ›'], ['maleta', 'verm', 'Tesoureiro da Área 2', 'vago desde 16/11', 'Preencher ›'], ['calendario', 'ouro', 'A diretoria da área de 2027', 'os 3 cargos vencem em 31/12', 'Montar ›']],
+  geral: [['doc', 'ouro', '2 termos de dirigente', 'esperam o Presidente · Área 4 e Área 6', 'Ver ›'], ['igreja', 'verm', 'Boa Sorte sem dirigente', 'Área 7 · desde 20/10', 'Pôr ›'], ['calendario', 'ouro', 'A diretoria geral de 2027', 'os cargos da Geral vencem em 31/12', 'Montar ›']]
+};
+const R32_NUMS = {
+  local: [r32Num('1', 'cargo vago', 'verm'), r32Num('5', 'cargos vencem em 31/12'), r32Num('0', 'termos pendentes'), r32Num('1', 'dado para conferir', 'ouro')],
+  area: [r32Num('8', 'cargos vagos', 'verm'), r32Num('1', 'congregação sem dirigente', 'verm'), r32Num('1', 'termo pendente', 'ouro'), r32Num('3', 'para conferir', 'ouro')],
+  geral: [r32Num('22', 'cargos vagos', 'verm'), r32Num('2', 'congregações sem dirigente', 'verm'), r32Num('3', 'termos pendentes', 'ouro'), r32Num('11', 'para conferir', 'ouro'), r32Num('4 de 45', 'com a diretoria de 2027')]
+};
+const r32Precisa = (p, k, cel) => r32Car(p, 'Precisa de você', r18Etiq(p, String(R32_PRECISA[k].length), 'ouro'), R32_PRECISA[k].map((x, i) => r28Pes(p, r32Ic(p, x[0], x[1]), x[2], x[3], r28Mais(p, cel ? '›' : x[4]), { i, alt: cel ? 50 : 54 })).join(''), cel);
+// a virada do ano em Vila Nova: quem vence em 31/12 e o acesso que perde se não estiver na diretoria de 2027
+const R32_VENCE = [['AN', 'Pr. Abel Nogueira', 'Dirigente', 'o acesso de dirigente'], ['IC', 'Pb. Ivan Castro', 'Vice-dirigente', 'o cargo de vice-dirigente'], ['DL', 'Débora Lima', '1º secretário', 'a secretaria de Vila Nova'], ['PM', 'Paulo Mendes', '2º secretário', 'a secretaria de Vila Nova'], ['SR', 'Sueli Rocha', '2º tesoureiro', 'a tesouraria de Vila Nova']];
+const R32_ATENCAO_A2 = [['12 · Monte Sião', 'sem dirigente · 2 vagos · cultos há 7 meses', 'verm', 'sem dirigente'], ['27 · Betel', 'os 2 tesoureiros vagos desde 03/11', 'ouro', '2 vagos'], ['21 · Nova Esperança', 'endereço e cultos há 8 meses', 'ouro', 'conferir'], ['7 · Vila Nova', '1º tesoureiro vago · cultos há 6 meses', 'ouro', '1 vago'], ['9 · Cidade Jardim', 'o secretário novo ainda não aceitou o termo', 'ouro', 'termo'], ['36 · Recanto', 'secretário vago desde 19/11', 'ouro', '1 vago']];
+function r32Painel(p, k, d) {
+  const cel = ehCel(d), N = R32_NUMS[k];
+  if (cel) {
+    const resto = k === 'local' ? r16aListaCel(p, [['A virada do ano', '5 vencem em 31/12 · nenhum em 2027', r18Etiq(p, '29 dias', 'ouro')]])
+      : k === 'area' ? r16aListaCel(p, R32_ATENCAO_A2.slice(0, 4).map(x => [x[0], x[1].split(' · ')[0], r18Etiq(p, x[3], x[2])]))
+      : r16aListaCel(p, R32_AREAS.filter(x => x[5] > 1).slice(0, 4).map(x => [x[0], `${x[5]} vagos · ${x[7]} termos · ${x[4]} para conferir`, x[6] ? r18Etiq(p, 'sem dirigente', 'verm') : '']));
+    return r32EsCel(p, 'Estrutura', `${r29Nums(p, N.slice(0, 3).map(x => [x[0], x[1].replace(/congregaç(ão|ões) sem dirigente/, 'sem dirigente').replace('cargos vencem em 31/12', 'vencem 31/12').replace('termos pendentes', 'termos').replace('termo pendente', 'termo')]), 1)}${r32Filtro(p, 1)}${r32Precisa(p, k, 1)}<strong style="font-size:14.5px;color:${p.titulo};flex:none">${k === 'local' ? 'Vem aí' : k === 'area' ? 'Quem precisa de atenção primeiro' : 'As áreas com mais coisa'}</strong>${resto}`);
+  }
+  let dir;
+  if (k === 'local') dir = r32Car(p, 'A virada do ano: vencem em 31/12', r18Etiq(p, 'faltam 29 dias', 'ouro'), `${R32_VENCE.map((x, i) => r28Pes(p, r32Av(p, x[0]), x[1], `${x[2]} · se não estiver em 2027, perde ${x[3]}`, '', { i, alt: 46 })).join('')}${r20Nota(p, 'Quem continua em 2027 entra na diretoria de 2027 antes da virada, e ninguém fica sem acesso no dia 01/01.')}`);
+  else if (k === 'area') dir = r18Col(`<strong style="font-size:14.5px;color:${p.titulo}">As congregações: quem precisa de atenção primeiro</strong>`, r16aTab(p, 'minmax(0,0.9fr) minmax(0,2fr) 106px', ['Congregação', 'O que está desatualizado', ''], R32_ATENCAO_A2.map(x => [x[0], x[1], r18Etiq(p, x[3], x[2])])), r20Nota(p, 'E mais 6 congregações em dia. A diretoria de cada congregação, o dirigente põe; a área acompanha e cobra.'));
+  else dir = r18Col(`<strong style="font-size:14.5px;color:${p.titulo}">As áreas</strong>`, r16aTab(p, 'minmax(0,1.5fr) 54px 100px 62px 96px 80px', ['Área', 'Vagos', 'Sem dirigente', 'Termos', 'Para conferir', '2027 pronta'], R32_AREAS.map(x => [x[0], r32N(p, x[5], 'verm'), r32N(p, x[6], 'verm'), r32N(p, x[7], 'ouro'), r32N(p, x[4], 'ouro'), `${x[8]} de ${x[1]}`])));
+  const onde = { local: 'em Vila Nova', area: 'na Área 2', geral: 'na igreja toda' }[k];
+  const tit = r18Tit(p, `O que está desatualizado ${onde}`, `o cargo vago, o cargo vencendo, o dado velho e o termo de posse pendente · ${R32_HOJE}`, r32Filtro(p));
+  return r32Es(p, k, 'Painel da estrutura', `${tit}${r29Nums(p, N)}${r17Dois(r32Precisa(p, k), dir, k === 'geral' ? '0.8fr 1.5fr' : k === 'area' ? '0.8fr 1.6fr' : '1fr 1fr')}`, ['Painel']);
+}
+const PERFIS32_PAINEL = [['local', 'Dirigente de Vila Nova'], ['area', 'Pastor da Área 2'], ['geral', 'Secretaria Geral']];
+
+/* ---------------- 4. PÔR E TROCAR A DIRETORIA, COM O TERMO DE POSSE DIGITAL ---------------- */
+// Quem dá a posse confirma no sistema (o dirigente, para a diretoria da congregação; o Presidente, para o dirigente) e
+// quem toma posse aceita no próprio celular. O termo sai em PDF com o QR e a data e a hora dos dois. Todo cargo vence em
+// 31/12 (ou na data marcada); trocado no meio do ano, quem saiu perde o cargo e o acesso quando o novo é cadastrado.
+const r32PosseCaminho = (dirigente, at) => (dirigente ? [['Quem e o cargo', 'você põe, direto'], ['O aceite dele', 'no celular dele'], ['O Presidente confirma', 'quem dá a posse'], ['O termo em PDF', 'com o QR']] : [['Quem e o cargo', 'você dá a posse'], ['O aceite dele', 'no celular dele'], ['O termo em PDF', 'com o QR']]).map((x, i) => x.concat([i < at ? 'ok' : i === at ? 'agora' : 'depois']));
+const r32Escolhido = (p, ini, nome, sub) => `<div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12.5px;font-weight:600;color:${p.titulo}">Quem<span style="font-weight:400;color:${p.suave}"> · procurado no cadastro de membros</span></span><div style="border:2px solid #FFB800;border-radius:10px;padding:0 10px;background:${p.campo}">${r28Pes(p, r32Av(p, ini, 30), nome, sub, r28Mais(p, 'Trocar'), { alt: 46 })}</div></div>`;
+function r32PorForm(p, k, cel) {
+  const dg = k === 'area';
+  const campos = `${r17Campo(p, 'O cargo', dg ? 'Dirigente de Monte Sião · vago desde 02/11' : '1º tesoureiro de Vila Nova · vago desde 25/11', { icone: 'maleta' })}${r32Escolhido(p, dg ? 'RA' : 'MV', dg ? 'Pb. Rui Andrade' : 'Marcos Vieira', dg ? 'matrícula 0.982 · presbítero' : 'matrícula 1.874 · em comunhão')}<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${r17Campo(p, 'Começa em', '02/12/2026', { icone: 'calendario' })}${r17Campo(p, 'Termina em', '31/12/2026', { icone: 'calendario', nota: cel ? '' : 'a virada do ano' })}</div>`;
+  const vai = r28Vai(p, dg
+    ? [['check', '<strong>O Rui vira dirigente agora</strong>, com o acesso de dirigente de Monte Sião.'], ['celular', 'Ele recebe o termo de posse no celular e aceita com o PIN.'], ['escudo', 'O Presidente confirma a posse: é quem dá a posse ao dirigente.'], ['doc', 'Com as duas confirmações, o termo sai em PDF com o QR.']]
+    : [['check', '<strong>O Marcos vira 1º tesoureiro agora</strong>, com o acesso da tesouraria de Vila Nova.'], ['celular', 'Ele recebe o termo de posse no celular e aceita com o PIN.'], ['doc', 'Aceito, o termo sai em PDF com o QR, a data e a hora de vocês dois.'], ['relogio', 'Em 31/12 o cargo vence. Em dezembro, monte a diretoria de 2027.']], cel);
+  const bt = r21Ouro(p, dg ? 'Pôr o dirigente' : 'Dar a posse', 'check', cel ? 44 : 42);
+  if (cel) return r32EsCel(p, dg ? 'Pôr o dirigente' : 'Preencher o cargo', `${r27Caminho(p, r32PosseCaminho(dg, 0), { cel: 1 })}${campos}${r32Car(p, 'O que vai acontecer', '', vai, 1)}${bt}`);
+  const esq = r32Car(p, dg ? 'O dirigente que falta' : 'O cargo vago', '', `<div style="display:flex;flex-direction:column;gap:10px;padding-top:4px">${campos}</div>${r20Nota(p, dg ? 'O dirigente, o pastor de área ou a Geral põe, direto, sem esperar ninguém.' : 'A diretoria da congregação, o dirigente põe. Quem sair no meio do ano perde o cargo e o acesso na hora em que o novo é cadastrado.')}`);
+  const dir = r18Col(r32Car(p, 'O que vai acontecer', '', vai), bt);
+  const tit = r18Tit(p, dg ? 'Pôr o dirigente de Monte Sião' : 'Preencher o 1º tesoureiro de Vila Nova', `com o termo de posse digital, sem papel · ${R32_HOJE}`, m8Linha(p, 'Cancelar', 'voltar'));
+  return r32Es(p, k, 'Diretoria e cargos', `${tit}${r27Caminho(p, r32PosseCaminho(dg, 0))}${r17Dois(esq, dir, '1.1fr 1fr')}`, dg ? ['Monte Sião', 'Pôr o dirigente'] : ['Vila Nova', 'Preencher o cargo']);
+}
+// o Marcos aceita no próprio celular, com o PIN
+function r32Aceitar(p, cel) {
+  const texto = `<div style="font-size:${cel ? 13 : 13.5}px;line-height:1.5;color:${p.texto}">Eu, <strong>Marcos Vieira</strong>, aceito o cargo de <strong>1º tesoureiro da Congregação Vila Nova</strong> (nº 7), Área 2, para o mandato de <strong>02/12/2026 a 31/12/2026</strong>, que me foi dado pelo Pr. Abel Nogueira, dirigente, em 02/12/2026, às 10h14.</div>`;
+  const leva = r31Fatos(p, [['O acesso', 'a tesouraria de Vila Nova'], ['Vence em', '31/12/2026, na virada do ano'], ['Se não aceitar', 'o dirigente fica sabendo']], cel);
+  const bts = `${r21Ouro(p, 'Aceitar com o meu PIN', 'cadeado', cel ? 44 : 42)}${r21Linha(p, 'Não aceito', 'fechar')}`;
+  if (cel) return r28MvCel(p, 'Termo de posse', `${r16aAviso(p, 'O Pr. Abel Nogueira deu a você a posse de um cargo. Leia e aceite.')}${r32Car(p, 'Termo de posse', r18Etiq(p, 'para aceitar', 'ouro'), `${texto}${leva}`, 1)}${bts}`);
+  const tit = r18Tit(p, 'Termo de posse para aceitar', `chegou em 02/12/2026, às 10h14 · ${R32_HOJE}`);
+  return r28Mv(p, { ini: 'MV', nome: 'Marcos Vieira', papel: 'Membro · Vila Nova' }, ['Termo de posse'], `${tit}${r17Dois(r32Car(p, '1º tesoureiro de Vila Nova', r18Etiq(p, 'para aceitar', 'ouro'), `${texto}<div style="display:flex;gap:10px;padding-top:6px">${bts.replace('justify-content:center', 'justify-content:center;flex:1.4')}</div>`), r32Car(p, 'O que o cargo traz', '', `${leva}${r20Nota(p, 'Aceito, o termo sai em PDF, com o QR e a data e a hora de vocês dois. Fica em “Minha vida”.')}`), '1.3fr 1fr')}`);
+}
+// o termo em PDF (A4), com as duas confirmações e o QR
+function r32Papel(W = 470) {
+  const prot = `<div style="text-align:right;line-height:1.3;flex:none"><div style="font-size:8px;color:#5B6678">Protocolo</div><strong style="font-size:9.5px">TP-2026-00418</strong></div>`;
+  const conf = (r, v) => `<div style="display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px;padding:4px 0;border-top:1px solid #E6EAF0"><span style="color:#5B6678">${r}</span><span>${v}</span></div>`;
+  return `<div style="width:${W}px;height:${Math.round(W * 1.414)}px;flex:none;background:#FFFFFF;color:#0A2342;border:1px solid #D5DBE5;display:flex;flex-direction:column;gap:9px;padding:22px 26px;box-sizing:border-box;font-size:10.5px;line-height:1.5">${r18PpCab('IEADESPA · Termo de posse', 'Congregação Vila Nova (nº 7) · Área 2', prot)}<div style="text-align:center;font-size:14px;font-weight:800;letter-spacing:.06em;padding-top:6px">TERMO DE POSSE</div><div style="text-align:justify">Aos dois dias do mês de dezembro de 2026, o <strong>Pr. Abel Nogueira</strong>, dirigente da Congregação Vila Nova (nº 7), Área 2, deu posse ao irmão <strong>Marcos Vieira</strong> (Cartão de Membro nº 1.874) no cargo de <strong>1º TESOUREIRO</strong> da congregação, para o mandato de 02/12/2026 a 31/12/2026, que ele aceitou.</div><div style="border:1px solid #D5DBE5;border-radius:6px;padding:6px 10px"><div style="font-size:9px;font-weight:800;letter-spacing:.06em;padding-bottom:2px">AS DUAS CONFIRMAÇÕES</div>${conf('Deu a posse', '<strong>Pr. Abel Nogueira</strong>, dirigente · 02/12/2026, às 10h14, no sistema')}${conf('Tomou posse', '<strong>Marcos Vieira</strong> · 02/12/2026, às 19h32, no celular dele, com o PIN')}</div><div style="flex:1"></div><div style="border-top:1px solid #D5DBE5;padding-top:6px;font-size:8.8px;color:#3B4A63">Emitido pelo sistema da IEADESPA em 02/12/2026. <strong style="color:#0A2342">Vale sem assinatura de caneta: confira pelo QR.</strong></div>${r18PpQr(52, 'T4R-8N2', 'Confira se este termo é verdadeiro: aponte a câmera do celular para o código.')}</div>`;
+}
+function r32Termo(p, cel) {
+  if (cel) return r28MvCel(p, 'Termo de posse', `<div style="display:flex;align-items:center;gap:8px;flex:none"><span style="flex:1;min-width:0;font-size:13px;font-weight:700;color:${p.titulo}">termo-de-posse-marcos-vieira.pdf</span>${r28Mais(p, 'Baixar')}<span style="color:${p.suave}">·</span>${r28Mais(p, 'Compartilhar')}</div><div style="width:358px;height:506px;flex:none;align-self:center;overflow:hidden;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.18)"><div style="zoom:0.7617;width:470px">${r32Papel()}</div></div>${r20Nota(p, 'Fica guardado em “Minha vida”, e também na ficha da congregação.')}`);
+  const info = r32Car(p, 'O arquivo', r18Etiq(p, 'valendo', 'verde'), `${r31Fatos(p, [['Arquivo', 'termo-de-posse-marcos-vieira.pdf'], ['Protocolo', 'TP-2026-00418 · código T4R-8N2'], ['Onde fica', 'em “Minha vida” do Marcos e na ficha de Vila Nova'], ['Vence em', '31/12/2026']])}<div style="display:flex;gap:10px;padding-top:6px">${r28Bt(p, 'Baixar', 'doc')}${r28Bt(p, 'Imprimir', 'imprimir')}</div>`);
+  const qr = r32Car(p, 'O QR', '', r20Nota(p, 'Quem apontar a câmera vê, na página de conferência da IEADESPA, que o termo existe, de quem é, o cargo, o mandato e as duas confirmações. Vencido o mandato, a página diz que o termo foi verdadeiro e que o mandato acabou.'));
+  return r32Es(p, 'local', 'Termos de posse', `${r18Tit(p, 'O termo de posse do Marcos', `em PDF, numa folha A4, com o QR · ${R32_HOJE}`)}<div style="display:flex;gap:20px;align-items:flex-start">${r32Papel(440)}${r18Col(info, qr)}</div>`, ['Vila Nova', 'Termos de posse']);
+}
+// o Presidente confirma a posse dos dirigentes
+const R32_TERMOS_PRES = [['TR', 'Ev. Tomé Rocha', 'dirigente de Liberdade (Área 4) · aceitou em 27/11', 1], ['WL', 'Pb. Wagner Lins', 'dirigente de Novo Horizonte (Área 6) · aceitou em 30/11', 0]];
+function r32Presidente(p, cel) {
+  const lista = r32Car(p, 'Esperam a sua confirmação', r18Etiq(p, '2', 'ouro'), `${R32_TERMOS_PRES.map((x, i) => r28Pes(p, r32Av(p, x[0], 32), x[1], cel ? x[2].split(' · ')[0] : x[2], cel ? r28Mais(p, '›') : '', { i, alt: 50, sel: !cel && x[3] })).join('')}${r28Pes(p, r32Av(p, 'RA', 32), 'Pb. Rui Andrade', cel ? 'dirigente de Monte Sião' : 'dirigente de Monte Sião · ainda não aceitou', r18Etiq(p, 'esperando ele', 'azul'), { i: 1, alt: 50 })}`, cel);
+  const bts = `${r21Ouro(p, 'Confirmar a posse', 'chave', cel ? 44 : 42)}${r21Linha(p, 'Não confirmar', 'fechar')}`;
+  if (cel) return r32EsCel(p, 'Termos de posse', `${r32Car(p, 'Ev. Tomé Rocha', r18Etiq(p, 'para você confirmar', 'ouro'), r31Fatos(p, [['Cargo', 'dirigente de Liberdade (Área 4)'], ['Posto por', 'Pr. Jonas Freire, em 27/11'], ['Mandato', 'até 31/12/2026'], ['Aceitou', 'em 27/11, às 21h40'], ['Já vale?', 'sim, desde 27/11']], 1), 1)}${bts}${r16aListaCel(p, [['Também espera: Pb. Wagner Lins', 'dirigente de Novo Horizonte (Área 6)', r28Mais(p, '›')], ['Pb. Rui Andrade', 'dirigente de Monte Sião', r18Etiq(p, 'esperando ele', 'azul')]])}`);
+  const aberto = r32Car(p, 'Ev. Tomé Rocha · dirigente de Liberdade', r18Etiq(p, 'para você confirmar', 'ouro'), `${r31Fatos(p, [['Posto por', 'Pr. Jonas Freire, pastor da Área 4, em 27/11, às 9h02'], ['Mandato', '27/11/2026 a 31/12/2026'], ['Aceitou', 'em 27/11, às 21h40, no celular dele'], ['Já vale?', 'sim, desde 27/11: o cargo e o acesso de dirigente'], ['Quem saiu', 'Pb. Osmar Leite, que perdeu o acesso em 27/11']])}<div style="display:flex;gap:10px;padding-top:6px">${bts.replace('justify-content:center', 'justify-content:center;flex:1.4')}</div>${r20Nota(p, 'Confirmado, o termo sai em PDF com o QR e a data e a hora dele e sua. “Não confirmar” pede o motivo, e o pastor da área fica sabendo.')}`);
+  return r32Es(p, 'geral', 'Termos de posse', `${r18Tit(p, 'Termos de posse de dirigente', `você dá a posse aos dirigentes · ${R32_HOJE}`)}${r17Dois(lista, aberto, '1fr 1.25fr')}`, ['Termos de posse'], R32_USU.pres);
+}
+// a virada do ano: o dirigente monta a diretoria de 2027
+function r32Virada(p, cel) {
+  const L = [['AN', 'Pr. Abel Nogueira', 'Dirigente', 1], ['IC', 'Pb. Ivan Castro', 'Vice-dirigente', 1], ['DL', 'Débora Lima', '1º secretário', 1], ['PM', 'Paulo Mendes', '2º secretário', 0], ['MV', 'Marcos Vieira', '1º tesoureiro', 1], ['SR', 'Sueli Rocha', '2º tesoureiro', 1]];
+  const caixa = on => `<span style="width:20px;height:20px;border-radius:6px;flex:none;box-sizing:border-box;display:flex;align-items:center;justify-content:center;${on ? `background:${R32_VERDE};` : `border:1.5px solid ${p.campoBorda};`}">${on ? ic('check', '#FFFFFF', 14, 3) : ''}</span>`;
+  const linhas = L.map((x, i) => r28Pes(p, caixa(x[3]), x[3] ? x[1] : `${x[2]}: escolher quem`, x[3] ? `${x[2]} · continua em 2027` : `o Paulo Mendes não continua · sai em 31/12`, x[3] ? '' : r28Mais(p, 'Escolher ›'), { i, alt: cel ? 44 : 48 })).join('');
+  const lista = r32Car(p, 'Quem continua em 2027', r18Etiq(p, '5 de 6', 'ouro'), linhas, cel);
+  const bt = r21Ouro(p, 'Mandar os termos de 2027', 'envelope', cel ? 44 : 42);
+  const vai = r28Vai(p, [['celular', 'Cada um recebe o termo de 2027 no celular: vale de 01/01 a 31/12/2027.'], ['relogio', 'Quem não estiver em 2027 perde o cargo e o acesso em 31/12, às 23h59.'], ['check', 'Com todos aceitos, o painel para de cobrar a diretoria de 2027.']], cel);
+  if (cel) return r32EsCel(p, 'Diretoria de 2027', `${lista}${r32Car(p, 'O que vai acontecer', '', vai, 1)}${bt}`);
+  const tit = r18Tit(p, 'A diretoria de Vila Nova para 2027', `os cargos de 2026 vencem em 31/12 · faltam 29 dias · ${R32_HOJE}`);
+  return r32Es(p, 'local', 'Diretoria e cargos', `${tit}${r17Dois(lista, r18Col(r32Car(p, 'O que vai acontecer', '', vai), bt), '1.1fr 1fr')}`, ['Vila Nova', 'Diretoria de 2027']);
+}
+const r32Posse = (p, k, d) => { const cel = ehCel(d); return k === 'pessoa' ? r32Aceitar(p, cel) : k === 'termo' ? r32Termo(p, cel) : k === 'geral' ? r32Presidente(p, cel) : k === 'virada' ? r32Virada(p, cel) : r32PorForm(p, k, cel); };
+const PERFIS32_POSSE = [['local', 'Dirigente de Vila Nova · põe o tesoureiro'], ['pessoa', 'O Marcos · aceita no celular'], ['termo', 'O termo em PDF'], ['area', 'Pastor da Área 2 · põe o dirigente'], ['geral', 'O Presidente · confirma os dirigentes'], ['virada', 'Dirigente de Vila Nova · a diretoria de 2027']];
+
+/* ---------------- 5. O MAPA ---------------- */
+// Onde ficam as congregações e os pontos de culto, e onde moram os membros. A congregação vê o ponto de cada membro dela
+// (o nome ao tocar); a área e a Geral veem só a contagem por bairro, sem pessoa. A localização das igrejas vem do site.
+// [bairro, x, y (0 a 100), membros que moram lá]
+const R32_BAIRROS = [['Vila Nova', 30, 40, 286, 1], ['Cidade Jardim', 56, 28, 190, 1], ['Altamira', 18, 64, 97], ['Nova Carajás', 70, 70, 64, 1], ['Bela Vista', 47, 58, 151, 1], ['Monte Sião', 80, 40, 88, 1], ['Primavera', 63, 12, 120, 1], ['Jardim Ipê', 38, 80, 76, 1], ['Centro', 48, 42, 342], ['Liberdade', 88, 16, 28], ['Novo Horizonte', 13, 22, 109], ['Chácaras do Rio', 90, 82, 41], ['Vale do Sol', 8, 88, 33]];
+// as igrejas: [nome, x, y, da Área 2?]; e os pontos de culto de Vila Nova
+const R32_IGREJAS = [['Vila Nova', 31, 38, 1], ['Cidade Jardim', 57, 26, 1], ['Bela Vista', 47, 56, 1], ['Monte Sião', 81, 38, 1], ['Primavera', 64, 10, 1], ['Jardim Ipê', 38, 80, 1], ['Betel', 36, 24, 1], ['Nova Esperança', 62, 44, 1], ['Shalom', 24, 48, 1], ['Recanto', 52, 90, 1], ['Morro Verde', 74, 52, 1], ['Morada do Sol', 44, 30, 1], ['Sede', 49, 44, 0], ['Novo Horizonte', 13, 20, 0], ['Altamira', 20, 70, 0], ['Liberdade', 92, 24, 0], ['', 6, 50, 0], ['', 28, 10, 0], ['', 86, 58, 0], ['', 16, 36, 0], ['', 40, 94, 0], ['', 62, 96, 0], ['', 96, 40, 0], ['', 76, 22, 0]];
+const R32_PONTOS_XY = [[19, 61], [68, 72]];
+function r32Mapa(p, W, H, k) {
+  const X = v => (v * W / 100).toFixed(0), Y = v => (v * H / 100).toFixed(0);
+  let s = `<rect width="${W}" height="${H}" fill="#EEF2E8"/><path d="M0 ${Y(52)} C ${X(20)} ${Y(46)}, ${X(34)} ${Y(66)}, ${X(56)} ${Y(64)} S ${X(84)} ${Y(52)}, ${W} ${Y(58)}" stroke="#A9CFEA" stroke-width="12" fill="none"/>`;
+  s += [[0, 34, 100, 46], [0, 74, 100, 90], [42, 0, 52, 100], [20, 0, 26, 100], [74, 0, 70, 100], [0, 12, 100, 22]].map(r => `<line x1="${X(r[0])}" y1="${Y(r[1])}" x2="${X(r[2])}" y2="${Y(r[3])}" stroke="#FFFFFF" stroke-width="${r[0] === 0 && r[1] === 34 ? 7 : 4}"/>`).join('');
+  if (k === 'local') {
+    s += `<circle cx="${X(31)}" cy="${Y(38)}" r="${(W * 0.15).toFixed(0)}" fill="rgba(21,128,61,.07)" stroke="${R32_VERDE}" stroke-width="1.5" stroke-dasharray="6 5"/>`;
+    let sem = 17; const rnd = () => { sem = (sem * 16807) % 2147483647; return sem / 2147483647; };
+    for (let i = 0; i < 90; i++) { const perto = i < 66, a = rnd() * 6.283, d = perto ? rnd() * 14 : 16 + rnd() * 36; s += `<circle cx="${X(Math.min(97, Math.max(3, 31 + Math.cos(a) * d)))}" cy="${Y(Math.min(96, Math.max(4, 38 + Math.sin(a) * d * 1.3)))}" r="3.6" fill="#1D4ED8" stroke="#FFFFFF" stroke-width="1"/>`; }
+  } else {
+    const max = 342;
+    s += R32_BAIRROS.filter(b => k === 'geral' || b[4]).map(b => `<circle cx="${X(b[1])}" cy="${Y(b[2])}" r="${(12 + 30 * Math.sqrt(b[3] / max)) * W / 900}" fill="rgba(29,78,216,${(0.12 + 0.4 * b[3] / max).toFixed(2)})"/><text x="${X(b[1])}" y="${+Y(b[2]) + 4}" text-anchor="middle" font-size="${W > 600 ? 12 : 10}" font-weight="800" fill="#13294A">${b[3]}</text>`).join('');
+  }
+  s += R32_BAIRROS.map(b => `<text x="${X(b[1])}" y="${+Y(b[2]) + (k === 'local' ? -10 : -18) * (W > 600 ? 1 : 0.8)}" text-anchor="middle" font-size="${W > 600 ? 11 : 9}" fill="#4B5563">${b[0]}</text>`).join('');
+  const pino = (x, y, on, t) => `<g transform="translate(${X(x)} ${Y(y)})"><circle r="${t}" fill="${on ? R32_VERDE : '#9CA3AF'}" stroke="#FFFFFF" stroke-width="2"/><path d="M0 ${-t * 0.5} V${t * 0.45} M${-t * 0.4} ${-t * 0.15} H${t * 0.4}" stroke="#FFFFFF" stroke-width="2"/></g>`;
+  const T = W > 600 ? 11 : 9;
+  s += R32_IGREJAS.filter(g => k !== 'local' || g[0] === 'Vila Nova' || g[0] === 'Sede' || g[0] === 'Shalom' || g[0] === 'Betel').map(g => pino(k === 'local' ? g[1] : g[1] + 4.5, k === 'local' ? g[2] : g[2] - 6, k === 'geral' || (k === 'local' ? g[0] === 'Vila Nova' : g[3]), g[0] === 'Vila Nova' && k === 'local' ? T + 3 : k === 'geral' ? T - 2 : T)).join('');
+  s += R32_PONTOS_XY.map(q => `<g transform="translate(${X(q[0])} ${Y(q[1])})"><rect x="-7" y="-7" width="14" height="14" rx="4" fill="#FFB800" stroke="#FFFFFF" stroke-width="2"/></g>`).join('');
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true" style="display:block;flex:none;border-radius:14px;border:1px solid ${p.borda}">${s}</svg>`;
+}
+const r32Legenda = (p, k) => `<div style="display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:${p.texto}">${[[R32_VERDE, 'congregação', 10], ['#FFB800', 'ponto de culto', 3], k === 'local' ? ['#1D4ED8', 'membro (o nome ao tocar)', 10] : ['rgba(29,78,216,.45)', 'membros por bairro', 10]].concat(k === 'area' ? [['#9CA3AF', 'outras áreas', 10]] : []).map(x => `<span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:${x[2]}px;background:${x[0]};flex:none"></span>${x[1]}</span>`).join('')}${k === 'local' ? `<span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:0;border-top:2px dashed ${R32_VERDE}"></span>3 km</span>` : ''}</div>`;
+const R32_LONGE = [['Nova Carajás · tem ponto de culto', '64 membros · a igreja mais perto a 3,4 km'], ['Chácaras do Rio', '41 membros · a igreja mais perto a 3,1 km'], ['Vale do Sol', '33 membros · a igreja mais perto a 2,9 km']];
+function r32MapaTela(p, k, d) {
+  const cel = ehCel(d);
+  const filtros = r32Pils(p, k === 'local' ? ['Congregação', 'Pontos de culto', 'Membros', '3 km'] : (k === 'geral' ? (cel ? ['Parauapebas ▾', 'Igrejas', 'Por bairro'] : ['Parauapebas ▾', 'Congregações', 'Pontos de culto', 'Por bairro']) : ['Congregações', 'Pontos de culto', 'Por bairro']), true);
+  const lado = k === 'local'
+    ? r32Car(p, 'Os membros de Vila Nova', '', `${r31Fatos(p, [['No mapa', '274 de 312'], ['Moram a mais de 3 km', '61'], ['Sem localização', '38: só o CEP geral da cidade']], cel)}${cel ? '' : r28Pes(p, r32Ic(p, 'mapa', 'ouro'), 'Completar os 38 endereços', 'o CEP e o número já bastam', r28Mais(p, 'Abrir ›'), { i: 1, alt: 52 })}`, cel)
+    : k === 'area' ? r32Car(p, 'Onde moram os membros da Área 2', '', `${[['Vila Nova', '286 · a 0,4 km da igreja'], ['Cidade Jardim', '190 · a 0,3 km'], ['Bela Vista', '151 · a 0,5 km'], ['Primavera', '120 · a 0,6 km'], ['Monte Sião', '88 · a 0,4 km'], ['Nova Carajás', '64 · a igreja mais perto a 3,4 km']].filter((x, i) => !cel || i !== 3).map((x, i) => r28Pes(p, r32Ic(p, 'casa', i === 5 ? 'ouro' : ''), x[0], x[1], '', { i, alt: cel ? 40 : 42 })).join('')}`, cel)
+    : r32Car(p, 'Onde falta igreja', r18Etiq(p, '3 bairros', 'ouro'), `${R32_LONGE.map((x, i) => r28Pes(p, r32Ic(p, 'alvo', 'ouro'), x[0], x[1], '', { i, alt: cel ? 42 : 46 })).join('')}${cel ? '' : `<div style="padding-top:8px">${r21Linha(p, 'Simular uma congregação nova', 'mais')}</div>`}`, cel);
+  if (cel) return r32EsCel(p, 'Mapa', `${filtros}${r32Mapa(p, 362, k === 'local' ? 330 : k === 'area' ? 262 : 280, k)}${r32Legenda(p, k)}${lado}`);
+  const nota = r20Nota(p, k === 'local' ? 'Só a congregação vê os membros dela, um ponto para cada um. A área e a Geral veem só quantos moram em cada bairro.' : 'Só a contagem por bairro, sem nenhum nome. A localização das igrejas vem do site.');
+  const tit = r18Tit(p, { local: 'O mapa de Vila Nova', area: 'O mapa da Área 2', geral: 'O mapa da igreja toda' }[k], `${{ local: 'a congregação, os pontos de culto e onde moram os membros', area: 'as 12 congregações da área, em verde, e os membros por bairro', geral: 'em Parauapebas, 24 das 45 congregações' }[k]} · ${R32_HOJE}`, filtros);
+  return r32Es(p, k, 'Mapa', `${tit}<div style="display:flex;gap:16px;align-items:flex-start">${r32Mapa(p, 640, 600, k)}${r18Col(r32Legenda(p, k), lado, nota)}</div>`, [k === 'local' ? 'Vila Nova' : k === 'area' ? 'Área 2' : 'Igreja toda', 'Mapa']);
+}
+const PERFIS32_MAPA = [['local', 'Dirigente de Vila Nova · os membros'], ['area', 'Pastor da Área 2 · por bairro'], ['geral', 'Secretaria Geral · onde falta igreja']];
+
+const r32T = (id, nome, parte, decidido, desc, fn, perfis, perfisRot, explica) => ({ id, nome, parte, w: 1280, h: 800, disp: true, perfis, perfisRot, decidido: `${decidido} ${R22_REGRA}`, opcoes: [['Versão única', desc, fn]], explica });
+// A explicação da rodada 32 (fica na página, FORA do desenho das telas).
+const EXPLICA_R32 = `<p><strong>A rodada 32 começa o Módulo 3, Estrutura e Territórios, com as respostas que você deu em 23/11 e às 8 perguntas de 24/11. A dor que ele resolve: os dados velhos. Ninguém sabe ao certo quem é o dirigente, o vice ou o tesoureiro, os cultos e os pontos de culto mudam e ninguém atualiza, e o termo de posse é de papel.</strong></p>
+<p>São 5 telas, cada uma numa versão só, com os dados de mentira de sempre: Vila Nova está sem tesoureiro desde que o Carlos saiu, e Monte Sião, sem dirigente. Nos desenhos, hoje é 02/12/2026, o mês do aviso de "cargo vencendo".</p>
+<ol>
+<li><strong>O painel, “o que está desatualizado”:</strong> a primeira tela do módulo. O cargo vago, o cargo vencendo, o dado velho e o termo pendente, cada nível com os seus.</li>
+<li><strong>A ficha da congregação:</strong> uma página por igreja, com o número de abertura, a diretoria e o mandato, os cultos, os pontos de culto, o endereço e as pessoas. Cada um vê a sua parte. O pastor de área tem a ficha da área.</li>
+<li><strong>Os cultos e os pontos de culto:</strong> a congregação atualiza, e o site muda sozinho. A cada 6 meses ela confere num toque que está tudo certo.</li>
+<li><strong>Pôr e trocar a diretoria, com o termo de posse digital:</strong> quem dá a posse confirma no sistema, e quem toma posse aceita no celular. O termo sai em PDF com o QR. Em dezembro, a diretoria do ano seguinte.</li>
+<li><strong>O mapa:</strong> as congregações, os pontos de culto e onde moram os membros. Cada nível vê o que lhe cabe, e a Geral vê onde falta igreja.</li>
+</ol>
+<p>Ficam para a próxima rodada: a lista das áreas e dos números, a congregação nova, mudar de área, fechar ou juntar e os termos guardados.</p>
+<p>Em cada tela, troque quem está vendo nos botões logo acima. O que você decidiu nas 8 perguntas aparece como “Decidido por você” na explicação de cada tela. Os detalhes que eu decidi ficam marcados “Para conferir”, fora do desenho. A cor do módulo é verde, a do território.</p>`;
+const R32_EX_FICHA = {
+  membro: '<strong>O membro abre “Minha congregação” em Minha vida.</strong> Ele vê o endereço, o dirigente, o telefone da secretaria, os cultos e os pontos de culto, só com o bairro e o horário, e procura as outras congregações. É o mesmo que está no site. <em>Para conferir: (1) no público, o ponto de culto aparece só com o bairro e o horário, sem o endereço da casa (sessão de 23/11); (2) o membro vê a página das outras congregações do mesmo jeito.</em>',
+  local: '<strong>O dirigente de Vila Nova abre a ficha dela.</strong> No alto, o número de abertura (nº 7), a área e quando os dados foram conferidos pela última vez. A diretoria de 2026, com o mandato até 31/12 e o 1º tesoureiro vago, com o “Preencher”, que abre a posse. Os cultos e os pontos de culto, com o responsável e a casa. O endereço, que vai para o site, e os números de pessoas. O dinheiro, não: fica no Financeiro. Decidido por você em 24/11: a diretoria é a lista fixa da Geral, com 6 cargos (dirigente, vice-dirigente, 1º e 2º secretário, 1º e 2º tesoureiro); o superintendente da EBD, o líder dos jovens, o porteiro e a recepção ficam no módulo de cada um, não aqui; o ponto de culto guarda o responsável e a casa, que só a liderança vê. <em>Para conferir: (1) quem vê o quê na ficha (sessão de 23/11); (2) o dirigente também vê os números de pessoas, como a secretaria.</em>',
+  area: '<strong>O pastor da Área 2 abre a ficha da área.</strong> À esquerda, a diretoria da área (ele, o secretário e o tesoureiro, vago desde 16/11). À direita, as 12 congregações pela ordem do número de abertura, com o dirigente, os cargos vagos e a situação: Monte Sião sem dirigente, em vermelho. Tocar numa congregação abre a ficha dela, como o dirigente vê. Decidido por você em 24/11: a diretoria da área é a da lista fixa, com 3 cargos: o pastor de área, o secretário e o tesoureiro. Os vagos contam só a diretoria. <em>Para conferir: o número que aparece é o de hoje; o histórico guarda o de cada época.</em>',
+  geral: '<strong>A Secretaria Geral abre a mesma ficha, com tudo:</strong> mais o dinheiro e o patrimônio (só a tesouraria e a Geral veem) e os dois botões que só a Geral tem, “Mudar de área” e “Fechar ou juntar”. Mudar de área deixa o passado na área antiga; fechar passa todos os membros de uma vez para a congregação que a Geral escolher. Essas duas telas vêm na próxima rodada.'
+};
+const R32_EX_CULTOS = {
+  local: '<strong>A secretaria de Vila Nova abre os cultos e os pontos de culto.</strong> Faz mais de 6 meses que ninguém confere, por isso o aviso no alto. Ela olha a lista e toca em “Está tudo certo”, e o painel para de cobrar. À direita, como aparece no site: o mesmo, sem o responsável e sem a casa do ponto de culto. Decidido por você em 24/11: a congregação confirma a cada 6 meses e, passado o prazo, entra no painel; o ponto de culto guarda o responsável e a casa, que só a liderança vê. <em>Para conferir: ' + R32_PC_SITE + ' (sessão de 23/11).</em>',
+  editar: '<strong>Vila Nova muda o culto de quinta das 19h30 para as 20h.</strong> A secretaria toca no lápis, troca a hora e salva: “Salvo. O site já mostra quinta, às 20h.” Ninguém precisa aprovar. Fica registrado quem mudou e quando. Cada culto tem o dia, a hora, o nome e se repete toda semana ou em semanas marcadas (como o dos jovens, no 1º e no 3º sábado). <em>Para conferir: (1) mudar ou tirar um culto também conta como conferido; (2) os nomes e os horários dos cultos são de mentira.</em>',
+  area: '<strong>O pastor da Área 2 vê quando cada uma das 12 congregações conferiu.</strong> Vila Nova, Monte Sião e Nova Esperança passaram dos 6 meses. Ele também pode corrigir: toca na congregação e abre a mesma tela da secretaria.',
+  geral: '<strong>A Geral vê a igreja toda, por área:</strong> 45 congregações no site, 214 cultos por semana, 61 pontos de culto e 11 congregações que passaram dos 6 meses sem conferir. Tocar numa área abre as congregações dela, como o pastor de área vê.'
+};
+const R32_EX_PAINEL = {
+  local: '<strong>A primeira tela do módulo para o dirigente de Vila Nova:</strong> o que está desatualizado, com o que precisa dele primeiro. O 1º tesoureiro vago, a diretoria de 2027 (os 6 cargos vencem em 31/12) e os cultos que passaram dos 6 meses sem conferir. O professor dos Jovens não entra: os outros cargos ficam no módulo de cada um. À direita, a virada do ano: quem vence em 31/12 e o acesso que perde se não estiver na diretoria de 2027. Decidido por você em 24/11: o dado velho é o que passou dos 6 meses sem conferir; o painel cobra só os 6 cargos da diretoria da lista fixa. <em>Para conferir: (1) a diretoria de 2027 se monta antes, com início em 01/01, e o aviso de “cargo vencendo” aparece em dezembro (sessão de 23/11); (2) o vice-dirigente perde o cargo, mas qual acesso ele tem depende do que a Geral definir para o vice.</em>',
+  area: '<strong>O pastor da Área 2:</strong> o que só ele resolve (o dirigente de Monte Sião, que ele ou a Geral põe, o tesoureiro da área e a diretoria da área de 2027) e, à direita, as congregações por ordem de atenção, com o que está desatualizado em cada uma. A diretoria de cada congregação, o dirigente põe; a área acompanha e cobra. Decidido por você em 24/11: o cargo vale no cadastro; “termo pendente” é o de quem já foi posto e ainda não aceitou.',
+  geral: '<strong>A Secretaria Geral vê a igreja toda:</strong> 22 cargos vagos da diretoria, 2 congregações sem dirigente, 3 termos pendentes, 11 com os dados para conferir e quantas já têm a diretoria de 2027. “Precisa de você” traz os 2 termos de dirigente que esperam o Presidente, a congregação sem dirigente e a diretoria geral de 2027. À direita, por área. Tocar numa área abre o painel dela, como o pastor de área vê.'
+};
+const R32_EX_POSSE = {
+  local: '<strong>O dirigente de Vila Nova preenche o 1º tesoureiro.</strong> Tocou em “Preencher”, no painel ou na ficha: o cargo já vem escrito, ele procura o Marcos no cadastro de membros, o mandato vai até 31/12 e ele toca em “Dar a posse”. O Marcos vira tesoureiro na hora, com o acesso da tesouraria, e recebe o termo no celular. Decidido por você em 24/11: o cargo e o acesso valem no cadastro, e o termo corre depois; o painel cobra o termo pendente. <em>Para conferir: (1) para a diretoria da congregação, o dirigente dá a posse ao cadastrar, e falta só o aceite de quem toma posse; (2) quem toma posse em dezembro faz o termo até 31/12 e, se continuar, o de 2027 logo depois, na diretoria de 2027.</em>',
+  pessoa: '<strong>O Marcos aceita no próprio celular.</strong> Chega o aviso, ele lê o termo (o cargo, a congregação, o mandato e quem deu a posse) e aceita com o PIN. Pode dizer “Não aceito”, e o dirigente fica sabendo. Decidido por você em 24/11: quem não usa celular aceita no balcão da secretaria, com o PIN, e fica registrado quem atendeu. <em>Para conferir: (1) quem não aceitou em 7 dias aparece no painel como “termo pendente”; (2) “Não aceito” desfaz o cadastro: o cargo volta a ficar vago, ele perde o acesso que o cargo dava e o dirigente fica sabendo.</em>',
+  termo: '<strong>O termo de posse em PDF, numa folha A4:</strong> quem deu a posse e quem tomou, o cargo e o mandato, com a data e a hora de cada um e o QR. Fica em “Minha vida” do Marcos e na ficha da congregação. Sem papel e sem caneta: o QR confere que o termo é verdadeiro, como na carta da 31.',
+  area: '<strong>O pastor da Área 2 põe o dirigente de Monte Sião,</strong> direto, sem esperar ninguém. O Rui vira dirigente na hora, com o acesso, e recebe o termo no celular. Como o dirigente recebe a posse do Presidente, o termo ainda espera a confirmação dele. A Geral põe do mesmo jeito. Decidido por você em 24/11: vale na hora, e o termo fica pendente até os dois confirmarem. <em>Para conferir: quem põe o dirigente pode ser outra pessoa (o pastor de área), mas quem dá a posse no termo é o Presidente.</em>',
+  geral: '<strong>O Presidente confirma a posse dos dirigentes,</strong> no celular ou no notebook, com a chave de acesso. Os que já aceitaram esperam por ele; o Rui, de Monte Sião, ainda não aceitou. Aberto um termo, ele vê quem pôs, o mandato, quando o novo aceitou e quem saiu. “Não confirmar” pede o motivo, e o pastor da área fica sabendo. Decidido por você em 24/11: enquanto o Presidente não confirma, o dirigente já trabalha com o acesso. <em>Para conferir: “Não confirmar” tira o cargo e o acesso: o cargo volta a ficar vago, e o pastor da área põe outro.</em>',
+  virada: '<strong>Em dezembro, o dirigente monta a diretoria de 2027.</strong> Marca de uma vez quem continua (5 dos 6) e escolhe quem entra no lugar do Paulo Mendes. Ao mandar, cada um recebe o termo de 2027 no celular, que vale de 01/01 a 31/12/2027. Quem não estiver em 2027 perde o cargo e o acesso em 31/12, às 23h59. Decidido por você em 24/11: a virada em lote: quem continua faz termo novo, um para cada um, aceito no celular. <em>Para conferir: os cargos do ano seguinte se cadastram antes, com início em 01/01, e ninguém fica sem acesso na virada (sessão de 23/11).</em>'
+};
+const R32_EX_MAPA = {
+  local: '<strong>O dirigente de Vila Nova vê o mapa dela:</strong> a igreja, os 2 pontos de culto (em amarelo), o raio de 3 km e um ponto azul para cada membro (o nome aparece ao tocar). Do lado, quantos estão no mapa, quantos moram longe e os 38 sem localização, que só têm o CEP geral da cidade: para esses, o CEP e o número já bastam, mesmo com erro de uns 50 m. Decidido por você em 24/11: só a congregação vê os membros dela, um ponto para cada um; os pontos de culto entram no mapa da liderança. <em>Para conferir: o raio de 3 km é o que já existe (v9.5).</em>',
+  area: '<strong>O pastor da Área 2 vê as 12 congregações dela (em verde; as das outras áreas, em cinza) e quantos membros moram em cada bairro da área:</strong> o círculo é maior e mais forte onde há mais gente, sem ponto de pessoa e sem nome. Os bairros das outras áreas ficam só com o nome. Do lado, os bairros com mais membros e a distância até a igreja; Nova Carajás está longe de todas. Decidido por você em 24/11: a área e a Geral veem só a contagem por bairro.',
+  geral: '<strong>A Geral vê a cidade inteira e onde falta igreja.</strong> Em Parauapebas ficam 24 das 45 congregações, e as outras ficam nas cidades vizinhas, que se escolhem no alto. São todas as congregações e a contagem de todos os bairros. Do lado, os bairros com muita gente e nenhuma congregação perto: Nova Carajás tem 64 membros, e a igreja mais perto fica a 3,4 km (lá já existe um ponto de culto de Vila Nova). A localização das igrejas vem do site, sozinha. <em>Para conferir: (1) “Simular uma congregação nova” abre a simulação e a tabela de critérios de emancipação que já existem (v9.5); (2) “igreja perto” quer dizer a até 3 km.</em>'
+};
+const TELAS_R32 = [
+  r32T('r32-painel', 'O painel: o que está desatualizado', 'Estrutura · Painel', 'Versão única: a primeira tela do módulo, quem precisa de atenção primeiro. O cargo vago, o cargo vencendo, o dado velho e o termo de posse pendente, cada nível com os seus, e o filtro “só o que eu preciso resolver”. Troque em “Quem está vendo”.',
+    'O dirigente, com a virada do ano; o pastor de área, com as congregações; a Geral, por área.', r32Painel, PERFIS32_PAINEL, 'Quem está vendo', R32_EX_PAINEL),
+  r32T('r32-ficha', 'A ficha da congregação', 'Estrutura · Igrejas', 'Versão única: uma página por congregação, com o número de abertura, a diretoria e o mandato, os cultos, os pontos de culto, o endereço e as pessoas. Cada um vê a sua parte: o membro, o endereço, os horários e o dirigente; a secretaria, as pessoas; o dinheiro, só a tesouraria e a Geral. O pastor de área tem a ficha da área. Troque em “Quem está vendo”.',
+    'O membro, o dirigente, o pastor de área (a ficha da área) e a Geral (com o dinheiro).', r32Ficha, PERFIS32_FICHA, 'Quem está vendo', R32_EX_FICHA),
+  r32T('r32-cultos', 'Os cultos e os pontos de culto', 'Estrutura · Igrejas', 'Versão única: a congregação, a área e a Geral atualizam os cultos e os pontos de culto, e o site muda sozinho. A cada 6 meses a congregação confere num toque; passou do prazo, vai para o painel. No site, o ponto de culto aparece só com o bairro e o horário. Troque em “Quem está vendo”.',
+    'A secretaria confere e muda a hora de um culto; a área e a Geral veem quem conferiu.', r32Cultos, PERFIS32_CULTOS, 'Quem está vendo e em que passo', R32_EX_CULTOS),
+  r32T('r32-posse', 'Pôr e trocar a diretoria, com o termo de posse', 'Estrutura · Diretoria', 'Versão única: quem dá a posse confirma no sistema (o dirigente, para a diretoria; o Presidente, para o dirigente) e quem toma posse aceita no próprio celular. O termo sai em PDF com o QR e a data e a hora dos dois. Todo cargo vence em 31/12, e a diretoria do ano seguinte se monta em dezembro. Troque em “Quem está vendo”.',
+    'O dirigente põe o tesoureiro; o Marcos aceita; o termo em PDF; o pastor de área põe o dirigente; o Presidente confirma; a diretoria de 2027.', r32Posse, PERFIS32_POSSE, 'Quem está vendo e em que passo', R32_EX_POSSE),
+  r32T('r32-mapa', 'O mapa', 'Estrutura · Igrejas', 'Versão única: as congregações e os pontos de culto, e onde moram os membros. A congregação vê o ponto de cada membro dela; a área e a Geral, só quantos moram em cada bairro, sem nome. A Geral vê onde há muita gente e nenhuma igreja perto. Troque em “Quem está vendo”.',
+    'A congregação com os membros; a área e a Geral pela contagem por bairro.', r32MapaTela, PERFIS32_MAPA, 'Quem está vendo', R32_EX_MAPA)
+];
+TELAS.unshift(...TELAS_R32.map(t => Object.assign({}, t, { rodada: 32 })));
+
+
+
+
+
+
+
+
+
+
+
+
+
+const $ = id => document.getElementById(id);
+const porId = id => TELAS.findIndex(t => t.id === id);
+const estado = { tela: 0, opcao: 0, modo: 'claro', perfil: 0, disp: 'notebook' };
+try {
+  const s = JSON.parse(localStorage.getItem('propostas-r15') || '{}');
+  if (s.disp === 'celular') estado.disp = 'celular';
+  const i = porId(s.id);
+  if (i >= 0 && TELAS[i].rodada === 32) { estado.tela = i; estado.opcao = TELAS[i].opcoes[s.opcao] ? s.opcao : 0; }
+} catch (e) { }
+const lembrar = () => { try { localStorage.setItem('propostas-r15', JSON.stringify({ id: TELAS[estado.tela].id, opcao: estado.opcao, modo: estado.modo, disp: estado.disp })); } catch (e) { } };
+let db = null, escolhas = {}, obsSuja = false, geralSuja = false;
+const tela = () => TELAS[estado.tela];
+const perfilAtual = () => tela().perfis ? tela().perfis[estado.perfil][0] : undefined;
+const dispAtual = () => tela().disp ? estado.disp : (tela().w < 500 ? 'celular' : 'notebook');
+const dims = () => { const t = tela(); return t.disp && estado.disp === 'celular' ? { w: 390, h: 844 } : { w: t.w, h: t.h }; };
+const desenhar = () => comBarraDoCelular(tela().opcoes[estado.opcao][2](P(estado.modo), perfilAtual(), dispAtual()));
+
+// Página nova a partir da rodada 31 (24/11/2026). As rodadas 19 a 30 (KMeb…) e 2 a 18 (G1gj…) ficam nas páginas antigas, intactas como arquivo do que já foi aprovado;
+// o "Já aprovados" é um link para ela (abre em outra aba). A chave 'propostas-r15' (a tela em que ele estava) continua a mesma.
+const RODADA_ATUAL = 32;
+const GRUPOS_TELAS = [[32, "Rodada 32: Estrutura e Territórios, o começo (a ficha da congregação, os cultos e os pontos de culto, o painel do que está desatualizado, a diretoria com o termo de posse e o mapa) (para escolher agora)"]];
+let explicaAberta = true;
+try { explicaAberta = localStorage.getItem('propostas-explica-r32') !== 'fechada'; } catch (e) { }
+document.addEventListener('toggle', ev => { const d = ev.target; if (!d || !d.classList || !d.classList.contains('explica')) return; explicaAberta = d.open; try { localStorage.setItem('propostas-explica-r32', d.open ? 'aberta' : 'fechada'); } catch (e) { } }, true);
+function botoesDaRodada(r) {
+  return TELAS.map((t, i) => {
+    if (t.rodada !== r) return '';
+    const e = escolhas[t.id];
+    const marca = e && e.opcao ? `<span class="marca ok">Aprovada: opção ${e.opcao}</span>` : '<span class="marca">Falta escolher</span>';
+    return `<button type="button" class="tela-btn" data-tela="${i}" aria-pressed="${i === estado.tela}"><small>${t.parte}</small><strong>${t.nome}</strong>${marca}</button>`;
+  }).join('');
+}
+// rodadas recolhidas embaixo da atual: uma página por rodada, não há nenhuma (GRUPOS_TELAS só com a 32) (aberta se ele abriu, ou se a tela escolhida é dela)
+let antigaAberta = false;
+try { antigaAberta = localStorage.getItem('propostas-r32-antigas') === 'aberta'; } catch (e) { }
+document.addEventListener('toggle', ev => { const d = ev.target; if (!d || !d.classList || !d.classList.contains('antiga')) return; antigaAberta = d.open; try { localStorage.setItem('propostas-r32-antigas', d.open ? 'aberta' : 'fechada'); } catch (e) { } }, true);
+function renderTelas() {
+  const atual = GRUPOS_TELAS.find(g => g[0] === RODADA_ATUAL), antigas = GRUPOS_TELAS.filter(g => g[0] !== RODADA_ATUAL);
+  const aberta = antigaAberta || (TELAS[estado.tela] && TELAS[estado.tela].rodada !== RODADA_ATUAL);
+  $('telas').innerHTML = `<div class="rodada"><h2>${atual[1]}</h2><details class="explica"${explicaAberta ? ' open' : ''}><summary>O que muda nesta rodada (leia primeiro)</summary>${EXPLICA_R32}</details><div class="telas-grid">${botoesDaRodada(atual[0])}</div></div>` + antigas.map(g => `<details class="antiga"${aberta ? ' open' : ''}><summary>${g[1]}</summary><div class="telas-grid">${botoesDaRodada(g[0])}</div></details>`).join('');
+}
+function renderOpcoes() {
+  const t = tela(), e = escolhas[t.id];
+  $('opcoes').innerHTML = '<span class="grupo-rot">Opção</span>' + t.opcoes.map((o, i) => `<button type="button" class="op-btn" data-op="${i}" aria-pressed="${i === estado.opcao}" title="${o[0]}">${i + 1}. ${o[0]}${e && e.opcao === i + 1 ? '<span class="ok">✓</span>' : ''}</button>`).join('');
+  $('decidido').innerHTML = `<strong>Rodada ${t.rodada} · ${t.nome}.</strong> ${t.decidido}`;
+  const o = t.opcoes[estado.opcao];
+  $('desc').innerHTML = `<strong>Opção ${estado.opcao + 1}: ${o[0]}.</strong> ${o[1]}`;
+  if (t.explica && t.perfis && t.explica[t.perfis[estado.perfil][0]]) $('desc').innerHTML += `<span class="passo-expl">${t.explica[t.perfis[estado.perfil][0]]}</span>`;
+  $('aprovar').textContent = `Aprovo a opção ${estado.opcao + 1} (${o[0]})`;
+  const pf = $('perfis');
+  if (t.perfis) {
+    pf.hidden = false;
+    pf.innerHTML = '<span class="grupo-rot">' + (t.perfisRot || 'Quem está vendo') + '</span>' + t.perfis.map((x, i) => `<button type="button" class="modo-btn" data-perfil="${i}" aria-pressed="${i === estado.perfil}">${x[1]}</button>`).join('');
+  } else { pf.hidden = true; pf.innerHTML = ''; }
+  const dv = $('dispositivos');
+  if (t.disp) {
+    dv.hidden = false;
+    dv.innerHTML = '<span class="grupo-rot">Onde ver</span>' + [['notebook', 'Notebook'], ['celular', 'Celular']].map(x => `<button type="button" class="modo-btn" data-disp="${x[0]}" aria-pressed="${estado.disp === x[0]}">${x[1]}</button>`).join('');
+  } else { dv.hidden = true; dv.innerHTML = ''; }
+}
+function renderPrevia() {
+  const t = dims(), palco = $('palco');
+  palco.style.width = t.w + 'px';
+  palco.style.height = t.h + 'px';
+  palco.style.borderRadius = t.w < 500 ? '38px' : '10px';
+  palco.innerHTML = desenhar();
+  ajustar();
+  renderCheia();
+}
+function ajustar() {
+  const t = dims(), q = $('quadro'), palco = $('palco');
+  const larg = q.clientWidth, pad = t.w < 500 ? 24 : 0;
+  const s = Math.min(1, (larg - pad * 2) / t.w);
+  palco.style.transform = `scale(${s})`;
+  palco.style.left = Math.max(0, (larg - t.w * s) / 2) + 'px';
+  palco.style.top = pad + 'px';
+  q.style.height = (t.h * s + pad * 2) + 'px';
+}
+function renderCheia() {
+  if ($('cheia').hidden) return;
+  const t = tela(), dd = dims(), pc = $('cheia-palco');
+  pc.style.width = dd.w + 'px';
+  pc.style.height = dd.h + 'px';
+  pc.style.borderRadius = dd.w < 500 ? '38px' : '10px';
+  pc.innerHTML = desenhar();
+  encaixarCheia();
+  $('cheia-titulo').textContent = `${t.nome} · opção ${estado.opcao + 1} de ${t.opcoes.length}: ${t.opcoes[estado.opcao][0]}` + (t.disp ? ` · ${estado.disp}` : '') + (t.perfis ? ` · ${t.perfis[estado.perfil][1]}` : '');
+}
+function encaixarCheia() {
+  if ($('cheia').hidden) return;
+  const t = dims(), area = $('cheia-area'), pc = $('cheia-palco');
+  const w = area.clientWidth, h = area.clientHeight;
+  if (!w || !h) return;
+  const s = Math.min(w / t.w, h / t.h, 1.6);
+  pc.style.transform = `scale(${s})`;
+  pc.style.left = (w - t.w * s) / 2 + 'px';
+  pc.style.top = Math.max(0, (h - t.h * s) / 2) + 'px';
+}
+function abrirCheia() { $('cheia').hidden = false; document.body.style.overflow = 'hidden'; renderCheia(); $('cheia-fechar').focus(); }
+function fecharCheia() { $('cheia').hidden = true; document.body.style.overflow = ''; $('tela-cheia').focus(); }
+const LIMITE_OBS = 20000;
+const RASCUNHO = id => 'propostas-rascunho:' + id;
+const lerRascunho = id => { try { return localStorage.getItem(RASCUNHO(id)); } catch (e) { return null; } };
+const gravarRascunho = (id, v) => { try { if (v) localStorage.setItem(RASCUNHO(id), v); else localStorage.removeItem(RASCUNHO(id)); } catch (e) { } };
+const fmtN = n => n.toLocaleString('pt-BR');
+function contar(campo, alvo) { const n = $(campo).value.length, el = $(alvo); if (!el) return; el.textContent = `${fmtN(n)} de ${fmtN(LIMITE_OBS)} caracteres`; el.classList.toggle('perto', n >= LIMITE_OBS * 0.95); }
+function renderAprovacao(trocouTela) {
+  const t = tela(), e = escolhas[t.id];
+  if (trocouTela || !obsSuja) {
+    const salvo = (e && e.observacao) || '', r = lerRascunho(t.id);
+    if (r && r !== salvo) { $('obs').value = r; obsSuja = true; $('rascunho').textContent = 'Rascunho recuperado deste aparelho: ainda não foi guardado.'; }
+    else { $('obs').value = salvo; obsSuja = false; $('rascunho').textContent = ''; if (r && r === salvo) gravarRascunho(t.id, ''); }
+  }
+  if (obsSuja && e && $('obs').value === (e.observacao || '')) { obsSuja = false; gravarRascunho(t.id, ''); $('rascunho').textContent = ''; }
+  contar('obs', 'obs-conta');
+  if (!db) return;
+  $('situacao').innerHTML = e && e.opcao
+    ? `Nesta tela você aprovou a <strong>opção ${e.opcao} (${e.nome || ''})</strong>${e.em ? ' em ' + new Date(e.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}.`
+    : (e && e.observacao ? 'Você deixou uma observação nesta tela, mas ainda não aprovou nenhuma opção.' : 'Você ainda não aprovou nenhuma opção desta tela.');
+  $('tirar').hidden = !(e && e.opcao);
+}
+function tudo(trocouTela) { renderTelas(); renderOpcoes(); renderPrevia(); renderAprovacao(trocouTela); lembrar(); }
+
+document.addEventListener('click', ev => {
+  const bt = ev.target.closest('button');
+  if (!bt) return;
+  if (bt.dataset.tela !== undefined) { estado.tela = +bt.dataset.tela; estado.opcao = 0; estado.perfil = 0; tudo(true); return; }
+  if (bt.dataset.op !== undefined) { estado.opcao = +bt.dataset.op; renderOpcoes(); renderPrevia(); lembrar(); return; }
+  if (bt.dataset.perfil !== undefined) { estado.perfil = +bt.dataset.perfil; renderOpcoes(); renderPrevia(); return; }
+  if (bt.dataset.disp !== undefined) { estado.disp = bt.dataset.disp; renderOpcoes(); renderPrevia(); lembrar(); return; }
+  if (bt.id === 'tela-cheia') { abrirCheia(); return; }
+  if (bt.id === 'cheia-fechar') { fecharCheia(); return; }
+  if (bt.id === 'cheia-anterior' || bt.id === 'cheia-proxima') {
+    const n = tela().opcoes.length;
+    estado.opcao = (estado.opcao + (bt.id === 'cheia-proxima' ? 1 : n - 1)) % n;
+    renderOpcoes(); renderPrevia(); lembrar(); return;
+  }
+  if (bt.id === 'aprovar') salvar('aprovar');
+  if (bt.id === 'guardar-obs') salvar('obs');
+  if (bt.id === 'tirar') salvar('tirar');
+  if (bt.id === 'guardar-geral') salvarGeral();
+});
+document.addEventListener('keydown', ev => {
+  if ($('cheia').hidden) return;
+  if (ev.key === 'Escape') fecharCheia();
+  else if (ev.key === 'ArrowRight') $('cheia-proxima').click();
+  else if (ev.key === 'ArrowLeft') $('cheia-anterior').click();
+});
+$('obs').addEventListener('input', () => { obsSuja = true; gravarRascunho(tela().id, $('obs').value); contar('obs', 'obs-conta'); $('rascunho').textContent = 'Rascunho guardado neste aparelho enquanto você escreve.'; });
+$('obs-geral').addEventListener('input', () => { geralSuja = true; gravarRascunho('geral-r32', $('obs-geral').value); contar('obs-geral', 'geral-conta'); $('rascunho-geral').textContent = 'Rascunho guardado neste aparelho enquanto você escreve.'; });
+new ResizeObserver(() => ajustar()).observe($('quadro'));
+new ResizeObserver(() => encaixarCheia()).observe($('cheia-area'));
+
+async function salvar(tipo) {
+  if (!db) { $('aviso').textContent = 'Esta página não consegue guardar aqui. Diga na conversa qual opção você aprova.'; return; }
+  const t = tela(), e = escolhas[t.id] || {}, o = t.opcoes[estado.opcao];
+  const obs = $('obs').value.trim().slice(0, LIMITE_OBS);
+  const doc = tipo === 'aprovar' ? { opcao: estado.opcao + 1, nome: o[0], observacao: obs, em: new Date().toISOString() }
+    : tipo === 'tirar' ? { opcao: null, nome: '', observacao: obs, em: new Date().toISOString() }
+      : { opcao: e.opcao || null, nome: e.nome || '', observacao: obs, em: e.em || new Date().toISOString() };
+  const botoes = ['aprovar', 'guardar-obs', 'tirar'].map($);
+  botoes.forEach(b => { b.disabled = true; });
+  try {
+    await db.doc('escolhas/' + t.id).set(doc);
+    obsSuja = false; gravarRascunho(t.id, ''); $('rascunho').textContent = '';
+    $('aviso').textContent = tipo === 'aprovar' ? `Guardado: você aprovou a opção ${estado.opcao + 1} da tela "${t.nome}".` : tipo === 'tirar' ? 'Guardado: esta tela voltou para "falta escolher".' : 'Observação guardada.';
+  } catch (err) {
+    $('aviso').textContent = 'Não consegui guardar agora. Tente de novo em instantes ou me diga na conversa.';
+  } finally { botoes.forEach(b => { b.disabled = false; }); }
+}
+async function salvarGeral() {
+  if (!db) { $('aviso-geral').textContent = 'Esta página não consegue guardar aqui. Escreva a observação na conversa.'; return; }
+  try {
+    await db.doc('escolhas/geral-r32').set({ observacao: $('obs-geral').value.trim().slice(0, LIMITE_OBS), em: new Date().toISOString() });
+    geralSuja = false; gravarRascunho('geral-r32', ''); $('rascunho-geral').textContent = '';
+    $('aviso-geral').textContent = 'Observação geral guardada.';
+  } catch (err) { $('aviso-geral').textContent = 'Não consegui guardar agora. Tente de novo em instantes.'; }
+}
+
+tudo(true);
+{ const r = lerRascunho('geral-r32'); if (r) { $('obs-geral').value = r; geralSuja = true; $('rascunho-geral').textContent = 'Rascunho recuperado deste aparelho: ainda não foi guardado.'; } contar('obs-geral', 'geral-conta'); }
+$('situacao').textContent = 'Carregando as suas escolhas…';
+(async () => {
+  try { db = window.claude && window.claude.use ? await window.claude.use('db') : null; } catch (e) { db = null; }
+  if (!db) {
+    $('situacao').textContent = 'Aqui a página não consegue guardar a escolha. Olhe as opções e me diga na conversa qual você aprova.';
+    ['aprovar', 'guardar-obs', 'guardar-geral'].forEach(id => { $(id).disabled = true; });
+    $('tirar').hidden = true;
+    return;
+  }
+  db.collection('escolhas').onSnapshot(snap => {
+    escolhas = {};
+    snap.docs.forEach(d => { if (d.exists) escolhas[d.id] = d.data(); });
+    { const g = (escolhas['geral-r32'] && escolhas['geral-r32'].observacao) || ''; if (!geralSuja) $('obs-geral').value = g; else if ($('obs-geral').value === g) { geralSuja = false; gravarRascunho('geral-r32', ''); $('rascunho-geral').textContent = ''; } contar('obs-geral', 'geral-conta'); }
+    renderTelas(); renderOpcoes(); renderAprovacao(false);
+  }, () => { $('situacao').textContent = 'Não consegui ler as escolhas guardadas agora. Recarregue a página.'; });
+})();
+
+</script>

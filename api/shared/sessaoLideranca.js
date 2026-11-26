@@ -10,19 +10,23 @@ const { concessoesDelegadas } = require("./delegacoes");
 const { hojeBrasilia } = require("./dataBrasilia");
 const { permissoesComRecertificacaoExpirada } = require("./compliance");
 
-// Todas as linhas de Lideranca da matrícula (uma pessoa pode ter mais de um cargo).
+// Todas as linhas de Lideranca da matrícula (uma pessoa pode ter mais de um cargo), só de quem está ATIVO no rol de membros: a mesma regra da entrada
+// por PIN e do código por e-mail (MembroEntrar, ConfirmarCodigoAcessoMembro). Quem sai do rol ativo (inativo, licença...) perde as sessões na hora
+// (GestaoPessoas) e não volta a entrar pela senha. Sem linha, o login responde como para quem não é da liderança. Serve às duas etapas (`reler`).
 async function buscarLiderancas(pool, matricula) {
   const result = await pool.request().input("mat", sql.Int, matricula).query(`
     SELECT l.MembroId AS membroId, l.PapelId AS papelId, l.EscopoTipo AS escopoTipo, l.EscopoId AS escopoId, l.SenhaHash AS senhaHash,
            l.DepartamentoId AS departamentoId,
            CONVERT(varchar(10), l.AtivoAte, 120) AS ativoAte,
-           p.Nome AS papelNome, p.Nivel AS papelNivel, p.Permissoes AS permissoesStr, m.Nome AS nome
+           p.Nome AS papelNome, p.Nivel AS papelNivel, p.Permissoes AS permissoesStr, m.Nome AS nome,
+           CASE WHEN m.Status = 'ATIVO' THEN 1 ELSE 0 END AS ativo
     FROM Lideranca l
     JOIN Papeis p ON p.PapelId = l.PapelId
     JOIN MembroReferencia m ON m.MembroId = l.MembroId
     WHERE l.MembroId = @mat
   `);
-  return result.recordset;
+  // Falha fechada: linha sem a marca (ou com 0) não entra.
+  return result.recordset.filter((l) => l.ativo === 1 || l.ativo === true);
 }
 
 // vB.9 — achado real (v4.5): com mais de um cargo, confere a senha contra TODAS as linhas com hash e, entre as que baterem, escolhe a de MAIOR
@@ -40,7 +44,7 @@ async function reler(pool, { membroId, papelId, escopoTipo, escopoId }) {
   return linhas.find((l) => l.papelId === papelId && l.escopoTipo === escopoTipo && String(l.escopoId) === String(escopoId)) || null;
 }
 
-// Art. 45 §1º, I — Medida Cautelar de suspensão de acesso ao sistema (GestaoMedidasCautelares grava AtivoAte = hoje na hora que aplica).
+// Art. 45 §1º, I — Medida Cautelar de suspensão de acesso ao sistema (o fim do acesso segue o dia de Brasília, como o login).
 const suspensa = (lideranca, hoje) => !!(lideranca.ativoAte && lideranca.ativoAte < hoje);
 
 // Monta a sessão e a resposta do login. `fator` = { via: "CHAVE" | "CODIGO" | "NENHUM", em: Date.now() } (vD.4): fica na sessão para a

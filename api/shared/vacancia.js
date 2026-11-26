@@ -52,11 +52,13 @@ async function encerrarVinculos(pool, sql, membroId, motivo) {
             WHERE MembroId = @id AND DataFim IS NULL`);
 
   // v7.6 — "ontem", não hoje: o login confere AtivoAte < hoje (mesmo padrão das medidas cautelares e da dissolução de diretoria em shared/psc.js). Com "hoje",
-  // quem perdeu a membresia entrava de novo com a senha até a meia-noite — e as sessões derrubadas logo abaixo voltavam no login seguinte.
+  // quem perdeu a membresia entrava de novo com a senha até a meia-noite — e as sessões derrubadas logo abaixo voltavam no login seguinte. "Hoje" é o de
+  // Brasília, a régua do login (shared/dataBrasilia.js).
   await pool.request()
     .input("id", sql.Int, membroId)
-    .query(`UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, CAST(SYSUTCDATETIME() AS DATE))
-            WHERE MembroId = @id AND (AtivoAte IS NULL OR AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))`);
+    .input("h", sql.Date, require("./dataBrasilia").hojeBrasilia())
+    .query(`UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, @h)
+            WHERE MembroId = @id AND (AtivoAte IS NULL OR AtivoAte >= @h)`);
 
   await pool.request()
     .input("id", sql.Int, membroId)
@@ -131,6 +133,9 @@ async function encerrarVinculos(pool, sql, membroId, motivo) {
               UPDATE EnviosMissionarios SET Status = N'ENCERRADO', EncerradoEm = @hoje, FimMes = CONVERT(char(7), @hoje, 120), MotivoEncerramento = @obs, EncerradoPorVacancia = 1
               WHERE MembroId = @id AND Status = N'ATIVO';
             END`);
+
+  // As delegações da pessoa (dadas e recebidas) ficam canceladas e as sessões abertas de quem recebeu uma delegação dela caem (shared/delegacoes.js).
+  await require("./delegacoes").encerrarDelegacoesDaPessoa(pool, sql, membroId);
 
   // v7.6 — sessão revogável: quem perde a membresia, o mandato (disciplina, licença de candidatura) ou sai do rol perde também as sessões abertas, na hora
   // (antes o token valia até expirar sozinho, 12 h). Usa o mesmo `pool` (dentro da transação de quem chamou, se houver).

@@ -3,15 +3,18 @@
 // cargo alterado/removido (e os delegados dele), "Derrubar acessos desta pessoa agora", "Minhas sessões", saída do rol (vacância).
 let mockRegras = [];
 let mockConsultas = [];
-jest.mock("../db", () => ({
-  getPool: async () => ({ request: () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
+jest.mock("../db", () => {
+  const novaRequisicao = () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
     mockConsultas.push({ sql: texto, inputs: { ...inputs } });
     for (const [padrao, valor] of mockRegras) if (padrao.test(texto)) return { recordset: typeof valor === "function" ? valor(inputs) : valor, rowsAffected: [1] };
     return { recordset: [], rowsAffected: [0] };
-  } }; return r; } }),
-  sql: new Proxy({}, { get: () => () => undefined })
-}));
-jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), sha256: () => "" }));
+  } }; return r; };
+  // as rotas que gravam em vários passos usam uma transação (shared/transacaoCurta.js): aqui ela só repassa os pedidos
+  class Transaction { async begin() {} async commit() {} async rollback() {} }
+  class Request { constructor() { return novaRequisicao(); } }
+  return { getPool: async () => ({ request: novaRequisicao }), sql: new Proxy({ Transaction, Request }, { get: (alvo, prop) => (prop in alvo ? alvo[prop] : () => undefined) }) };
+});
+jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => true), sha256: () => "" }));
 jest.mock("../trilhas", () => ({ avaliarRequisitos: jest.fn(async () => ({ bloqueado: false })) }));
 jest.mock("../canaisDb", () => ({ sincronizarSucessoes: jest.fn(async () => ({})) }));
 jest.mock("../notificacaoEmail", () => ({ enviarEmailNotificacao: jest.fn(async () => {}) }));
@@ -257,6 +260,58 @@ describe("eventos que derrubam sessões", () => {
     expect(auth.getSessao(sessaoDe(20, SID.alvo))).toBeNull();
   });
 
+  // Quem perde o cargo leva junto as delegações dele: ficam canceladas, e a sessão aberta de quem as recebeu (que carrega o cargo delegado) cai na hora.
+  const CANCELA_DELEGACOES = /UPDATE DelegacoesAcesso SET Status = 'CANCELADA'[\s\S]*OUTPUT INSERTED\.DelegadoMembroId/;
+  test("Medida cautelar com suspensão do acesso: as delegações da pessoa ficam canceladas e as sessões de quem as recebeu caem na hora", async () => {
+    quando(/SELECT MembroId FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 20 }]);
+    quando(/SELECT COUNT\(\*\) AS total/, [{ total: 2 }]);
+    quando(/INSERT INTO MedidasCautelares/, [{ MedidaId: 3 }]);
+    quando(CANCELA_DELEGACOES, [{ DelegadoMembroId: 77 }, { DelegadoMembroId: 20 }, { DelegadoMembroId: 77 }]);
+    quando(REVOGA_DO_MEMBRO, abertasPorMembro({ 20: [SID.alvo], 77: [SID.delegado] }));
+    const tokDelegado = sessaoDe(77, SID.delegado);
+    expect(auth.getSessao(tokDelegado)).not.toBeNull();
+    const r = await chamar(hMedidas, { token: geral(), corpo: { membroId: 20, motivo: "Auditoria", suspenderAcessoSistema: true } });
+    expect(r.status).toBe(201);
+    const cancelamento = rodou(/UPDATE DelegacoesAcesso SET Status = 'CANCELADA'/);
+    expect(cancelamento).toHaveLength(1);
+    expect(cancelamento[0].sql).toMatch(/DeleganteMembroId = @membroId/);
+    expect(cancelamento[0].sql).toMatch(/DelegadoMembroId = @membroId/);
+    expect(cancelamento[0].inputs.membroId).toBe(20);
+    expect(rodou(REVOGA_DO_MEMBRO).map((c) => c.inputs.membroId).sort((a, b) => a - b)).toEqual([20, 77]);
+    expect(auth.getSessao(tokDelegado)).toBeNull();
+  });
+
+  test("Medida cautelar: suspender o acesso pede a confirmação recente (428) antes de gravar; a medida sem suspensão, não", async () => {
+    quando(/SELECT MembroId FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 20 }]);
+    quando(/SELECT COUNT\(\*\) AS total/, [{ total: 2 }]);
+    quando(/INSERT INTO MedidasCautelares/, [{ MedidaId: 3 }]);
+    const semFatorRecente = geral({ fator: { via: "NENHUM", em: Date.now() } });
+    const r = await chamar(hMedidas, { token: semFatorRecente, corpo: { membroId: 20, motivo: "Auditoria", suspenderAcessoSistema: true } });
+    expect(r.status).toBe(428);
+    expect(r.body.precisaFator).toBe(true);
+    expect(mockConsultas).toHaveLength(0);
+    const fatorVelho = geral({ fator: { via: "CHAVE", em: Date.now() - 11 * 60 * 1000 } });
+    expect((await chamar(hMedidas, { token: fatorVelho, corpo: { membroId: 20, motivo: "Auditoria", suspenderAcessoSistema: true } })).status).toBe(428);
+    expect(rodou(/INSERT INTO MedidasCautelares|UPDATE Lideranca|UPDATE DelegacoesAcesso|UPDATE SessoesAtivas/)).toHaveLength(0);
+    const semSuspensao = await chamar(hMedidas, { token: semFatorRecente, corpo: { membroId: 20, motivo: "Auditoria", suspenderAcessoSistema: false } });
+    expect(semSuspensao.status).toBe(201);
+  });
+
+  test("Saída do rol (vacância): as delegações da pessoa ficam canceladas e as sessões de quem as recebeu caem; a dela cai por último", async () => {
+    quando(CANCELA_DELEGACOES, [{ DelegadoMembroId: 77 }, { DelegadoMembroId: 78 }]);
+    quando(REVOGA_DO_MEMBRO, abertasPorMembro({ 42: [SID.alvo], 77: [SID.delegado], 78: [SID.outra] }));
+    const { getPool } = require("../db");
+    await require("../vacancia").encerrarVinculos(await getPool(), require("../db").sql, 42, "DESLIGAMENTO");
+    const cancelamento = rodou(/UPDATE DelegacoesAcesso SET Status = 'CANCELADA'/);
+    expect(cancelamento).toHaveLength(1);
+    expect(cancelamento[0].inputs.membroId).toBe(42);
+    const revogadas = rodou(REVOGA_DO_MEMBRO).map((c) => c.inputs.membroId);
+    expect([...revogadas].sort((a, b) => a - b)).toEqual([42, 77, 78]);
+    expect(revogadas[revogadas.length - 1]).toBe(42);
+    expect(auth.getSessao(sessaoDe(77, SID.delegado))).toBeNull();
+    expect(auth.getSessao(sessaoDe(78, SID.outra))).toBeNull();
+  });
+
   test("Minhas sessões: encerrar a sessão de outro aparelho derruba aquele token na hora", async () => {
     quando(/SELECT MembroId FROM SessoesAtivas WHERE SessaoId = @id/, [{ MembroId: 5 }]);
     const outroAparelho = sessaoDe(5, SID.outra);
@@ -269,6 +324,7 @@ describe("eventos que derrubam sessões", () => {
   test("GestaoPessoas: quem sai do rol ativo (ATIVO -> INATIVO) perde as sessões; editar sem mudar o status não derruba", async () => {
     const existente = (status) => [{ MembroId: 40, Status: status, CongregacaoNome: "Central", ExtensaoNome: null, EmailAnterior: null }];
     quando(/FROM Congregacoes WHERE CongregacaoId = @id|SELECT Nome FROM Congregacoes/, [{ Nome: "Central", CongregacaoId: 1 }]);
+    quando(/FROM StatusMembro WHERE Sigla = @sigla/, (i) => [{ Sigla: i.sigla, Ativa: 1 }]);   // a situação nova está no catálogo
     quando(REVOGA_DO_MEMBRO, abertasPorMembro({ 40: [SID.alvo] }));
     quando(/UPDATE MembroReferencia SET Nome/, []);   // v8.2: o UPDATE confere o cargo lido (aqui ele não mudou: 1 linha)
     const tk = sessaoDe(5, SID.atual, { permissoes: ["pessoas"] });
@@ -278,5 +334,31 @@ describe("eventos que derrubam sessões", () => {
     await chamar(hPessoas, { metodo: "POST", token: tk, corpo: { membroId: 40, nome: "Maria", congregacaoId: 1, status: "INATIVO" } });
     expect(rodou(REVOGA_DO_MEMBRO).map((c) => c.inputs.membroId)).toEqual([40]);
     expect(auth.getSessao(sessaoDe(40, SID.alvo))).toBeNull();
+  });
+
+  test("o login do delegado só recebe a delegação de quem continua ATIVO no rol (e com o cargo vigente)", async () => {
+    const { pool, chamadas } = criarPoolFalso([[]]);
+    await require("../delegacoes").concessoesDelegadas(pool, sqlFalso, 77, "2026-11-24");
+    expect(chamadas[0].sql).toMatch(/JOIN MembroReferencia deleg ON deleg\.MembroId = d\.DeleganteMembroId/);
+    expect(chamadas[0].sql).toMatch(/deleg\.Status = 'ATIVO'/);
+    expect(chamadas[0].sql).toMatch(/l\.AtivoAte IS NULL OR l\.AtivoAte >= @hoje/);
+  });
+
+  test.each(["INATIVO", "LICENÇA"])("GestaoPessoas: quem sai do rol ativo (ATIVO -> %s) leva junto as delegações; as sessões de quem as recebeu caem", async (statusNovo) => {
+    const existente = [{ MembroId: 40, Status: "ATIVO", CongregacaoNome: "Central", ExtensaoNome: null, EmailAnterior: null }];
+    quando(/FROM Congregacoes WHERE CongregacaoId = @id|SELECT Nome FROM Congregacoes/, [{ Nome: "Central", CongregacaoId: 1 }]);
+    quando(/FROM StatusMembro WHERE Sigla = @sigla/, (i) => [{ Sigla: i.sigla, Ativa: 1 }]);   // a situação nova está no catálogo
+    quando(/UPDATE DelegacoesAcesso SET Status = 'CANCELADA'[\s\S]*OUTPUT INSERTED\.DelegadoMembroId/, [{ DelegadoMembroId: 77 }]);
+    quando(REVOGA_DO_MEMBRO, abertasPorMembro({ 40: [SID.alvo], 77: [SID.delegado] }));
+    quando(/UPDATE MembroReferencia SET Nome/, []);
+    mockRegras.unshift([/FROM MembroReferencia m[\s\S]*WHERE m\.MembroId = @id/, existente]);
+    const tk = sessaoDe(5, SID.atual, { permissoes: ["pessoas"] });
+    const r = await chamar(hPessoas, { metodo: "POST", token: tk, corpo: { membroId: 40, nome: "Maria", congregacaoId: 1, status: statusNovo } });
+    expect(r.body.sucesso).toBe(true);
+    const cancelamento = rodou(/UPDATE DelegacoesAcesso SET Status = 'CANCELADA'/);
+    expect(cancelamento).toHaveLength(1);
+    expect(cancelamento[0].inputs.membroId).toBe(40);
+    expect(rodou(REVOGA_DO_MEMBRO).map((c) => c.inputs.membroId).sort((a, b) => a - b)).toEqual([40, 77]);
+    expect(auth.getSessao(sessaoDe(77, SID.delegado))).toBeNull();
   });
 });

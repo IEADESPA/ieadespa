@@ -983,6 +983,42 @@ describe("GestaoPsc", () => {
     expect(geral.status).not.toBe(403);
     expect(rodou(/FROM PscAvaliacoes a\s+JOIN Congregacoes c/).length).toBeGreaterThan(0);
   });
+
+  // Sessão com duas concessões (o cargo próprio e uma delegação recebida): cada gravação confere o escopo da permissão que a autoriza.
+  const concessao = (origem, permissoes, nivel, escopo) => ({ origem, ...(origem === "DELEGACAO" ? { delegacaoId: 9, ate: "2099-12-31" } : {}), permissoes, nivel, escopoCongregacoes: escopo, escopoExtensaoNome: null, departamentoId: null });
+  const tokenDuasConcessoes = (concessoes) => tok({ via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: concessoes[0].nivel, permissoes: concessoes[0].permissoes, escopoCongregacoes: concessoes[0].escopoCongregacoes, concessoes });
+  const COMBINACOES = {
+    "gestão local + homologação delegada geral": [concessao("PROPRIA", ["psc_gestao"], "CONGREGACAO", [CENTRAL]), concessao("DELEGACAO", ["psc_homologacao"], "GLOBAL", "TODAS")],
+    "gestão local + homologação delegada de outra unidade": [concessao("PROPRIA", ["psc_gestao"], "CONGREGACAO", [CENTRAL]), concessao("DELEGACAO", ["psc_homologacao"], "AREA", [VILA])],
+    "homologação geral própria + gestão local delegada": [concessao("PROPRIA", ["psc_homologacao"], "GLOBAL", "TODAS"), concessao("DELEGACAO", ["psc_gestao"], "CONGREGACAO", [CENTRAL])]
+  };
+  test.each(Object.keys(COMBINACOES))("gravar a avaliação vale só no escopo da própria psc_gestao (%s)", async (nome) => {
+    const t = tokenDuasConcessoes(COMBINACOES[nome]);
+    for (const acao of ["avaliacoes/sugestoes", "avaliacoes/responder", "avaliacoes/enviar", "avaliacoes/validar", "avaliacoes/devolver"]) {
+      mockConsultas = [];
+      const fora = await post(acao, t, { avaliacaoId: 2, parecer: "Conferido", motivo: "Faltam evidências nas alíneas", respostas: [{ respostaId: 1, situacao: "ATENDIDO" }] });
+      expect([acao, fora.status]).toEqual([acao, 403]);
+      expect(gravacoes()).toHaveLength(0);
+    }
+    // dentro do escopo da gestão, a validação passa
+    mockConsultas = [];
+    const dentro = await post("avaliacoes/validar", t, { avaliacaoId: 1, parecer: "Conferido" });
+    expect(dentro.status).toBe(200);
+    expect(rodou(/UPDATE PscAvaliacoes SET Status = @para/)).toHaveLength(1);
+    // a leitura continua com as duas permissões (quem homologa lê a avaliação de outra unidade)
+    expect((await get("avaliacao", t, { avaliacaoId: "2" })).status).toBe(200);
+  });
+
+  test("decretar a reclassificação pede a confirmação recente (428) depois da permissão e antes do banco", async () => {
+    mockConsultas = [];
+    const semFator = await post("reclassificacoes/decretar", tokenGeral(["psc_homologacao"]), { reclassificacaoId: 1, resolucao: "Resolução 1/2026", encarregadoMembroId: 40 });
+    expect(semFator.status).toBe(428);
+    expect(semFator.body.precisaFator).toBe(true);
+    expect(mockConsultas).toHaveLength(0);
+    const comFator = await post("reclassificacoes/decretar", tokenGeral(["psc_homologacao"], { fator: { via: "CHAVE", em: Date.now() } }), { reclassificacaoId: 1, resolucao: "Resolução 1/2026", encarregadoMembroId: 40 });
+    expect(comFator.status).not.toBe(428);
+    expect(rodou(/PscReclassificacoes/).length).toBeGreaterThan(0);
+  });
 });
 
 // =====================================================================================================================================================

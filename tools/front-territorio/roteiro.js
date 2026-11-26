@@ -208,6 +208,19 @@ async function prova() {
   await abrirTerritorio(amb); await sub(amb, "simulacao");
   ok(true, "(a simulação geral é lida abaixo)");
   ok(/Nenhum critério ativo/.test(amb.e("terSimulacao").textContent) && botoes(amb, "terSimulacao", "terAbrirPedidoAcao").length === 0, "sem critério ativo: diz isso e não aponta ninguém");
+  // a CME de outra área: o servidor manda a Extensão sem o critério do Encarregado e sem a contagem (regra de 25/11/2026)
+  amb = montar();
+  const semEnc = (e) => ({ ...e, podePedir: false, medidas: Object.fromEntries(Object.entries(e.medidas || {}).filter(([k]) => k !== "ENCARREGADO_EM_COMUNHAO")),
+    avaliacao: { situacao: "NAO_AVALIAVEL", itens: e.avaliacao.itens.filter((i) => i.indicador !== "ENCARREGADO_EM_COMUNHAO"), atendidos: null, total: null } });
+  amb.__respostas["GET territorio/simulacao"] = { corpo: { ...R.simulacaoGeral, extensoes: R.simulacaoGeral.extensoes.map(semEnc) } };
+  await abrirTerritorio(amb); await sub(amb, "simulacao");
+  const simOutra = amb.e("terSimulacao").textContent;
+  const itensOutra = R.simulacaoGeral.extensoes.reduce((n, e) => n + semEnc(e).avaliacao.itens.length, 0);
+  ok(R.simulacaoGeral.extensoes.length > 0 && (simOutra.match(/Não dá para avaliar daqui/g) || []).length === R.simulacaoGeral.extensoes.length && !/NAO_AVALIAVEL|null|undefined|\(\d+ de \d+\)/.test(simOutra)
+    && botoes(amb, "terSimulacao", "terAbrirPedidoAcao").length === 0, "a Extensão que não dá para avaliar daqui: diz isso, sem a contagem e sem o pedir", simOutra.slice(0, 300));
+  ok(todos(amb, "terSimulacao").filter((x) => x.localName === "tr").length === itensOutra + R.simulacaoGeral.extensoes.filter((e) => semEnc(e).avaliacao.itens.length).length,
+    "os outros critérios continuam na tabela de cada Extensão");
+  semAtaque(amb, "a simulação que não dá para avaliar daqui");
 
   console.log("== bairros (nível geral) ==");
   amb = montar();

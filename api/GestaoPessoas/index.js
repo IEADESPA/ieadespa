@@ -4,7 +4,7 @@
 // POST   /api/pessoas            -> body: { membroId, nome, cargoMinisterial, congregacaoId, status, ... } -> cria ou atualiza
 // DELETE /api/pessoas/{membroId} -> não remove de verdade: marca status = DESLIGADO
 const auth = require("../shared/auth");
-const { registrarAuditoria } = require("../shared/auditoria");
+const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("../shared/auditoria");
 const { MSG: { NA_CONGREGACAO: MSG_TRANSFERENCIA } } = require("../shared/transferencias");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
@@ -41,6 +41,10 @@ const afm = require("../shared/afm");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
 // FASE 10, passo 7a — os números do painel executivo do módulo Membros (?resumo=1)
 const painelMembros = require("../shared/painelMembros");
+const { dataIsoValida, obterTrava } = require("../shared/financeiroSeguro");
+const { emTransacao } = require("../shared/transacaoCurta");
+const nivelDoCargo = require("../shared/nivelDoCargo");
+const licencaCandidatura = require("../shared/licencaCandidatura");
 const SEXOS = ["M", "F"];
 // "ana.souza@exemplo.org" -> "a***@exemplo.org": o suficiente para a trilha mostrar QUE o e-mail mudou, sem guardar o endereço na auditoria imutável.
 function mascararEmail(e) {
@@ -64,11 +68,51 @@ function motivoSaidaVisivel(m, vDisciplina) {
 // Status que encerram a membresia de vez — entrar num desses (vindo de outro status)
 // dispara a vacância automática de Assentos/Liderança/Cargo (shared/vacancia.js).
 const STATUS_TERMINAIS = ["DESLIGADO", "FALECIDO"];
+const DATA_SAIDA_MINIMA = "2006-01-01";   // a fundação da igreja
+// A licença por candidatura entra e sai só pela aba "Licença Candidatura" (GestaoLicencasCandidatura): lá ficam o registro da licença, o afastamento dos cargos e
+// a volta, que é decisão da Diretoria.
+const LICENCA_CANDIDATURA = "LICENCA_CANDIDATURA";
+const MSG_LICENCA_ABERTA = "Esta pessoa está em licença por candidatura: a volta e o não retorno se registram na aba \"Licença Candidatura\" (decisão da Diretoria, pelo nível geral); o falecimento, aqui na ficha, escolhendo \"Falecido\"; o desligamento, pelo botão \"Desligar\".";
+// a licença por candidatura ainda aberta da pessoa (o índice IX_LicencasCandidatura_MembroId_Status, migração 300, atende a busca)
+const SQL_LICENCA_ABERTA = (dica) => `SELECT TOP 1 LicencaId FROM LicencasCandidatura${dica} WHERE MembroId = @id AND Status = 'EM_LICENCA'`;
+const TAMANHO_STATUS = 20;   // MembroReferencia.Status é NVARCHAR(20); a sigla do catálogo vai até 30
+
+// As outras datas da ficha: um dia que existe (AAAA-MM-DD), dentro do que a coluna DATE guarda; nascimento, admissão e batismo nunca no futuro (dia de Brasília).
+const DATAS_DA_FICHA = [
+  ["dataNascimento", "a data de nascimento", true],
+  ["dataAdmissao", "a data de admissão", true],
+  ["dataBatismo", "a data do batismo", true],
+  ["dataRitoRecebimento", "a data do rito de recebimento", false],
+  ["dataAfastamento", "a data do afastamento", false]
+];
+function conferirDatasDaFicha(corpo, hoje) {
+  for (const [campo, nome, naoNoFuturo] of DATAS_DA_FICHA) {
+    const valor = corpo[campo];
+    if (valor === undefined || valor === null || valor === "") continue;   // sem a data, como sempre
+    if (!dataIsoValida(valor) || valor < "0001-01-01") return `Informe ${nome} (dia/mês/ano).`;
+    if (naoNoFuturo && valor > hoje) return `${nome[0].toUpperCase()}${nome.slice(1)} não pode ser no futuro.`;
+  }
+  return null;
+}
+
+// Tirar do rol ativo quem tem cargo de liderança: a secretaria do nível do cargo ou de cima, o 428 e a trava do último administrador (regra do responsável,
+// 25/11/2026: shared/nivelDoCargo.js, a mesma da licença por candidatura).
+const conferirSaidaDeLideranca = (pool, req, context, usuario, membroId) => nivelDoCargo.conferirSaidaDeLideranca(pool, sql, req, context, usuario, membroId);
 
 // "funcao" no retorno é só de exibição: prioriza o nome do Cargo Ministerial
 // (catálogo fechado, com escada — Art. 71) e cai pro texto livre antigo só se
 // a pessoa ainda não tiver Cargo Ministerial definido (dado histórico). Quem
 // alimenta isso é a esteira de Consagrações (EvoluirConsagracao) e/ou o campo
+// licencaAberta: quem está em LICENCA_CANDIDATURA com a licença ainda aberta (a ficha, na tela, oferece só o falecimento; com a licença já encerrada, a lista
+// inteira — decisão de 25/11/2026). Só consulta as licenças quando alguém da lista está nessa situação.
+async function marcarLicencaAberta(pool, membros) {
+  const algumNaLicenca = membros.some(m => m.status === LICENCA_CANDIDATURA);
+  const abertas = algumNaLicenca
+    ? new Set(((await pool.request().query("SELECT MembroId FROM LicencasCandidatura WHERE Status = 'EM_LICENCA'")).recordset || []).map(r => r.MembroId))
+    : new Set();
+  return membros.map(m => Object.assign({}, m, { licencaAberta: m.status === LICENCA_CANDIDATURA && abertas.has(m.membroId) }));
+}
+
 // Cargo Ministerial do próprio cadastro — não existe mais edição manual de
 // "função" nesta tela (ver migração 013).
 const SELECT_MEMBRO = `
@@ -266,7 +310,7 @@ module.exports = async function (context, req) {
     } else {
       linhas = (await pedido.query(`${SELECT_MEMBRO}${onde} ORDER BY m.Nome`)).recordset;
     }
-    const membros = linhas
+    const membros = (await marcarLicencaAberta(pool, linhas))
       // Escopo EXTENSAO é mais estreito que a Congregação-Mãe: só quem tem exatamente essa Extensão vinculada entra na lista (noEscopoDaPessoa confere os
       // dois, concessão por concessão). O banco já filtrou; esta é a segunda conferência (nunca deixa passar quem está fora).
       .filter(m => noEscopoDaPessoa(usuario, m.congregacao, m.extensao))
@@ -291,32 +335,33 @@ module.exports = async function (context, req) {
   if (method === "POST") {
     const corpo = req.body || {};
     const {
-      nome, congregacaoId, status, dataNascimento, dataAdmissao, dizimistaFiel,
+      membroId: membroIdCorpo, nome, congregacaoId, status, dataNascimento, dataAdmissao, dizimistaFiel,
       situacaoMembro, departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId,
       dataBatismo, formaAdmissao, origem, igrejaAnterior,
       dataRitoRecebimento, nomeLidoRito, ministranteRito, estadoCivil,
       dataAfastamento, motivoSaida, dataSaida, sexo, cargoDesde, enderecoPartes
     } = corpo;
-    let membroId = corpo.membroId;
+    let membroId = null;
     if (!nome) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campo obrigatório: nome." } };
       return;
     }
     // v10.1b — sem matrícula e com o pedido explícito (gerarMatricula: true), o sistema gera (pessoa nova); com matrícula, ela precisa ser um número inteiro
     // positivo. Sem as duas coisas, recusa como antes: uma tela que mandasse a matrícula vazia por engano criaria uma pessoa nova em vez de corrigir a ficha.
-    const semMatricula = membroId === undefined || membroId === null || membroId === "";
+    const semMatricula = membroIdCorpo === undefined || membroIdCorpo === null || membroIdCorpo === "";
     const matriculaGerada = semMatricula && corpo.gerarMatricula === true;
     if (semMatricula && !matriculaGerada) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula (ou peça para o sistema gerar uma)." } };
       return;
     }
     if (!matriculaGerada) {
-      const n = (typeof membroId === "number" || typeof membroId === "string") && /^\s*\d{1,10}\s*$/.test(String(membroId)) ? Number(String(membroId).trim()) : NaN;
-      if (!Number.isInteger(n) || n <= 0 || n > 2147483647) {
-        context.res = { status: 400, body: { sucesso: false, mensagem: "Matrícula inválida." } };
+      // A matrícula é o número inteiro, escrito como número (a mesma régua das rotas, auth.idDeRota): daqui em diante, a leitura, as travas e a gravação
+      // usam este valor.
+      membroId = auth.idDeRota(typeof membroIdCorpo === "string" ? membroIdCorpo.trim() : membroIdCorpo);
+      if (!membroId) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Matrícula inválida: informe só o número da matrícula." } };
         return;
       }
-      membroId = n;
     }
     // v10.1b — CPF, filiação e escolaridade: o campo que não veio no pedido fica como está (a tela antiga não apaga o que não mostra)
     const veio = (campo) => Object.prototype.hasOwnProperty.call(corpo, campo);
@@ -365,18 +410,6 @@ module.exports = async function (context, req) {
         return;
       }
     }
-    if (extensaoId) {
-      // v9.2 — a Extensão precisa estar ativa (a emancipada ou desativada só vale para quem já está nela: o registro histórico) e ser da congregação da pessoa
-      const ex = await pool.request().input("id", sql.Int, extensaoId).input("m", sql.Int, auth.idDeRota(membroId)).input("c", sql.Int, congregacaoId || null)
-        .query(`SELECT TOP 1 Nome FROM ExtensoesTenda WHERE ExtensaoId = @id
-                  AND (Ativa = 1 OR ExtensaoId = (SELECT ExtensaoId FROM MembroReferencia WHERE MembroId = @m))
-                  AND (@c IS NULL OR CongregacaoMaeId = @c)`);
-      if (ex.recordset.length === 0) {
-        context.res = { status: 200, body: { sucesso: false, mensagem: "Extensão da Tenda inválida (inativa, emancipada ou de outra congregação)." } };
-        return;
-      }
-      destinoExtensaoNome = ex.recordset[0].Nome;
-    }
 
     // Formas de admissão fixas do Estatuto Art. 6º §1º — regra jurídica, não catálogo
     // editável por tela (mesmo espírito de shared/estatuto.js).
@@ -417,6 +450,29 @@ module.exports = async function (context, req) {
       cargoDesdeFinal = d.data;
     }
 
+    // A data de saída, quando vem no pedido, é um dia que existe (AAAA-MM-DD): ela fica gravada e os prazos de retenção contam dela.
+    // Regra do responsável (25/11/2026): de 2006 (a fundação da igreja) até hoje, pelo dia de Brasília.
+    const dataSaidaInformada = dataSaida !== undefined && dataSaida !== null && dataSaida !== "";
+    if (dataSaidaInformada && !dataIsoValida(dataSaida)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a data de saída (dia/mês/ano)." } };
+      return;
+    }
+    if (dataSaidaInformada && (dataSaida < DATA_SAIDA_MINIMA || dataSaida > hojeBrasilia())) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "A data de saída vai de 01/01/2006 (a fundação da igreja) até hoje." } };
+      return;
+    }
+    const erroNasDatas = conferirDatasDaFicha(req.body, hojeBrasilia());
+    if (erroNasDatas) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: erroNasDatas } };
+      return;
+    }
+    // A situação no rol, quando vem, é a sigla de uma situação do catálogo (StatusMembro); a conferência no catálogo vem depois da leitura da pessoa.
+    const statusInformado = status !== undefined && status !== null && status !== "";
+    if (statusInformado && (typeof status !== "string" || status.length > 30)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Situação no rol inválida: escolha uma das situações da lista." } };
+      return;
+    }
+
     // Causa de saída (Reg. Art. 11 — v1.5): mesmo padrão de validação de FORMAS_ADMISSAO.
     if (motivoSaida && !CAUSAS_SAIDA.includes(motivoSaida)) {
       context.res = { status: 200, body: { sucesso: false, mensagem: `Causa de saída inválida. Use uma de: ${CAUSAS_SAIDA.join(", ")}.` } };
@@ -437,6 +493,7 @@ module.exports = async function (context, req) {
     const lerExistente = () => pool.request().input("id", sql.Int, membroId).query(`
       SELECT m.MembroId, m.Status, m.Email AS EmailAnterior, m.MotivoSaida AS MotivoAnterior, m.Cpf AS CpfAnterior, m.CargoMinisterial AS CargoAnterior, m.DizimistaFiel AS DizimistaAnterior, m.Sexo AS SexoAnterior,
              CONVERT(varchar(10), m.DataNascimento, 120) AS NascimentoAnterior, CONVERT(varchar(10), m.DataAdmissao, 120) AS AdmissaoAnterior, m.EstadoCivil AS EstadoCivilAnterior,
+             CONVERT(varchar(10), m.DataSaida, 120) AS DataSaidaAnterior,
              CASE WHEN EXISTS (SELECT 1 FROM Consagracoes cs LEFT JOIN TiposConsagracao tc ON tc.Nome = cs.Assunto
                                WHERE cs.MembroId = m.MembroId AND ISNULL(cs.CargoAlvo, tc.CargoMinisterialResultante) IS NOT NULL
                                AND cs.Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO', N'HOMOLOGADO')) THEN 1 ELSE 0 END AS EmProcessoDeCargo,
@@ -455,8 +512,25 @@ module.exports = async function (context, req) {
       return;
     }
     const existia = existente.recordset.length > 0;
-    // O alvo (se já existe) e o destino (a congregação/extensão para onde vai) precisam estar no escopo de quem altera.
-    if ((existia && !noEscopoDaPessoa(usuario, existente.recordset[0].CongregacaoNome, existente.recordset[0].ExtensaoNome)) || !noEscopoDaPessoa(usuario, destinoCongregacaoNome, destinoExtensaoNome)) {
+    // O alvo (se já existe) e o destino (a congregação/extensão para onde vai) precisam estar no escopo de quem altera. O alvo vem PRIMEIRO, antes de qualquer
+    // consulta que dependa dos dados dele (a Extensão abaixo olha a Extensão atual da pessoa): fora do escopo, a resposta é a mesma, qualquer que seja o pedido.
+    if (existia && !noEscopoDaPessoa(usuario, existente.recordset[0].CongregacaoNome, existente.recordset[0].ExtensaoNome)) {
+      context.res = { status: 403, body: FORA_DO_ESCOPO };
+      return;
+    }
+    if (extensaoId) {
+      // v9.2 — a Extensão precisa estar ativa (a emancipada ou desativada só vale para quem já está nela: o registro histórico) e ser da congregação da pessoa
+      const ex = await pool.request().input("id", sql.Int, extensaoId).input("m", sql.Int, membroId).input("c", sql.Int, congregacaoId || null)
+        .query(`SELECT TOP 1 Nome FROM ExtensoesTenda WHERE ExtensaoId = @id
+                  AND (Ativa = 1 OR ExtensaoId = (SELECT ExtensaoId FROM MembroReferencia WHERE MembroId = @m))
+                  AND (@c IS NULL OR CongregacaoMaeId = @c)`);
+      if (ex.recordset.length === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Extensão da Tenda inválida (inativa, emancipada ou de outra congregação)." } };
+        return;
+      }
+      destinoExtensaoNome = ex.recordset[0].Nome;
+    }
+    if (!noEscopoDaPessoa(usuario, destinoCongregacaoNome, destinoExtensaoNome)) {
       context.res = { status: 403, body: FORA_DO_ESCOPO };
       return;
     }
@@ -560,18 +634,70 @@ module.exports = async function (context, req) {
     const motivoSaidaFinal = motivoOculto ? motivoAnterior : (motivoSaida || null);
     const statusAnterior = existia ? existente.recordset[0].Status : null;
     const emailAnterior = existia ? existente.recordset[0].EmailAnterior : null;
-    const statusFinal = status || "ATIVO";
+    // Sem a situação no pedido, ATIVO (como sempre). A situação já gravada fica, mesmo que a Secretaria a tenha desativado no catálogo. Outra situação: só a ativa
+    // do catálogo, e a gravação usa a sigla que o catálogo devolve (o banco compara sem caixa e sem o espaço do fim; as conferências abaixo comparam a sigla).
+    let statusFinal = "ATIVO";
+    if (statusInformado && existia && status === statusAnterior) {
+      statusFinal = statusAnterior;
+    } else if (statusInformado) {
+      const cat = await pool.request().input("sigla", sql.NVarChar(30), status).query(`SELECT TOP 1 Sigla, Ativa FROM StatusMembro WHERE Sigla = @sigla`);
+      const linha = cat.recordset[0];
+      const sigla = linha ? String(linha.Sigla) : null;
+      if (!linha || (!linha.Ativa && sigla !== statusAnterior)) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Situação no rol fora do catálogo: escolha uma das situações da lista." } };
+        return;
+      }
+      if (sigla.length > TAMANHO_STATUS) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: `A sigla desta situação passa de ${TAMANHO_STATUS} letras e não cabe no cadastro: ajuste o catálogo de situações.` } };
+        return;
+      }
+      statusFinal = sigla;
+    }
+    if (statusFinal === LICENCA_CANDIDATURA && statusAnterior !== LICENCA_CANDIDATURA) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "A licença por candidatura se registra na aba \"Licença Candidatura\" da pessoa: lá ficam a licença e o afastamento dos cargos." } };
+      return;
+    }
+    // Da licença ABERTA, a ficha só grava o falecimento (a licença fecha junto, na transação abaixo); a volta e o não retorno são da aba da licença, o
+    // desligamento é o botão "Desligar" (que também fecha a licença). Sem licença aberta (encerrada por uma exclusão, ou o "não retornou" de antes), a ficha
+    // aceita a situação normalmente (decisão de 25/11/2026); a transação confere de novo, sob a trava da escada, que nenhuma licença abriu no meio.
+    const saindoDaLicenca = statusAnterior === LICENCA_CANDIDATURA && statusFinal !== LICENCA_CANDIDATURA;
+    const conferirLicencaFechada = saindoDaLicenca && statusFinal !== "FALECIDO";
+    if (conferirLicencaFechada) {
+      const aberta = await pool.request().input("id", sql.Int, membroId).query(SQL_LICENCA_ABERTA(""));
+      if ((aberta.recordset || []).length) {
+        context.res = { status: 409, body: { sucesso: false, mensagem: MSG_LICENCA_ABERTA } };
+        return;
+      }
+    }
     // Entrar num status terminal (vindo de outro) dispara a perda de membresia de
     // verdade: força Sem Comunhão, registra a data de saída (se não vier informada) e
     // encerra Assentos/Liderança/Cargo — mesmo racional já usado em GestaoCartas/processar
     // e na exclusão disciplinar, agora coberto também no fluxo manual de edição da Pessoa.
     const entrandoEmStatusTerminal = STATUS_TERMINAIS.includes(statusFinal) && statusAnterior !== statusFinal;
-    const hojeISO = new Date().toISOString().slice(0, 10);
+    // sair do rol ativo (para qualquer outra situação, inclusive as terminais) corta o acesso: quem tem cargo de liderança passa pela conferência
+    const saindoDoRolAtivo = existia && statusAnterior !== statusFinal && statusFinal !== "ATIVO";
+    if (saindoDoRolAtivo && !(await conferirSaidaDeLideranca(pool, req, context, usuario, membroId))) return;
+    // a volta ao rol ativo devolve o acesso do cargo (INATIVO, AFASTADO e LICENÇA não encerram o mandato; o login só exige ATIVO): a mesma regra do nível do cargo e
+    // a confirmação recente, sem a trava do último administrador. A ficha sem o campo da situação vale ATIVO: também é volta.
+    const voltandoAoRolAtivo = existia && statusAnterior !== statusFinal && statusFinal === "ATIVO";
+    if (voltandoAoRolAtivo && !(await nivelDoCargo.conferirVoltaDeLideranca(pool, sql, req, context, usuario, membroId))) return;
+    // O e-mail é o destino do código de acesso (a segunda etapa do login e o "esqueci o PIN"): trocar ou apagar o de quem tem cargo segue o nível do cargo + 428.
+    // Sem o campo no pedido, o e-mail é apagado (como sempre): também conta como troca.
+    const emailMudou = existia && String(emailAnterior || "").trim().toLowerCase() !== String(email || "").trim().toLowerCase();
+    if (emailMudou && !(await nivelDoCargo.conferirTrocaDeEmailDeLideranca(pool, sql, req, context, usuario, membroId))) return;
+    const hojeISO = hojeBrasilia();   // a data da saída é o dia de Brasília (depois das 21h o de Greenwich já é amanhã)
     const situacaoFinal = entrandoEmStatusTerminal
       ? "SEM_COMUNHAO"
       : situacaoAnterior === "ARROLAMENTO" ? "ARROLAMENTO"   // só completando sai do grupo (rodada 28)
-      : (situacaoMembro || (status === "ATIVO" ? "EM_COMUNHAO" : "SEM_COMUNHAO"));
-    const dataSaidaFinal = entrandoEmStatusTerminal ? (dataSaida || hojeISO) : (dataSaida || null);
+      : (situacaoMembro || (statusInformado && statusFinal === "ATIVO" ? "EM_COMUNHAO" : "SEM_COMUNHAO"));
+    // A ficha não manda a data de saída (só a mostra): sem a data no pedido (ou com ela vazia), quem continua fora do rol ativo mantém a data gravada (o
+    // histórico e os prazos de retenção contam dela). A data informada vale; a volta a ATIVO a limpa, como antes.
+    // De uma situação terminal para a outra (desligado para falecido, ou o contrário), a saída já aconteceu: fica a data gravada (sem ela, hoje, como no Desligar).
+    const dataSaidaGuardada = existia ? (existente.recordset[0].DataSaidaAnterior || null) : null;
+    const deTerminalParaTerminal = entrandoEmStatusTerminal && STATUS_TERMINAIS.includes(statusAnterior);
+    const dataSaidaFinal = entrandoEmStatusTerminal ? (dataSaidaInformada ? dataSaida : (deTerminalParaTerminal && dataSaidaGuardada) || hojeISO)
+      : dataSaidaInformada ? dataSaida
+        : statusFinal !== "ATIVO" ? dataSaidaGuardada : null;
 
     // v9.5 — o endereço em linhas: vindo da tela nova (enderecoPartes), a linha única é montada com ele; vindo só a linha única (tela antiga), as linhas ficam se a
     // linha não mudou e são limpas se mudou (deixariam de corresponder).
@@ -612,6 +738,7 @@ module.exports = async function (context, req) {
       .input("motivoSaida", sql.NVarChar(200), motivoSaidaFinal)
       .input("sexo", sql.NChar(1), sexoFinal)
       .input("cargoLido", sql.NVarChar(30), cargoAnterior)
+      .input("statusLido", sql.NVarChar(TAMANHO_STATUS), statusAnterior)
       .input("cpf", sql.Char(11), cpfLido.cpf === undefined ? null : cpfLido.cpf)
       .input("nomeMae", sql.NVarChar(150), maeLida.nome === undefined ? null : maeLida.nome)
       .input("nomePai", sql.NVarChar(150), paiLido.nome === undefined ? null : paiLido.nome)
@@ -635,7 +762,7 @@ module.exports = async function (context, req) {
                IgrejaAnterior = @igrejaAnterior, DataRitoRecebimento = @dataRitoRecebimento,
                NomeLidoRito = @nomeLidoRito, MinistranteRito = @ministranteRito, EstadoCivil = @estadoCivil,
                DataAfastamento = @dataAfastamento, DataSaida = @dataSaida, MotivoSaida = @motivoSaida, Sexo = @sexo${setFichaNova}
-        WHERE MembroId = @id AND ISNULL(CargoMinisterial, N'') = ISNULL(@cargoLido, N'')`);   // o cargo não mudou desde a leitura acima (uma conclusão no meio → 409)
+        WHERE MembroId = @id AND ISNULL(CargoMinisterial, N'') = ISNULL(@cargoLido, N'') AND Status = @statusLido`);   // o cargo e a situação não mudaram desde a leitura acima (→ 409)
         const passou = !!(gravou && gravou.rowsAffected && gravou.rowsAffected[0]);
         return { gravou: passou, desfazer: !passou };
       }
@@ -647,13 +774,51 @@ module.exports = async function (context, req) {
       return { gravou: true };
     };
     const prepEnd = { partes: partesFinais, endereco: enderecoFinal };
-    const executarGravacao = () => (partesFinais && partesFinais.bairroId
-      ? territorioDb.gravarComBairroTravado(pool, prepEnd, (rq) => gravarPessoa(preencher(rq()), prepEnd))
-      : gravarPessoa(preencher(pool.request()), prepEnd));
-    let resultadoGravacao;
+    // v8.2 — o histórico de cargos acompanha a troca (ou recebe a data informada).
+    const mexeNoHistorico = cargoAnterior !== cargoNovo || !!cargoDesdeFinal;
+    // O motivo que a vacância grava nos vínculos encerrados: a causa da saída informada ou, sem ela, a do próprio status (o falecido sai por falecimento).
+    const motivoDaVacancia = motivoSaidaFinal || (statusFinal === "FALECIDO" ? "FALECIMENTO" : "DESLIGAMENTO");
+    // A ficha, o histórico de cargos, a vacância (ou o corte do acesso de quem sai do rol ativo) e a trilha numa transação só: uma falha no meio desfaz tudo e
+    // o pedido pode ser repetido. Quando o cargo ou o rol mudam, a trava da escada vem primeiro (a mesma da cerimônia de consagração e do abandono).
+    let licencaEncerrada = 0;
+    const gravarNaTransacao = () => emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
+      licencaEncerrada = 0;
+      if ((mexeNoHistorico || entrandoEmStatusTerminal || saindoDaLicenca) && !(await obterTrava(rq, `escada_${membroId}`))) { await desistir(); return "OCUPADA"; }
+      if (conferirLicencaFechada && ((await rq().input("id", sql.Int, membroId).query(SQL_LICENCA_ABERTA(" WITH (UPDLOCK, HOLDLOCK)"))).recordset || []).length) {
+        await desistir();
+        return "LICENCA_ABERTA";
+      }
+      await territorioDb.travarBairroDaFicha(rq, prepEnd);   // com um bairro da lista, a linha única é refeita com o bairro travado (revisão de 06/11/2026)
+      const gravacao = await gravarPessoa(preencher(rq()), prepEnd);
+      if (!gravacao.gravou) { await desistir(); return "FICHA_MUDOU"; }
+      if (mexeNoHistorico) await escadaDb.sincronizarCadastroNaTransacao(transacao, { membroId, cargoAnterior, cargoNovo, desde: cargoDesdeFinal, por: usuario.membroId });
+      if (entrandoEmStatusTerminal) {
+        await vacancia.encerrarVinculos(executor, sql, membroId, motivoDaVacancia);   // também derruba as sessões abertas da pessoa
+        if (saindoDaLicenca && statusFinal === "FALECIDO") licencaEncerrada = await licencaCandidatura.encerrarLicencaAberta(executor, sql, membroId, "Encerrada pelo falecimento.", hojeISO);
+      } else if (saindoDoRolAtivo) {
+        // v7.6 — saiu do rol ativo (inativo, transferido, afastado...): as sessões abertas dela caem na hora (a entrada por PIN já exige status ATIVO).
+        // As delegações dela (dadas e recebidas) ficam canceladas e as sessões de quem recebeu caem junto (shared/delegacoes.js).
+        await require("../shared/delegacoes").encerrarDelegacoesDaPessoa(executor, sql, membroId);
+        await auth.revogarSessoesDoMembro(executor, sql, membroId);
+      }
+      await registrarAuditoriaNaTransacao(transacao, {
+        tabela: "MembroReferencia",
+        registroId: Number(membroId),
+        acao: existia ? "Atualizou pessoa" : "Cadastrou pessoa",
+        usuarioId: usuario.membroId,
+        dadosDepois: { nome, cargoMinisterial, congregacaoId, status: statusFinal, formaAdmissao, dataAdmissao, ...(cargoAnterior !== cargoNovo ? { cargoAnterior } : {}), ...(cargoDesdeFinal ? { cargoDesde: cargoDesdeFinal } : {}),
+          ...(dizimistaAnterior !== dizimistaNovo ? { dizimistaAnterior, dizimistaFiel: dizimistaNovo } : {}), ...(sexoAnterior !== sexoFinal ? { sexoAnterior, sexo: sexoFinal } : {}), ...(emailMudou ? { emailAlterado: true, emailAnterior: mascararEmail(emailAnterior), emailNovo: mascararEmail(email) } : {}), ...(licencaEncerrada ? { licencaEncerrada: true } : {}),
+          // v10.1b — o CPF na trilha só mascarado (a trilha é imutável e não pode guardar o número inteiro)
+          ...(cpfMuda ? { cpfAlterado: true, cpfAnterior: ficha.mascararCpf(cpfAnterior), cpfNovo: ficha.mascararCpf(cpfLido.cpf) } : {}),
+          ...(maeLida.nome !== undefined ? { nomeMae: maeLida.nome } : {}), ...(paiLido.nome !== undefined ? { nomePai: paiLido.nome } : {}),
+          ...(escolaridade !== undefined ? { escolaridade } : {}), ...(matriculaGerada ? { matriculaGerada: true } : {}) }
+      });
+      return "GRAVOU";
+    });
+    let desfecho;
     for (let tentativa = 0; ; tentativa++) {
       try {
-        resultadoGravacao = await executarGravacao();
+        desfecho = await gravarNaTransacao();
         break;
       } catch (e) {
         // v10.1b — o CPF gravado por outro cadastro no mesmo instante (o índice único recusou): a mesma mensagem da conferência acima, sem o número
@@ -661,7 +826,7 @@ module.exports = async function (context, req) {
           context.res = { status: 200, body: { sucesso: false, mensagem: MSG_CPF_REPETIDO } };
           return;
         }
-        // a matrícula gerada foi tomada por outro cadastro no mesmo instante: pede o próximo número
+        // a matrícula gerada foi tomada por outro cadastro no mesmo instante: pede o próximo número e refaz a transação inteira com ele
         if (matriculaGerada && ehMatriculaRepetida(e) && tentativa < 5) {
           membroId = await proximaMatricula(pool);
           continue;
@@ -669,31 +834,41 @@ module.exports = async function (context, req) {
         throw e;
       }
     }
-    if (!resultadoGravacao.gravou) {
-      context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo desta pessoa mudou enquanto você salvava. Abra a ficha de novo." } };
+    if (desfecho === "OCUPADA") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração desta pessoa está em andamento. Tente de novo em instantes." } };
       return;
     }
-
-    // v8.2 — o histórico de cargos acompanha a troca (ou recebe a data informada). Falhou a trava? O cadastro já foi salvo; o histórico fica para a próxima gravação e a
-    // escada mostra "data de entrada no cargo não informada" até lá (nunca presume a data).
-    if (cargoAnterior !== cargoNovo || cargoDesdeFinal) {
+    if (desfecho === "LICENCA_ABERTA") {
+      context.res = { status: 409, body: { sucesso: false, mensagem: MSG_LICENCA_ABERTA } };
+      return;
+    }
+    if (desfecho === "FICHA_MUDOU") {
+      context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo ou a situação desta pessoa mudou enquanto você salvava. Abra a ficha de novo." } };
+      return;
+    }
+    // O e-mail é por onde chega o código de acesso do membro: quem perdeu o endereço antigo precisa saber que ele mudou (e quem não pediu, estranhar). Vai logo
+    // depois do commit (antes da credencial e da releitura, que podem falhar), e o resultado é lido: o aviso que não sai fica dito na resposta e na trilha.
+    let avisoEmailNaoSaiu = false;
+    if (emailMudou && emailAnterior) {
+      let enviado = false;
       try {
-        const h = await escadaDb.sincronizarCadastro(pool, { membroId, cargoAnterior, cargoNovo, desde: cargoDesdeFinal, por: usuario.membroId });
-        if (!h.sucesso) context.log.warn(`[GestaoPessoas] histórico de cargos de ${membroId} não atualizado: ${h.mensagem}`);
-      } catch (e) { context.log.error(`[GestaoPessoas] histórico de cargos de ${membroId} não atualizado: ${e.message}`); }
+        enviado = await enviarEmailNotificacao({
+          email: emailAnterior,
+          titulo: "O e-mail do seu cadastro na IEADESPA foi alterado",
+          mensagem: `O e-mail do cadastro da matrícula ${membroId} foi alterado pela Secretaria. Se foi você quem pediu, não há nada a fazer; se não foi, avise a Secretaria da sua congregação.`
+        });
+      } catch (e) { context.log.error("Falha ao avisar o e-mail antigo:", e.message); }
+      if (enviado !== true) {
+        avisoEmailNaoSaiu = true;
+        await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(membroId), acao: "Aviso da troca de e-mail não enviado", usuarioId: usuario.membroId,
+          dadosDepois: { emailAnterior: mascararEmail(emailAnterior) } });
+      }
     }
-
-    if (entrandoEmStatusTerminal) {
-      await vacancia.encerrarVinculos(pool, sql, membroId, motivoSaidaFinal || statusFinal);   // também derruba as sessões abertas da pessoa
-      await require("../shared/credencialDb").recolherSemFalhar(pool, membroId, motivoSaidaFinal || statusFinal, usuario.membroId);   // v8.4: o recolhimento da credencial
-    } else if (existia && statusAnterior !== statusFinal && statusFinal !== "ATIVO") {
-      // v7.6 — saiu do rol ativo (inativo, transferido, afastado...): as sessões abertas dela caem na hora (a entrada por PIN já exige status ATIVO).
-      await auth.revogarSessoesDoMembro(pool, sql, membroId);
-    }
+    if (entrandoEmStatusTerminal) await require("../shared/credencialDb").recolherSemFalhar(pool, membroId, motivoDaVacancia, usuario.membroId);   // v8.4: a credencial, depois do commit
 
     const result = await pool.request().input("id", sql.Int, membroId).query(`${SELECT_MEMBRO} WHERE m.MembroId = @id`);
     const membro = result.recordset[0];
-    const emailMudou = existia && String(emailAnterior || "").trim().toLowerCase() !== String(email || "").trim().toLowerCase();
+    Object.assign(membro, (await marcarLicencaAberta(pool, [membro]))[0]);
     const vDisciplinaMembro = auth.visaoDaPermissao(usuario, "disciplina");
     if (vDisciplinaMembro && noEscopoDaPessoa(vDisciplinaMembro, membro.congregacao, membro.extensao)) {
       const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
@@ -705,40 +880,20 @@ module.exports = async function (context, req) {
     membro.menorDeIdade = idadeMembro !== null && idadeMembro < 18;
     membro.fotoUrl = storage.urlComSas(membro.fotoUrl);
 
-    await registrarAuditoria({
-      tabela: "MembroReferencia",
-      registroId: Number(membroId),
-      acao: existia ? "Atualizou pessoa" : "Cadastrou pessoa",
-      usuarioId: usuario.membroId,
-      dadosDepois: { nome, cargoMinisterial, congregacaoId, status, formaAdmissao, dataAdmissao, ...(cargoAnterior !== cargoNovo ? { cargoAnterior } : {}), ...(cargoDesdeFinal ? { cargoDesde: cargoDesdeFinal } : {}),
-        ...(dizimistaAnterior !== dizimistaNovo ? { dizimistaAnterior, dizimistaFiel: dizimistaNovo } : {}), ...(sexoAnterior !== sexoFinal ? { sexoAnterior, sexo: sexoFinal } : {}), ...(emailMudou ? { emailAlterado: true, emailAnterior: mascararEmail(emailAnterior), emailNovo: mascararEmail(email) } : {}),
-        // v10.1b — o CPF na trilha só mascarado (a trilha é imutável e não pode guardar o número inteiro)
-        ...(cpfMuda ? { cpfAlterado: true, cpfAnterior: ficha.mascararCpf(cpfAnterior), cpfNovo: ficha.mascararCpf(cpfLido.cpf) } : {}),
-        ...(maeLida.nome !== undefined ? { nomeMae: maeLida.nome } : {}), ...(paiLido.nome !== undefined ? { nomePai: paiLido.nome } : {}),
-        ...(escolaridade !== undefined ? { escolaridade } : {}), ...(matriculaGerada ? { matriculaGerada: true } : {}) }
-    });
-    // O e-mail é por onde chega o código de acesso do membro: quem perdeu o endereço antigo precisa saber que ele mudou (e quem não pediu, estranhar).
-    if (emailMudou && emailAnterior) {
-      try {
-        await enviarEmailNotificacao({
-          email: emailAnterior,
-          titulo: "O e-mail do seu cadastro na IEADESPA foi alterado",
-          mensagem: `O e-mail do cadastro da matrícula ${membroId} foi alterado pela Secretaria. Se foi você quem pediu, não há nada a fazer; se não foi, avise a Secretaria da sua congregação.`
-        });
-      } catch (e) { context.log.error("Falha ao avisar o e-mail antigo:", e.message); }
-    }
-
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: existia ? "✅ Pessoa atualizada." : matriculaGerada ? `✅ Pessoa cadastrada com a matrícula ${membroId}.` : "✅ Pessoa cadastrada.", membro } };
+    const mensagemGravou = existia ? "✅ Pessoa atualizada." : matriculaGerada ? `✅ Pessoa cadastrada com a matrícula ${membroId}.` : "✅ Pessoa cadastrada.";
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, membro,
+      mensagem: avisoEmailNaoSaiu ? `${mensagemGravou} Atenção: o aviso da troca de e-mail não saiu para o endereço antigo; avise a pessoa por outro meio.` : mensagemGravou } };
     return;
   }
 
   // ---- DELETE: desligar (não remove de verdade) ----
   if (method === "DELETE") {
-    if (!membroIdRota) {
+    const membroDesligar = auth.idDeRota(membroIdRota);
+    if (!membroDesligar) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o membroId na rota: /api/pessoas/{membroId}" } };
       return;
     }
-    const alvoDesligar = (await pool.request().input("id", sql.Int, membroIdRota).query(`
+    const alvoDesligar = (await pool.request().input("id", sql.Int, membroDesligar).query(`
       SELECT c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
       LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId WHERE m.MembroId = @id`)).recordset[0];
     // Matrícula que não existe e matrícula de fora do escopo recebem a mesma recusa: a resposta não diz quem tem cadastro.
@@ -746,19 +901,34 @@ module.exports = async function (context, req) {
       context.res = { status: 403, body: FORA_DO_ESCOPO };
       return;
     }
-    const upd = await pool.request().input("id", sql.Int, membroIdRota)
-      .query(`UPDATE MembroReferencia SET Status = 'DESLIGADO', SituacaoMembro = 'SEM_COMUNHAO',
-              DataSaida = ISNULL(DataSaida, CAST(SYSUTCDATETIME() AS DATE))
-              WHERE MembroId = @id AND Status <> 'DESLIGADO'`);
-    if (upd.rowsAffected[0] === 0) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada (ou já estava desligada)." } };
+    if (!(await conferirSaidaDeLideranca(pool, req, context, usuario, membroDesligar))) return;
+    // O status, a vacância automática (v1.5: Assentos, Liderança, cargo, EBD, delegações e sessões) e a trilha numa transação só: ou tudo vale, ou nada muda e o
+    // pedido pode ser repetido. A trava da escada põe em fila com a cerimônia de consagração da mesma pessoa (como no abandono). O falecido não vira desligado.
+    const desfecho = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
+      if (!(await obterTrava(rq, `escada_${membroDesligar}`))) { await desistir(); return "OCUPADA"; }
+      const hojeDeslig = hojeBrasilia();
+      const upd = await rq().input("id", sql.Int, membroDesligar).input("hoje", sql.Date, hojeDeslig)
+        .query(`UPDATE MembroReferencia SET Status = 'DESLIGADO', SituacaoMembro = 'SEM_COMUNHAO', DataSaida = ISNULL(DataSaida, @hoje)
+                OUTPUT INSERTED.MembroId, DELETED.Status AS StatusAnterior
+                WHERE MembroId = @id AND Status NOT IN ('DESLIGADO', 'FALECIDO')`);
+      if (!(upd.recordset || []).length) { await desistir(); return "JA_SAIU"; }
+      await vacancia.encerrarVinculos(executor, sql, membroDesligar, "DESLIGAMENTO");
+      // desligar quem estava em licença por candidatura fecha a licença aberta (resposta do responsável, 25/11/2026)
+      const licencaEncerrada = upd.recordset[0].StatusAnterior === LICENCA_CANDIDATURA
+        ? await licencaCandidatura.encerrarLicencaAberta(executor, sql, membroDesligar, "Encerrada pelo desligamento.", hojeDeslig) : 0;
+      await registrarAuditoriaNaTransacao(transacao, { tabela: "MembroReferencia", registroId: membroDesligar, acao: "Desligou pessoa", usuarioId: usuario.membroId,
+        ...(licencaEncerrada ? { dadosDepois: { licencaEncerrada: true } } : {}) });
+      return "DESLIGOU";
+    });
+    if (desfecho === "OCUPADA") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração desta pessoa está em andamento. Tente de novo em instantes." } };
       return;
     }
-    // Vacância automática (v1.5): fecha Assentos/Liderança/Cargo — mesmo helper
-    // usado no procedimento de abandono e na exclusão disciplinar.
-    await vacancia.encerrarVinculos(pool, sql, membroIdRota, "DESLIGAMENTO");
-    await require("../shared/credencialDb").recolherSemFalhar(pool, membroIdRota, "Desligamento", usuario.membroId);   // v8.4: o recolhimento da credencial
-    await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(membroIdRota), acao: "Desligou pessoa", usuarioId: usuario.membroId });
+    if (desfecho === "JA_SAIU") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Esta pessoa já está fora do rol (desligada ou falecida)." } };
+      return;
+    }
+    await require("../shared/credencialDb").recolherSemFalhar(pool, membroDesligar, "Desligamento", usuario.membroId);   // v8.4: o recolhimento da credencial, depois do commit
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Pessoa desligada." } };
     return;
   }

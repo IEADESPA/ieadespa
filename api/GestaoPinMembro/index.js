@@ -1,11 +1,14 @@
 // GestaoPinMembro (fecho da v7.5) — a Secretaria gera um PIN PROVISÓRIO para o membro que não tem e-mail (ou perdeu o acesso a ele).
-// POST /api/gestao/pin-membro -> { membroId }      (permissão "pessoas"; a congregação do membro precisa estar no escopo de quem gera)
+// POST /api/gestao/pin-membro -> { membroId }      (permissão "pessoas"; o membro precisa estar no escopo de quem gera, pela regra de PESSOA:
+//                                                    congregação e, para quem alcança só uma Extensão da Tenda, a mesma Extensão — escopoRotas.noEscopoDaPessoa)
 //
 // O PIN é aleatório, sem nenhum dos padrões fáceis, vale por 7 dias e o membro é obrigado a trocar por um dele ao entrar. Aparece UMA vez, na tela da
 // Secretaria, que o entrega pessoalmente. Não vai para a auditoria, para o log nem para o e-mail; se o membro tem e-mail, é avisado de que a Secretaria
 // gerou um PIN provisório (para estranhar se não foi ele quem pediu). Gerar um novo também desbloqueia a pessoa.
 const { getPool, sql } = require("../shared/db");
 const auth = require("../shared/auth");
+const { noEscopoDaPessoa } = require("../shared/escopoRotas");
+const nivelDoCargo = require("../shared/nivelDoCargo");
 const pinMembro = require("../shared/pinMembro");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { enviarEmailNotificacao } = require("../shared/notificacaoEmail");
@@ -22,14 +25,18 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   const m = (await pool.request().input("id", sql.Int, membroId).query(`
-    SELECT m.MembroId, m.Nome, m.Email, m.DataNascimento, c.Nome AS CongregacaoNome
+    SELECT m.MembroId, m.Nome, m.Email, m.DataNascimento, c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome
     FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+    LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId
     WHERE m.MembroId = @id AND m.Status = 'ATIVO'`)).recordset[0];
   // Mesma resposta para quem não existe e para quem está fora do escopo: a recusa não diz quem tem cadastro.
-  if (!m || !auth.estaNoEscopo(usuario, m.CongregacaoNome)) {
+  if (!m || !noEscopoDaPessoa(usuario, m.CongregacaoNome, m.ExtensaoNome || null)) {
     context.res = { status: 403, body: { sucesso: false, mensagem: "Fora do seu escopo de atuação." } };
     return;
   }
+  // Quem tem cargo de liderança vigente: o PIN provisório abre a sessão de titular dele, e a regra é a do nível do cargo com a confirmação recente (25 e 26/11).
+  if (!(await nivelDoCargo.conferirPinDeLideranca(pool, sql, req, context, usuario, membroId))) return;
+
 
   const pin = pinMembro.gerarPinProvisorio({ nascimento: m.DataNascimento, matricula: membroId });
   await pinMembro.gravarPin(pool, membroId, pin, { provisorioPor: usuario.membroId });

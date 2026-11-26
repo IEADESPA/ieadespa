@@ -113,7 +113,7 @@ describe("desafios e opções", () => {
 describe("login em duas etapas (LoginSecretaria) e segunda etapa (SegundoFator)", () => {
   const auth = require("../auth");
   const senhaHash = auth.hashSenha("Senha@Forte1");
-  const linha = { membroId: 12, papelId: 3, escopoTipo: "AREA", escopoId: 1, senhaHash, departamentoId: null, ativoAte: null, papelNome: "Pastor de Área", papelNivel: "AREA", permissoesStr: "reunioes", nome: "Gabriela" };
+  const linha = { membroId: 12, papelId: 3, escopoTipo: "AREA", escopoId: 1, senhaHash, departamentoId: null, ativoAte: null, papelNome: "Pastor de Área", papelNivel: "AREA", permissoesStr: "reunioes", nome: "Gabriela", ativo: 1 };
   let login, segunda;
   beforeAll(() => {
     jest.doMock("../pinMembro", () => ({ reservarTentativa: jest.fn(async () => ({ bloqueado: false })), limparTentativas: jest.fn(async () => {}), LIMITE_FALHAS_SENHA: 10 }));
@@ -186,6 +186,19 @@ describe("login em duas etapas (LoginSecretaria) e segunda etapa (SegundoFator)"
     const ctx = contexto(); ctx.bindingData.acao = "chave/opcoes";
     await segunda(ctx, reqCom("https://app.ieadespa.org.br", { body: { bilhete } }));
     expect(ctx.res.status).toBe(401);
+  });
+  test("segunda etapa: a pessoa saiu do rol ATIVO depois da senha = 401, sem sessão (a situação é relida com a linha)", async () => {
+    const codigoAcesso = require("../codigoAcesso");
+    const confirmar = jest.spyOn(codigoAcesso, "confirmarCodigo").mockResolvedValue({ valido: true });
+    const bilhete = segundoFator.emitirBilhete({ membroId: 12, papelId: 3, escopoTipo: "AREA", escopoId: 1 });
+    poolFalso.liderancas = [{ ...linha, ativo: 0 }];
+    for (const acao of ["codigo", "chave/opcoes", "codigo/enviar"]) {
+      const ctx = contexto(); ctx.bindingData.acao = acao;
+      await segunda(ctx, reqCom("https://app.ieadespa.org.br", { body: { bilhete, codigo: "123456" } }));
+      expect(ctx.res.status).toBe(401);
+      expect(ctx.res.body.token).toBeUndefined();
+    }
+    confirmar.mockRestore();
   });
 });
 

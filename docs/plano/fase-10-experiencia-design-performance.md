@@ -1057,6 +1057,7 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
   O código já faz assim.
 - **"Descartar a prévia" e a guarda dos dados da importação, respostas dele (23/11/2026, à noite), que substituem o "não
   precisa de botão":**
+  - Subir a planilha certa substitui a prévia; além disso, a tela ganha o botão "Descartar".
   - A prévia que não foi confirmada (com CPF, celular, mãe e pai) **se apaga sozinha em 7 dias**. A tela ganha um botão
     **"Descartar"** para apagar na hora.
   - A lista dos que ficaram de fora (nome e motivo) **fica 90 dias depois de a importação terminar** e depois se apaga
@@ -1085,6 +1086,43 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
     planilha antes de gravar; a secretaria corrigir os cadastros que não entraram). O Encarregado ajusta o prazo ali.
 - **O que a tela ganhou além do desenho**, aprovado por ele: "Continuar a importação" se ela parar no meio, o aviso das
   linhas que ficaram de fora, "Mostrar mais" nas listas longas e a caixa "Conferi" começando desmarcada.
+- **A guarda dos dados (LGPD), respostas dele (23/11/2026, à noite)**, depois da revisão:
+  - a prévia que não foi confirmada (tem CPF, celular, mãe e pai) **se apaga sozinha em 7 dias**, e o botão
+    "Descartar" apaga na hora;
+  - a lista dos que ficaram de fora (nome e motivo) fica **90 dias** depois de a importação terminar e depois se apaga
+    sozinha.
+- **A revisão de 23/11 (até `58dcd0d`)**: a trava está completa. Antes da produção, faltam o ensaio da importação
+  inteira na homologação (~5 mil linhas de mentira, medindo o lote), depois do "vi" dele sobre a trava, e as correções
+  da revisão (a aspa sem fechar no arquivo, a saída do IMPORTANDO, o texto do site e o menu cortado).
+
+### Financeiro, blocos de recibo: as respostas dele (23/11/2026, à noite)
+
+Depois da revisão do Financeiro até `4c06d58`:
+
+- **As folhas em branco voltam livres (ele, 24/11, substitui a "devolução só de bloco cheio" de 23/11).** Normalmente
+  o bloco volta completo. Se uma congregação devolver o bloco por algum motivo com folhas nunca usadas, a tesouraria
+  marca a devolução como **parcial**. Essas folhas **não são anuladas**: voltam a ficar livres para uma próxima entrega,
+  porque imprimir bloco novo custa dinheiro e as folhas já existem. A entrega de um bloco parcial pega só as folhas
+  livres, e quem usou cada folha continua no histórico dela. Não existe a situação "anulada".
+- **A exceção da folha pode ser desfeita**, só pela Tesouraria Geral e com motivo obrigatório. Fica no histórico quem
+  marcou, quem desfez, quando e por quê; nada se apaga. Não vale para folha de bloco já devolvido.
+- O formulário "Registrar saída" (entregar um bloco a uma congregação), a cor da folha extraviada e o seletor de bloco
+  no celular vão para o desenho da rodada 30.
+- O 1b continua fora da produção até a troca de janeiro de 2027 (plano da construção do Financeiro, §5): na produção
+  ele esconderia as telas antigas, e o módulo novo ainda está quase todo "em construção".
+- **A rodada 30 (24/11/2026): as 5 telas aprovadas na versão única** (r30-blocos-saida, -devolver, -folhas, -desfazer
+  e -vazios). Foram para a construção.
+- **A folha inexistente (ele, 24/11):** um tipo novo de exceção. É a folha que a gráfica não imprimiu (o bloco devia
+  ter 50 e veio com uma a menos). Ela tem de ser catalogada, porque a numeração não pode pular. Não precisa de tela
+  nova: é a opção a mais onde as outras exceções aparecem, e sai nos relatórios como as outras.
+- **Os 4 tipos de exceção, cada um com uma frase curta na tela (ele, 24/11):**
+  - cancelada: preenchida errado e anulada;
+  - arrancada: tirada do bloco;
+  - extraviada: sumiu, e a congregação não sabe dela;
+  - inexistente: a gráfica não imprimiu.
+- **Onde se marca a inexistente (ele, 24/11):** ninguém confere o lote folha por folha quando ele chega da gráfica.
+  A inexistente aparece no lançamento, na planilha, e se marca ali, do mesmo jeito que a cancelada ou a arrancada. Na
+  devolução parcial, a inexistente no fim do bloco não impede: as folhas em branco antes dela voltam livres.
 
 ### Rodada 28: o que ele aprovou (23/11/2026)
 
@@ -1094,6 +1132,59 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
   planilha, só o pessoal da Geral.** A congregação e a área veem e usam a lista no sistema, mas não baixam.
 - **Completar o arrolamento:** aprovado. **A área e a Geral também podem completar e editar** os dados do membro, e
   aprovar quando for o caso: se a congregação não faz o que tem de fazer, a área faz, e o serviço não para.
+  - **O "aprovar" (ele, 24/11): nada a mais.** Completou a ficha, ela sai do arrolamento sozinha; o "aprovar" era só a
+    área ou a Geral poderem fazer o serviço quando a congregação não faz.
+- **Os 3 tipos de dado da ficha (ele, 24/11, regra para todo o sistema):**
+  1. **A situação do membro** (congregado, membro em comunhão, sem comunhão) e os eventos simples (batismo,
+     reconciliação, conversão, carta de mudança): a secretaria local e a da área têm toda a autonomia.
+  2. **Os cargos administrativos** (dirigente de congregação, líderes, 1º e 2º tesoureiro, secretário etc.): cada
+     nível muda os do seu âmbito.
+  3. **As funções eclesiásticas** (auxiliar, diácono, presbítero, evangelista, missionário, pastor): só a Câmara de
+     liderança e a academia (o órgão de formação ministerial) mexem. A secretaria local e a da área **nunca**, em
+     nenhuma hipótese. São funções condicionadas à permanência em órgãos. Com a disciplina (sem comunhão), a função e
+     o cargo são cortados sozinhos. Quem sai da Câmara perde a função, mas fica com o cargo e a situação.
+  - No arrolamento, a congregação e a área completam a situação e os cargos do seu nível, e **não gravam função
+    eclesiástica** (a revisão de 24/11 achou que hoje gravam qualquer cargo, até Pastor).
+- **A rodada 31 (24/11, à tarde): as 5 telas aprovadas na versão única** (r31-carta, -qr, -pedido, -abandono e
+  -volta), com 2 ajustes dele:
+  - **A carta impressa fica curta.** Tem gente com dezenas de cargos (ele mesmo já teve uns 10), e o histórico
+    inteiro iria para uma segunda folha. A carta mostra só o mais recente: a última função (com a data da consagração)
+    e o último cargo. Se a pessoa tem mais de 2 cargos ativos, aparecem os ativos. O cargo de maior grau prevalece (o
+    geral antes do de área e do local), e, se houver vários gerais, aparecem os gerais.
+  - **O QR mostra o histórico inteiro**, com todos os cargos, durante os 30 dias. Passados os 30 dias, a carta está
+    **vencida**: a página do QR diz que ela venceu, e a igreja que recebe decide se aceita ou não. Continua sem dado da
+    pessoa depois do prazo, como na r29.
+- **As respostas dele à revisão do arrolamento (24/11, à tarde):**
+  - **Sem congregação, não há importação.** A importação é feita uma única vez e é só da Secretaria Geral. A linha
+    da planilha sem congregação é recusada na prévia: a Geral corrige a planilha ou deixa a linha de fora. Por isso não
+    existe ficha em arrolamento sem congregação, e o "Completar" não volta.
+  - **A importação que para no meio:** o prazo é de 7 dias, contados do último lote, e a tela avisa "faltam N dias".
+    Vencido o prazo, os dados pessoais da prévia se apagam (LGPD) e o sistema mostra quais linhas faltaram (o número
+    e o nome). A Secretaria Geral pode fazer uma importação nova só com elas. A parada sem ninguém importado segue o
+    mesmo prazo e pode ser descartada.
+  - **A data de entrada (admissão) é quando a pessoa se torna membro.** Quem se converteu na nossa igreja (era
+    congregado) é admitido no batismo nas águas. Exemplo: veio em 2006, ficou congregado e foi batizado em 2010; a
+    admissão é 2010, e os 90 dias da Assembleia contam do batismo. Quem veio de outra igreja tem como data de entrada a
+    da chegada.
+  - **Quem está em arrolamento não vota e não conta em nada:** fica fora das enquetes, das votações, da presença e do
+    quórum das reuniões de órgão.
+  - No arrolamento, cada nível completa só os **cargos administrativos** do seu âmbito. A função eclesiástica aparece
+    só para ler.
+- **As respostas dele à volta 5 do arrolamento (25/11):**
+  - **O cargo administrativo leva o acesso junto.** Quem ganha o cargo (por exemplo, eleito 1º tesoureiro geral em
+    assembleia) recebe o acesso ao sistema daquele cargo. Mas **só pode ter cargo administrativo quem é membro há pelo
+    menos 90 dias** (o mesmo prazo do voto, contado da admissão). O congregado (em arrolamento) não tem cargo
+    administrativo nenhum: o campo some da ficha dele. O acesso pode ser tirado depois, com o motivo anotado, **pela
+    Geral e pela liderança do mesmo nível do cargo**; o cargo continua. É regra de acesso: entra numa missão própria,
+    com plano aprovado antes de construir.
+  - **Batismo ou carta sem a data na planilha:** a pessoa entra no rol como "dados incompletos" (não conta como apta)
+    até a secretaria pôr a data certa.
+  - **O congregado fica fora de tudo**, também das listas de votantes montadas nome por nome e dos órgãos.
+  - **A importação parada (os 7 dias):** confirmadas as 4 leituras da construção: a parada sem ninguém importado conta
+    da confirmação; a lista do que ficou de fora fica 90 dias; a linha que faltou é achada pelo nome; para importar o
+    resto, a Secretaria Geral manda o arquivo de novo (o sistema não guarda CPF nem contato).
+  - Os textos construídos sem desenho ("As linhas que faltaram", o aviso "faltam N dias" e "Descartar a importação")
+    ele aprova vendo na homologação.
 - **A movimentação (saída e volta): volta para o desenho (rodada 29).** Ele marcou a versão, mas disse que ainda não está
   boa. As regras novas dele:
   - **O membro sai sozinho, pelo aplicativo, na hora:** pede a carta de mudança no próprio celular e sai na mesma hora,
@@ -1136,6 +1227,29 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
     depois de 30 dias, grava DESLIGADO, deixa os cargos vagos, corta o acesso e apaga tudo de uma vez, guardando o
     batismo e o casamento. A regra nova muda o código, não só a tela: sair na hora, cargos vagos na hora e o
     apagamento aos poucos e sozinho.
+  - **As respostas dele à rodada 29 (23 e 24/11): as 7 telas aprovadas**, com estes ajustes (vão para a r30 e para a
+    construção):
+    - **O destino é só a cidade** (com o estado), nunca o nome da igreja. Em branco, fica a cidade da nossa igreja
+      (Parauapebas-PA). Isto substitui o "destino opcional" decidido pela sessão.
+    - **A carta é individual e traz o histórico do membro:** a data em que chegou e a da saída, o batismo nas águas, o
+      batismo no Espírito Santo, as consagrações e os cargos que teve, com as datas. O motivo dele: as pessoas
+      esquecem esses dados e depois pedem à secretaria. Os filhos menores que saem junto também recebem carta própria.
+      O QR confirma o que está na carta. Como os dados se apagam aos poucos, o QR confere a carta pela impressão
+      digital guardada e pelo protocolo, sem mostrar os dados depois do apagamento (decisão da sessão).
+    - **A situação na carta:** o congregado sai **em Paz**, nunca em Observação. A Observação é só para quem está sem
+      comunhão ou em disciplina, e então a carta diz **por quanto tempo**, sem dizer o motivo.
+    - **O pedido por outra pessoa:** podem pedir por alguém, conforme a situação, e fica registrado quem pediu e quando.
+      O aviso à pessoa não diz "responda este e-mail", porque ela pode nem ter e-mail: diz **"entre em contato com a
+      Secretaria Geral"** para saber e, se for o caso, ser reintegrada.
+    - **O abandono passa pela Câmara de liderança, além da Geral:** a congregação pede, a Geral confere e o caso só vale
+      depois de aprovado na reunião da Câmara ("para não dizer que foi algo sem nada"). Até lá, fica "aguardando a
+      Câmara". No sistema entra **só o registro**: a Secretaria Geral marca "aprovado na reunião de dd/mm/aaaa, ata nº
+      X". Não há pauta de reunião no sistema.
+    - **Ninguém devolve cargo a quem volta.** Quem sai perde os cargos, e para ter cargo de novo faz o caminho inteiro
+      (o protocolo da função). Isto substitui o "quem cuida daquele nível decide se os devolve".
+    - **O falecimento:** aprovado sem mudança. Ele perguntou o que a lei diz sobre os dados de quem faleceu (resposta na
+      conversa de 24/11).
+    - **Os cargos vagos:** ficam como estão. Quais cargos existem e como se criam será uma conversa à parte, no módulo 3.
 - **As matrículas novas depois da importação (23/11):** liberam-se **sozinhas** quando a importação do sistema pago
   termina (ela é uma vez só). Até lá, ninguém se cadastra: não há fila. É a trava simples, descrita em "A tela de
   importar os membros". O sistema que está hoje na produção não gera matrícula sozinho (a secretaria digita o número).
@@ -1180,6 +1294,18 @@ guardadas para quando o módulo 3 começar. O levantamento completo do desenhist
   - O problema é a localização: a cidade costuma usar um CEP geral. No futuro, o endereço buscado pelo CEP e pelo
     número já basta, mesmo com erro de uns 50 m.
   - A localização das igrejas que vai para o site alimenta o mapa sozinha.
+- **As respostas dele às 8 perguntas da rodada 32 (24/11/2026):**
+  1. O novo dirigente (ou cargo) **vale no cadastro**; o painel cobra o termo de posse até as duas confirmações.
+  2. Quem não tem celular **aceita a posse no balcão, com o PIN**, e fica registrado quem atendeu.
+  3. **A virada do ano é em lote, com termo novo**: "continuam em 2027", e cada um aceita o termo de novo.
+  4. **A diretoria cobrada como vaga é uma lista fixa da Geral.** Na congregação: dirigente, vice, 1º e 2º secretário
+     e 1º e 2º tesoureiro. Na área: pastor, secretário e tesoureiro.
+  5. **Os outros cargos (EBD, jovens, porteiro, recepção) ficam no módulo de cada um**, não na Estrutura.
+  6. A congregação confirma os dados (endereço, cultos, diretoria) **a cada 6 meses**, num toque; vencido, vai para o
+     painel.
+  7. **O ponto de culto guarda** o bairro, o dia e a hora, o responsável e o endereço da casa; o endereço só a
+     liderança vê.
+  8. **O mapa:** a congregação vê o ponto de cada membro dela; a área e a Geral veem só a contagem por bairro.
 - **O painel da Estrutura ("quem precisa de atenção"):** o cargo vago, o cargo vencendo, os dados velhos e o termo de
   posse pendente, e todos os avisos do módulo. Cada nível vê os seus tipos de aviso, como no Financeiro.
 - **A Sede:** fica numa área, a **Área 1 ("Distrito Sede")**, com os pontos de culto dela. É área de uma congregação

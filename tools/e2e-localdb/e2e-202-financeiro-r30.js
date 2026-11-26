@@ -60,6 +60,7 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
   let r = await POST(H, "lote", geral, { serie: 2026, primeiraFolha: 70001, totalFolhas: 10000 });
   ok(r.status === 201, "o lote 70.001 a 80.000 (200 blocos)", r.body);
   ok((await POST(H, "chegada", geral, { loteId: r.body.loteId, ateFolha: 75000, data: "2026-11-01" })).status === 200, "chegaram os blocos até a folha 75.000 em 01/11");
+  await L.naLiderancaDe(TESOUREIRA_LOCAL, VILA_NOVA);   // a lista do "Entregue a" (o servidor só aceita a matrícula de quem está nela)
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70051, congregacaoId: VILA_NOVA, pessoa: { membroId: TESOUREIRA_LOCAL }, data: "2026-11-10" })).status === 200, "o 1.401 entregue a Vila Nova em 10/11");
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70101, congregacaoId: VILA_NOVA, pessoa: { nome: "Rute Santos" }, data: "2026-11-12" })).status === 200, "o 1.402 entregue a Vila Nova em 12/11");
   const [b1401, b1402] = [await idDo(1401), await idDo(1402)];
@@ -382,8 +383,12 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
   ok((await retratoFin()) === antesDev, "as recusas não mexeram no banco");
   r = await GET(H, "rastreio", geral, { folha: 70501 });
   ok(r.status === 200 && r.body.primeiraEmBranco === 70537, "o rastreio sugere a 70.537, a seguinte à última com destino", r.body.primeiraEmBranco);
+  // revisão de fora (S1): quem levou o bloco devolve mesmo fora da liderança (o rastreio o oferece: "quem levou o bloco"); a tesoureira passa
+  // para a Central só durante esta devolução
+  await q(`UPDATE Lideranca SET EscopoId = ${CENTRAL} WHERE MembroId = ${TESOUREIRA_LOCAL}`);
   r = await POST(H, "devolver", geral, { primeiraFolha: 70501, folha: 70501, pessoa: { membroId: TESOUREIRA_LOCAL }, parcial: true, primeiraEmBranco: 70537, data: "2026-11-22" });
-  ok(r.status === 200 && r.body.mensagem === "Bloco 1.410 de volta, parcial: as folhas 70.537 a 70.550 estão livres para outra entrega.", "o 1.410 de volta, parcial", r.body);
+  await q(`UPDATE Lideranca SET EscopoId = ${VILA_NOVA} WHERE MembroId = ${TESOUREIRA_LOCAL}`);
+  ok(r.status === 200 && r.body.mensagem === "Bloco 1.410 de volta, parcial: as folhas 70.537 a 70.550 estão livres para outra entrega.", "o 1.410 de volta, parcial (devolvido por quem o levou, que já não é da liderança de Vila Nova)", r.body);
   const todasDev = [];
   for (let pg = 1; pg <= 10; pg++) {
     const x = (await GET(H, "livro", geral, { porPagina: 5, pagina: pg })).body.registros;

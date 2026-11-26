@@ -73,6 +73,7 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   let r = await POST(H, "lote", geral, { serie: 2026, primeiraFolha: 70001, totalFolhas: 10000 });
   ok(r.status === 201, "o lote 70.001 a 80.000 (200 blocos)", r.body);
   ok((await POST(H, "chegada", geral, { loteId: r.body.loteId, ateFolha: 75000, data: "2026-11-01" })).status === 200, "chegaram os blocos até a folha 75.000 em 01/11");
+  await L.naLiderancaDe(TESOUREIRA_LOCAL, VILA_NOVA);   // a lista do "Entregue a" (o servidor só aceita a matrícula de quem está nela)
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70051, congregacaoId: VILA_NOVA, pessoa: { membroId: TESOUREIRA_LOCAL }, data: "2026-11-10" })).status === 200, "o 1.401 entregue a Vila Nova em 10/11");
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70101, congregacaoId: VILA_NOVA, pessoa: { nome: "Rute Santos" }, levadoPelaArea: true })).status === 200, "o 1.402 entregue a Vila Nova hoje, levado pela área");
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70151, congregacaoId: BETA, pessoa: { nome: "Tesoureiro da Beta" } })).status === 200, "o 1.403 entregue à Beta");
@@ -92,6 +93,13 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   ok((await retratoFin()) === antes0, "as recusas não mexeram no banco");
 
   console.log("== a exceção da folha ==");
+  // revisão de fora (L2): "o que aconteceu" só vale o que a lista de escolhas tem; o nome de uma propriedade de todo objeto é recusado (422), sem gravar
+  const antesL2 = await retratoFin();
+  for (const palavra of ["constructor", "__proto__", "toString"]) {
+    r = await POST(H, "folha", local, { folha: 70090, oQueAconteceu: palavra, observacao: "teste" });
+    ok(r.status === 422 && r.body.mensagem === "Escolha o que aconteceu: cancelada, arrancada, extraviada ou inexistente.", `"o que aconteceu" = ${JSON.stringify(palavra)}: 422 com a mensagem de escolha`, r);
+  }
+  ok((await retratoFin()) === antesL2, "as escolhas recusadas não gravaram nada");
   r = await POST(H, "folha", local, { folha: 70090, oQueAconteceu: "cancelada", observacao: "Rasgou na hora de preencher" });
   ok(r.status === 200 && /70\.090 \(40ª do bloco 1\.401\)/.test(r.body.mensagem), "a tesouraria de Vila Nova cancela a folha 70.090 (a 40ª do bloco 1.401)", r.body);
   r = await POST(H, "folha", local, { folha: 70090, oQueAconteceu: "arrancada", observacao: "de novo" });
@@ -142,6 +150,18 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   r = await POST(H, "devolver", geral, { primeiraFolha: 75001, pessoa: { nome: "Lia Fontes" } });
   ok(r.status === 422 && r.body.mensagem === "O bloco 1.500 ainda está na Tesouraria Geral: não saiu para voltar.", "bloco que não saiu da Geral não volta", r.body);
   ok((await POST(H, "devolver", geral, { primeiraFolha: 70051, pessoa: { membroId: 987654 } })).status === 422, "pessoa que não existe é recusada");
+  // revisão de fora (S1): quem devolve vem da lista que o rastreio oferece (quem levou o bloco e a liderança da congregação), conferida depois de
+  // achar o bloco; a matrícula de fora da lista e a que não existe têm a mesma recusa, e o bloco que não existe responde igual com qualquer uma
+  const DE_FORA = Number(await escalar(`SELECT TOP 1 m.MembroId FROM MembroReferencia m WHERE m.MembroId NOT IN (${TESOUREIRA_LOCAL}, ${TESOUREIRO_GERAL})
+    AND NOT EXISTS (SELECT 1 FROM Lideranca l WHERE l.MembroId = m.MembroId AND l.EscopoTipo = 'CONGREGACAO') ORDER BY m.MembroId`));
+  const devForaDaLista = await POST(H, "devolver", geral, { primeiraFolha: 70051, pessoa: { membroId: DE_FORA } });
+  const devSemCadastro = await POST(H, "devolver", geral, { primeiraFolha: 70051, pessoa: { membroId: 987654 } });
+  ok(DE_FORA > 0 && devForaDaLista.status === 422 && devForaDaLista.body.mensagem === "A pessoa escolhida não confere." && JSON.stringify(devForaDaLista.body) === JSON.stringify(devSemCadastro.body),
+    "devolver: a matrícula de fora da lista e a que não existe têm a mesma recusa", { DE_FORA, fora: devForaDaLista.body, sem: devSemCadastro.body });
+  const devSemBloco1 = await POST(H, "devolver", geral, { primeiraFolha: 999999999, pessoa: { membroId: DE_FORA } });
+  const devSemBloco2 = await POST(H, "devolver", geral, { primeiraFolha: 999999999, pessoa: { membroId: 987654 } });
+  ok(devSemBloco1.status === 422 && /Não há bloco/.test(devSemBloco1.body.mensagem) && JSON.stringify(devSemBloco1.body) === JSON.stringify(devSemBloco2.body),
+    "devolver: o bloco que não existe responde igual, seja qual for a matrícula", { a: devSemBloco1.body, b: devSemBloco2.body });
   ok((await POST(H, "devolver", geral, { primeiraFolha: 70051, pessoa: {} })).status === 422, "sem dizer quem devolveu é recusada");
   // a regra dele (24/11/2026, com o detalhe da r30): nada se recusa por folha livre; a parcial diz a primeira folha em branco, que tem de ser desta
   // entrega e vir depois da última folha com destino
@@ -227,6 +247,11 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   r = await GET(H, "livro", local, {});
   ok(r.status === 200 && r.body.total === 3 && r.body.registros.every((x) => ["saida", "entrada"].includes(x.tipo) && x.congregacao === "Vila Nova E2E"), "a congregação vê só as saídas e entradas dela (3)", r.body.registros);
   ok(JSON.stringify(r.body.agora) === JSON.stringify({ emUso: 1, esperando: 0, aDevolver: 0 }), "\"Seus blocos agora\": 1 em uso", r.body.agora);
+  // revisão de fora (E2/L4): a página além do fim (o celular virou e as páginas passaram de 3 para 5) devolve a contagem certa, só do escopo
+  r = await GET(H, "livro", local, { pagina: 5, porPagina: 5 });
+  ok(r.status === 200 && r.body.registros.length === 0 && r.body.total === 3 && r.body.pagina === 5, "a congregação além do fim do livro: nenhum registro, mas o total certo (3)", { total: r.body.total, n: r.body.registros.length });
+  r = await GET(H, "livro", geral, { pagina: 999, porPagina: 3 });
+  ok(r.status === 200 && r.body.registros.length === 0 && r.body.total === totalLivro, "a Geral além do fim do livro: o total do livro inteiro", { total: r.body.total, totalLivro });
   r = await GET(H, "livro", area, {});
   ok(r.body.total === 4 && JSON.stringify(r.body.agora) === JSON.stringify({ emUso: 2, esperando: 0, aDevolver: 0 }), "a área vê o livro de Central e Vila Nova e os blocos dela agora", r.body.agora);
 

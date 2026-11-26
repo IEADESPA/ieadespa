@@ -88,6 +88,7 @@ const lancar = (token, congregacaoId, linhas) => ({ handler: "finLancamentos", a
   let r = await POST(HB, "lote", geral, { serie: 2026, primeiraFolha: 70001, totalFolhas: 10000 });
   ok(r.status === 201, "o lote 70.001 a 80.000", r.body);
   ok((await POST(HB, "chegada", geral, { loteId: r.body.loteId, ateFolha: 75000, data: `${anterior.slice(0, 8)}01` })).status === 200, "chegaram os blocos até a 75.000");
+  await L.naLiderancaDe(TESOUREIRA_LOCAL, VILA_NOVA);   // a lista do "Entregue a" (o servidor só aceita a matrícula de quem está nela)
   ok((await POST(HB, "entregar", geral, { primeiraFolha: 70051, congregacaoId: VILA_NOVA, pessoa: { membroId: TESOUREIRA_LOCAL }, data: `${anterior.slice(0, 8)}02` })).status === 200, "o 1.401 (70.051 a 70.100) entregue a Vila Nova");
   ok((await POST(HB, "entregar", geral, { primeiraFolha: 70101, congregacaoId: CENTRAL, pessoa: { nome: "Rute Santos" }, data: `${anterior.slice(0, 8)}02` })).status === 200, "o 1.402 (70.101 a 70.150) entregue à Central");
   const [b1401, b1402] = [await idDo(1401), await idDo(1402)];
@@ -96,12 +97,7 @@ const lancar = (token, congregacaoId, linhas) => ({ handler: "finLancamentos", a
     (${ANA}, N'Ana Teste Cidade', ${CENTRAL}, 'ATIVO'), (${BRUNO}, N'Bruno Teste Vila', ${VILA_NOVA}, 'ATIVO'), (${CARLA}, N'Carla Teste Beta', ${BETA}, 'ATIVO'),
     (${INATIVO}, N'Anastácio Teste Inativo', ${VILA_NOVA}, 'INATIVO'), (${EXCLUIDO}, N'Anabela Teste Excluída', ${VILA_NOVA}, 'ATIVO'), (${DAVI}, N'Davi Teste 100% [x]_y', ${VILA_NOVA}, 'ATIVO')`);
   await q(`INSERT INTO SolicitacoesTitularLGPD (MembroId, Tipo, Status) VALUES (${EXCLUIDO}, 'EXCLUSAO', 'ATENDIDA')`);
-  // a tesoureira é da liderança de Vila Nova, como tesoureira: o papel da hora vai para o histórico da folha que ela marca (205)
-  await q(`UPDATE Lideranca SET EscopoTipo = 'CONGREGACAO', EscopoId = ${VILA_NOVA}, AtivoAte = NULL,
-             PapelId = COALESCE((SELECT TOP 1 PapelId FROM Papeis WHERE Nome = 'Tesoureiro'), PapelId) WHERE MembroId = ${TESOUREIRA_LOCAL}`);
-  if (!Number(await escalar(`SELECT COUNT(*) FROM Lideranca WHERE MembroId = ${TESOUREIRA_LOCAL}`))) {
-    await q(`INSERT INTO Lideranca (MembroId, PapelId, EscopoTipo, EscopoId) SELECT TOP 1 ${TESOUREIRA_LOCAL}, PapelId, 'CONGREGACAO', ${VILA_NOVA} FROM Papeis WHERE Nome = 'Tesoureiro'`);
-  }
+  // a tesoureira já é da liderança de Vila Nova, como tesoureira (acima): o papel da hora vai para o histórico da folha que ela marca (205)
   const PAPEL_VN = `${String(await escalar(`SELECT p.Nome FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId WHERE l.MembroId = ${TESOUREIRA_LOCAL}`)).toLowerCase()} de Vila Nova E2E`;
 
   console.log("== a planilha vazia ==");

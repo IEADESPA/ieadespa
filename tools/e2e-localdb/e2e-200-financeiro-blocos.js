@@ -127,6 +127,12 @@ async function disparar(chamadas) {
   ok(r.status === 422 && /As folhas 79\.951 a 80\.050 cruzam o lote da série 2026 \(70\.001 a 80\.000\)/.test(r.body.mensagem), "um lote que cruza as folhas de outro é recusado", r.body);
   r = await POST(H, "lote", geral, { serie: 2026, primeiraFolha: 70001, totalFolhas: 75 });
   ok(r.status === 422, "o total que não fecha blocos de 50 é recusado");
+  // revisão de fora (L3): o número do bloco sai da primeira folha, de 50 em 50; outro tamanho repetiria números de blocos já cadastrados
+  const antesL3 = await retratoFin();
+  r = await POST(H, "lote", geral, { serie: 2027, primeiraFolha: 400001, totalFolhas: 200, folhasPorBloco: 100 });
+  ok(r.status === 422 && r.body.mensagem === "Os blocos de recibo têm 50 folhas: o número de cada bloco sai da primeira folha, contando de 50 em 50.",
+    "o lote com blocos de 100 folhas é recusado pela causa certa (o tamanho do bloco)", r.body);
+  ok((await retratoFin()) === antesL3, "o lote recusado não gravou nada");
 
   r = await POST(H, "entregar", geral, { primeiraFolha: 70051, congregacaoId: VILA_NOVA, pessoa: { nome: "Tesoureira de Vila Nova" } });
   ok(r.status === 422 && /O bloco 1\.401 ainda não chegou/.test(r.body.mensagem), "o bloco que não chegou da gráfica não se entrega", r.body);
@@ -156,6 +162,8 @@ async function disparar(chamadas) {
   }
   ok((await retratoFin()) === antesM, "as entregas recusadas não mexeram no banco");
 
+  // a tesoureira é da liderança de Vila Nova (a lista do "Entregue a" que a tela oferece; o servidor só aceita a matrícula de quem está nela)
+  await L.naLiderancaDe(TESOUREIRA_LOCAL, VILA_NOVA);
   r = await POST(H, "entregar", geral, { primeiraFolha: 70051, congregacaoId: VILA_NOVA, pessoa: { membroId: TESOUREIRA_LOCAL } });
   ok(r.status === 200 && r.body.mensagem === "Bloco 1.401 entregue a Vila Nova E2E. Está no livro.", "o bloco 1.401 entregue a Vila Nova (a confirmação da r30)", r.body);
   r = await POST(H, "entregar", geral, { primeiraFolha: 70051, congregacaoId: BETA, pessoa: { nome: "Outra pessoa" } });
@@ -173,6 +181,20 @@ async function disparar(chamadas) {
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: CENTRAL, pessoa: { membroId: 987654 } })).status === 422, "pessoa que não existe é recusada");
   r = await POST(H, "entregar", geral, { primeiraFolha: 70202, congregacaoId: CENTRAL, pessoa: { nome: "x" } });
   ok(r.status === 422 && /Não há bloco que comece na folha 70\.202/.test(r.body.mensagem), "folha que não é a primeira de um bloco é recusada", r.body);
+  // revisão de fora (S1): a matrícula tem de ser da lista que a tela oferece (a liderança da congregação), conferida depois de achar o bloco. A
+  // de fora da lista e a que não existe têm a mesma recusa; o bloco que não existe responde igual, seja qual for a matrícula
+  const DE_FORA = Number(await escalar(`SELECT TOP 1 m.MembroId FROM MembroReferencia m WHERE m.MembroId NOT IN (${TESOUREIRA_LOCAL}, ${TESOUREIRO_GERAL})
+    AND NOT EXISTS (SELECT 1 FROM Lideranca l WHERE l.MembroId = m.MembroId AND l.EscopoTipo = 'CONGREGACAO') ORDER BY m.MembroId`));
+  const antesS1 = await retratoFin();
+  const foraDaLista = await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: CENTRAL, pessoa: { membroId: DE_FORA } });
+  const semCadastro = await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: CENTRAL, pessoa: { membroId: 987654 } });
+  ok(DE_FORA > 0 && foraDaLista.status === 422 && foraDaLista.body.mensagem === "A pessoa escolhida não confere." && JSON.stringify(foraDaLista.body) === JSON.stringify(semCadastro.body),
+    "entregar: a matrícula de fora da liderança e a que não existe têm a mesma recusa", { DE_FORA, foraDaLista: foraDaLista.body, semCadastro: semCadastro.body });
+  const semBloco1 = await POST(H, "entregar", geral, { primeiraFolha: 999999999, congregacaoId: CENTRAL, pessoa: { membroId: DE_FORA } });
+  const semBloco2 = await POST(H, "entregar", geral, { primeiraFolha: 999999999, congregacaoId: CENTRAL, pessoa: { membroId: 987654 } });
+  ok(semBloco1.status === 422 && /Não há bloco/.test(semBloco1.body.mensagem) && JSON.stringify(semBloco1.body) === JSON.stringify(semBloco2.body),
+    "entregar: o bloco que não existe responde igual, seja qual for a matrícula", { semBloco1: semBloco1.body, semBloco2: semBloco2.body });
+  ok((await retratoFin()) === antesS1, "entregar: as recusas da matrícula não gravaram nada");
   const livro = await q(`SELECT l.Tipo, l.CongregacaoId, l.PessoaMembroId, l.PessoaNome, l.LevadoPelaArea, l.PrimeiraFolha, l.UltimaFolha, l.BlocoPrimeiraFolha,
            b.PrimeiraFolha AS BlocoPrimeira, b.UltimaFolha AS BlocoUltima
     FROM FinLivroBlocos l JOIN FinBlocos b ON b.BlocoId = l.BlocoId WHERE l.Tipo = 'SAIDA' ORDER BY l.RegistroId`);
@@ -253,6 +275,15 @@ async function disparar(chamadas) {
   ok(JSON.stringify(r.body.resumo) === JSON.stringify({ tipo: "lote", lote: { id: loteId, serie: 2026, primeiraFolha: 70001, ultimaFolha: 80000, folhasPorBloco: 50, blocos: 200, folhas: 10000, folhasChegaram: 5000, blocosChegaram: 100, folhasFaltam: 5000 } }),
     "o quadro do lote: 200 blocos, 10.000 folhas, chegaram 5.000 e faltam 5.000 (como no desenho)", r.body.resumo);
   ok((await GET(H, "", geral, { pagina: 5 })).body.blocos.length === 40 && (await GET(H, "", geral, { pagina: 6 })).body.blocos.length === 0, "a página 5 é a última");
+  // revisão de fora (E2/L4): a página além do fim devolve a contagem certa (a tela volta para a última), na Geral e na congregação (o escopo
+  // vale também na contagem)
+  r = await GET(H, "", geral, { pagina: 6 });
+  ok(r.status === 200 && r.body.blocos.length === 0 && r.body.total === 200 && r.body.pagina === 6, "a página além do fim: nenhum bloco, mas o total certo (200)", { total: r.body.total, pagina: r.body.pagina });
+  const p1Local = await GET(H, "", local, {});
+  r = await GET(H, "", local, { pagina: 999 });
+  ok(p1Local.body.total > 0 && r.status === 200 && r.body.blocos.length === 0 && r.body.total === p1Local.body.total, "a congregação além do fim: o mesmo total da 1ª página (só o escopo dela)", { p1: p1Local.body.total, alem: r.body.total });
+  r = await GET(H, "", local, { situacao: "em-uso", pagina: 50 });
+  ok(r.status === 200 && r.body.total === (await GET(H, "", local, { situacao: "em-uso" })).body.total, "com o filtro, além do fim: o total do filtro", r.body.total);
   ok((await GET(H, "", geral, { situacao: "em-uso" })).body.blocos.map((x) => x.numero).join() === "1401", "filtro em uso: só o 1.401");
   ok((await GET(H, "", geral, { situacao: "esperando" })).body.blocos.map((x) => x.numero).sort().join() === "1402,1403", "filtro esperando: o 1.402 e o 1.403");
   ok((await GET(H, "", geral, { situacao: "fechado" })).body.total === 0, "filtro fechado: nenhum ainda");
@@ -293,6 +324,11 @@ async function disparar(chamadas) {
   ok(r.status === 200 && r.body.blocos === 1, "até a última folha do 1º bloco: chegou 1 bloco", r.body);
   r = await POST(H, "chegada", geral, { loteId: loteM6, ateFolha: 300050 });
   ok(r.status === 200 && r.body.blocos === 0 && /já estavam registrados/.test(r.body.mensagem), "a mesma chegada de novo: já estavam registrados", r.body);
+  // revisão de fora (E1/L1): no meio do 2º bloco, com o 1º já chegado, a mesma recusa (a conferência olha o primeiro bloco que ainda falta)
+  const antesE1 = await retratoFin();
+  r = await POST(H, "chegada", geral, { loteId: loteM6, ateFolha: 300075 });
+  ok(r.status === 422 && r.body.mensagem === "Até a folha 300.075 nenhum bloco chegou inteiro: o bloco 6.001 vai até a folha 300.100.", "a chegada no meio do 2º bloco é recusada, com o bloco e a última folha dele", r.body);
+  ok((await retratoFin()) === antesE1 && Number(await escalar(`SELECT COUNT(*) FROM FinBlocos WHERE LoteId = ${loteM6} AND ChegouEm IS NOT NULL`)) === 1, "a recusa não gravou nada: o 6.001 continua na gráfica");
   ok(Number(await escalar(`SELECT Quantidade FROM FinLivroBlocos WHERE Tipo = 'CHEGADA' AND LoteId = ${loteM6}`)) === 1, "a chegada também conta blocos no livro");
 
   console.log("== lixo em cada campo ==");

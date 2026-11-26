@@ -54,6 +54,13 @@ describe("o número do bloco e o lote da gráfica", () => {
     }
     expect(regra.blocosDoLote(null).erro).toBeTruthy();
   });
+  test("o bloco tem 50 folhas: o número sai da primeira folha, de 50 em 50, e outro tamanho repetiria números (revisão de fora, L3)", () => {
+    const outro = "Os blocos de recibo têm 50 folhas: o número de cada bloco sai da primeira folha, contando de 50 em 50.";
+    expect(regra.blocosDoLote({ serie: 2027, primeiraFolha: 10001, totalFolhas: 10000, folhasPorBloco: 100 }).erro).toBe(outro);
+    expect(regra.blocosDoLote({ serie: 2027, primeiraFolha: 10001, totalFolhas: 100, folhasPorBloco: "25" }).erro).toBe(outro);
+    expect(regra.blocosDoLote({ serie: 2027, primeiraFolha: 10001, totalFolhas: 100, folhasPorBloco: 50 }).blocos).toHaveLength(2);
+    expect(regra.blocosDoLote({ serie: 2027, primeiraFolha: 10001, totalFolhas: 100, folhasPorBloco: 1.5 }).erro).toBe("O número de folhas por bloco não confere.");
+  });
 });
 
 describe("a folha e a situação", () => {
@@ -94,6 +101,10 @@ describe("a folha e a situação", () => {
     expect(regra.excecaoDaFolha({ folha: 2 ** 40, oQueAconteceu: "cancelada", observacao: "x" }).erro).toMatch(/folha/);
     expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "cancelada", observacao: "x".repeat(301) }).erro).toMatch(/300/);
     expect(regra.excecaoDaFolha({ folha: "abc", oQueAconteceu: "cancelada", observacao: "x" }).erro).toMatch(/folha/);
+    // o que vem da tabela de escolhas é só o que ela tem (o nome de uma propriedade de todo objeto não é escolha: revisão de fora, L2)
+    for (const palavra of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"]) {
+      expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: palavra, observacao: "x" }).erro).toBe("Escolha o que aconteceu: cancelada, arrancada, extraviada ou inexistente.");
+    }
   });
 });
 

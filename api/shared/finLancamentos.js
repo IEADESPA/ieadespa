@@ -10,8 +10,9 @@
 // - O dinheiro anda em centavos inteiros (nada de número quebrado); o banco guarda DECIMAL(14,2).
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-const TIPOS = { DIZIMO: "Dízimo", OFERTA_CULTO: "Oferta de culto", OFERTA_VOLUNTARIA: "Oferta voluntária" };
-const FORMAS = { PIX: "Pix", ESPECIE: "Espécie" };
+// tabelas de escolhas sem protótipo: só vale o que está nelas (o texto que vem da tela nunca acha uma propriedade que todo objeto tem)
+const TIPOS = Object.freeze({ __proto__: null, DIZIMO: "Dízimo", OFERTA_CULTO: "Oferta de culto", OFERTA_VOLUNTARIA: "Oferta voluntária" });
+const FORMAS = Object.freeze({ __proto__: null, PIX: "Pix", ESPECIE: "Espécie" });
 const REFERENTES = ["ESTE_MES", "MES_POSTERIOR"];
 const MAX_CENTAVOS = 9999999999;   // R$ 99.999.999,99: muito acima de qualquer folha, e cabe com folga no DECIMAL(14,2)
 const MAX_NOME = 120;
@@ -150,7 +151,7 @@ function validarLinha(l, { preencher = false } = {}) {
 // A decisão 4 corrigida (26/11/2026): a cancelada, a arrancada e a inexistente se marcam na própria planilha, com o motivo; a aba Folhas continua
 // marcando também, e as duas gravam pela mesma regra do servidor (finBlocosDb.marcarExcecaoNaTransacao: o mesmo histórico e o mesmo desfazer da
 // r30). A extraviada fica só na aba Folhas. O motivo é a observação da folha (a mesma coluna, até 300 letras).
-const EXCECOES_NA_PLANILHA = { cancelada: "CANCELADA", arrancada: "ARRANCADA", inexistente: "INEXISTENTE" };
+const EXCECOES_NA_PLANILHA = Object.freeze({ __proto__: null, cancelada: "CANCELADA", arrancada: "ARRANCADA", inexistente: "INEXISTENTE" });
 const MAX_OBSERVACAO = 300;
 
 /** a linha da planilha que marca a folha: { folha, excecao: { oQueAconteceu, observacao } } → { folha, destino, observacao } */

@@ -98,6 +98,10 @@ describe("a linha da planilha", () => {
     expect(r.validarLinha({ ...dizimo, valor: "0" })).toEqual({ ok: false, mensagem: "Folha 70.165: informe o valor." });
     expect(r.validarLinha({ ...dizimo, tipo: "DOACAO" }).mensagem).toBe("Folha 70.165: escolha o tipo (dízimo, oferta de culto ou oferta voluntária).");
     expect(r.validarLinha({ ...dizimo, forma: "CHEQUE" }).mensagem).toBe("Folha 70.165: escolha a forma (Pix ou espécie).");
+    for (const palavra of ["constructor", "__proto__", "toString", "valueOf"]) {   // só o que a tabela de escolhas tem (revisão de fora, L2)
+      expect(r.validarLinha({ ...dizimo, tipo: palavra }).mensagem).toBe("Folha 70.165: escolha o tipo (dízimo, oferta de culto ou oferta voluntária).");
+      expect(r.validarLinha({ ...dizimo, forma: palavra }).mensagem).toBe("Folha 70.165: escolha a forma (Pix ou espécie).");
+    }
     expect(r.validarLinha({ ...dizimo, tipo: "OFERTA_CULTO" }).mensagem).toBe("Folha 70.165: a oferta voluntária junto só vai com o dízimo.");
     expect(r.validarLinha({ ...dizimo, referente: "MES_ANTERIOR" }).mensagem).toBe("Folha 70.165: escolha “Este mês” ou “Mês posterior”.");
     expect(r.validarLinha({ ...dizimo, pessoa: { membroId: 1, nome: "Fulano" } }).mensagem).toBe("Folha 70.165: escolha o membro do cadastro ou digite o nome, não os dois.");
@@ -141,6 +145,7 @@ describe("a folha marcada na planilha", () => {
     expect(r.excecaoNaPlanilha({ folha: 70168, excecao: { oQueAconteceu: "LANCADA", observacao: "x" } }).mensagem).toBe(sem);
     expect(r.excecaoNaPlanilha({ folha: 70168, excecao: "arrancada" }).mensagem).toBe(sem);
     expect(r.excecaoNaPlanilha({ folha: 70168, excecao: [] }).mensagem).toBe(sem);
+    for (const palavra of ["constructor", "__proto__", "toString"]) expect(r.excecaoNaPlanilha({ folha: 70168, excecao: { oQueAconteceu: palavra, observacao: "x" } }).mensagem).toBe(sem);
     expect(r.excecaoNaPlanilha({ folha: 70168, excecao: { oQueAconteceu: "arrancada", observacao: "   " } }).mensagem).toBe("Folha 70.168: escreva o motivo (o que aconteceu com a folha).");
     expect(r.excecaoNaPlanilha({ folha: 70168, excecao: { oQueAconteceu: "arrancada", observacao: 5 } }).mensagem).toBe("Folha 70.168: escreva o motivo (o que aconteceu com a folha).");
     expect(r.excecaoNaPlanilha({ folha: 70168, excecao: { oQueAconteceu: "arrancada", observacao: "x".repeat(301) } }).mensagem).toBe("Folha 70.168: o motivo tem no máximo 300 letras.");

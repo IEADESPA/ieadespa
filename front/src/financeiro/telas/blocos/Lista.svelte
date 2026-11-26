@@ -57,6 +57,8 @@
     carregando = false;
     if (!r.ok) { if (!r.cancelado) erro = r.mensagem; return; }
     erro = "";
+    // a página passou do fim (a lista encolheu entre duas leituras): volta para a última que existe, que o efeito pede de novo
+    if (pg > 1 && !r.dados.blocos.length && r.dados.total) { pagina = Math.ceil(r.dados.total / r.dados.porPagina); return; }
     dados = r.dados;
     lidoCom = { filtro: f, procura: p.trim() };
     escopo.tela = r.dados.escopo;

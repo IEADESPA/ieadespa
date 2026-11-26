@@ -13,7 +13,8 @@ const MAX_BLOCOS_POR_LOTE = 1000;        // 50.000 folhas num lote: a gráfica m
 const MAX_FOLHA = 999999999;             // cabe no INT da tabela, com folga
 const POR_PAGINA = 40;                   // a lista dos blocos, como no desenho
 const SITUACOES_FILTRO = ["todos", "em-uso", "esperando", "fechado", "na-geral"];
-const DESTINOS_EXCECAO = { cancelada: "CANCELADA", arrancada: "ARRANCADA", extraviada: "EXTRAVIADA", inexistente: "INEXISTENTE" };
+// tabela de escolhas sem protótipo: só vale o que está nela (o texto que vem da tela nunca acha uma propriedade que todo objeto tem)
+const DESTINOS_EXCECAO = Object.freeze({ __proto__: null, cancelada: "CANCELADA", arrancada: "ARRANCADA", extraviada: "EXTRAVIADA", inexistente: "INEXISTENTE" });
 
 const inteiro = (v) => {
   if (typeof v === "number") return Number.isInteger(v) ? v : null;
@@ -36,6 +37,9 @@ function blocosDoLote(dados) {
   if (serie === null || serie < 2000 || serie > 2100) return { erro: "Informe a série do lote (o ano, por exemplo 2027)." };
   if (primeira === null || primeira < 1 || primeira > MAX_FOLHA) return { erro: "Informe o número da primeira folha do lote." };
   if (porBloco === null || porBloco < 1 || porBloco > 500) return { erro: "O número de folhas por bloco não confere." };
+  // o número do bloco sai da primeira folha, de 50 em 50 (70.051 → 1.401): um lote com blocos de outro tamanho repetiria números de blocos já
+  // cadastrados, então o bloco tem sempre 50 folhas
+  if (porBloco !== FOLHAS_POR_BLOCO) return { erro: `Os blocos de recibo têm ${FOLHAS_POR_BLOCO} folhas: o número de cada bloco sai da primeira folha, contando de ${FOLHAS_POR_BLOCO} em ${FOLHAS_POR_BLOCO}.` };
   if (total === null || total < porBloco) return { erro: `Informe quantas folhas vieram no lote (pelo menos um bloco de ${porBloco}).` };
   if (total % porBloco !== 0) return { erro: `O total de folhas tem de ser blocos inteiros de ${porBloco} (por exemplo, ${(porBloco * 200).toLocaleString("pt-BR")} = 200 blocos).` };
   const nBlocos = total / porBloco;

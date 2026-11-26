@@ -63,8 +63,8 @@ async function fecharTransacao(t, ok) {
 // com a linha do bloco já travada, na mesma transação. null = o bloco nunca saiu.
 async function ultimaSaida(t, blocoId) {
   const s = (await pedidoNaTransacao(t).input("b", sql.Int, blocoId).query(`
-    SELECT TOP 1 RegistroId, PrimeiraFolha FROM FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = @b ORDER BY RegistroId DESC`)).recordset[0];
-  return s ? { id: Number(s.RegistroId), primeiraFolha: Number(s.PrimeiraFolha) } : null;
+    SELECT TOP 1 RegistroId, PrimeiraFolha, PessoaMembroId FROM FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = @b ORDER BY RegistroId DESC`)).recordset[0];
+  return s ? { id: Number(s.RegistroId), primeiraFolha: Number(s.PrimeiraFolha), pessoaMembroId: s.PessoaMembroId == null ? null : Number(s.PessoaMembroId) } : null;
 }
 
 // A faixa do bloco agora, para as leituras (o bloco é "b"): entregue ou devolvido, a da última saída; na Geral depois de uma devolução parcial, a
@@ -83,6 +83,13 @@ const FAIXA_ATUAL = `
                  AND (vp.VoltouParcial = 1 OR f.SaidaId < sa.RegistroId)) h
   CROSS APPLY (SELECT u.Usadas - h.Herdadas AS UsadasDaEntrega) ue`;
 const faixaDaLinha = (l) => ({ primeiraFolha: Number(l.Inicio), ultimaFolha: Number(l.UltimaFolha) });
+
+// A contagem de uma lista em páginas quando a página pedida passou do fim (nenhuma linha veio para trazer o total): o mesmo pedido (as mesmas
+// entradas, o escopo inclusive) e o mesmo FROM ... WHERE da lista.
+async function contarAParte(pedido, deOnde) {
+  const r = await pedido.query(`SELECT COUNT(*) AS Total ${deOnde}`);
+  return Number((r.recordset[0] || {}).Total || 0);
+}
 const livresDaLinha = (l) => Number(l.UltimaFolha) - Number(l.Inicio) + 1 - Number(l.Usadas);
 
 // Quem está vendo (o título da página e o cabeçalho do módulo): a Geral, ou quantas congregações ativas a pessoa alcança, a área delas (quando é
@@ -122,16 +129,21 @@ async function listar(pool, usuario, { geral, congregacaoId, filtro, procura, pa
   else if (filtro === "esperando") onde.push("b.Situacao = 'ENTREGUE' AND ue.UsadasDaEntrega = 0");
   else if (filtro === "em-uso") onde.push("b.Situacao = 'ENTREGUE' AND ue.UsadasDaEntrega > 0");
   pedido.input("pular", sql.Int, (pagina - 1) * regra.POR_PAGINA).input("porPagina", sql.Int, regra.POR_PAGINA);
-  const r = await pedido.query(`
-    SELECT b.BlocoId, b.Numero, b.PrimeiraFolha, b.UltimaFolha, b.Situacao, b.ChegouEm, b.EntregueEm, b.DevolvidoEm, b.CongregacaoId, c.Nome AS Congregacao,
-           fx.Inicio, vp.VoltouParcial, u.Usadas, ue.UsadasDaEntrega, COUNT(*) OVER () AS Total
+  const deOnde = `
     FROM FinBlocos b
     LEFT JOIN Congregacoes c ON c.CongregacaoId = b.CongregacaoId
     ${FAIXA_ATUAL}
-    ${onde.length ? "WHERE " + onde.join(" AND ") : ""}
+    ${onde.length ? "WHERE " + onde.join(" AND ") : ""}`;
+  const r = await pedido.query(`
+    SELECT b.BlocoId, b.Numero, b.PrimeiraFolha, b.UltimaFolha, b.Situacao, b.ChegouEm, b.EntregueEm, b.DevolvidoEm, b.CongregacaoId, c.Nome AS Congregacao,
+           fx.Inicio, vp.VoltouParcial, u.Usadas, ue.UsadasDaEntrega, COUNT(*) OVER () AS Total
+    ${deOnde}
     ORDER BY CASE b.Situacao WHEN 'ENTREGUE' THEN 0 WHEN 'DEVOLVIDO' THEN 1 ELSE 2 END, b.EntregueEm DESC, b.Numero
     OFFSET @pular ROWS FETCH NEXT @porPagina ROWS ONLY`);
   const linhas = r.recordset;
+  // a página além do fim (a lista encolheu entre duas leituras) não traz linha para contar: a contagem vem à parte, com as mesmas condições (a
+  // tela volta para a última página, em vez de dizer que não há bloco)
+  const total = linhas.length ? Number(linhas[0].Total) : pagina > 1 ? await contarAParte(pedido, deOnde) : 0;
   return {
     blocos: linhas.map((l) => {
       const usadas = Number(l.Usadas);
@@ -143,7 +155,7 @@ async function listar(pool, usuario, { geral, congregacaoId, filtro, procura, pa
         chegouEm: iso(l.ChegouEm), entregueEm: iso(l.EntregueEm), devolvidoEm: iso(l.DevolvidoEm)
       };
     }),
-    total: linhas.length ? Number(linhas[0].Total) : 0, pagina, porPagina: regra.POR_PAGINA,
+    total, pagina, porPagina: regra.POR_PAGINA,
     resumo: await quadro(), escopo
   };
 }
@@ -237,12 +249,12 @@ async function registrarChegada(pool, { loteId, ateFolha, data, por }) {
       .query(`UPDATE FinBlocos SET ChegouEm = @d OUTPUT INSERTED.BlocoId WHERE LoteId = @id AND UltimaFolha <= @ate AND ChegouEm IS NULL`);
     const n = r.recordset.length;
     if (!n) {
-      // nenhum bloco mudou: ou já tinham chegado, ou a folha fica no meio do primeiro bloco que falta (nenhum chegou inteiro)
-      const v = (await pedidoNaTransacao(t).input("id", sql.Int, id).input("ate", sql.Int, ate).query(`
-        SELECT (SELECT COUNT(*) FROM FinBlocos WHERE LoteId = @id AND UltimaFolha <= @ate) AS Inteiros, m.Numero, m.UltimaFolha
-        FROM (SELECT 1 AS um) u OUTER APPLY (SELECT TOP 1 Numero, UltimaFolha FROM FinBlocos WHERE LoteId = @id AND UltimaFolha >= @ate ORDER BY UltimaFolha) m`)).recordset[0];
-      if (!Number(v.Inteiros) && v.Numero != null) {
-        return { sucesso: false, mensagem: `Até a folha ${milhar(ate)} nenhum bloco chegou inteiro: o bloco ${milhar(v.Numero)} vai até a folha ${milhar(v.UltimaFolha)}.` };
+      // nenhum bloco mudou: ou já tinham chegado, ou a folha fica no meio do primeiro bloco que ainda falta (seja ele o primeiro do lote ou não:
+      // os de antes dele já tinham chegado e nenhum novo chegou inteiro)
+      const falta = (await pedidoNaTransacao(t).input("id", sql.Int, id).query(`
+        SELECT TOP 1 Numero, PrimeiraFolha, UltimaFolha FROM FinBlocos WHERE LoteId = @id AND ChegouEm IS NULL ORDER BY PrimeiraFolha`)).recordset[0];
+      if (falta && Number(falta.PrimeiraFolha) <= ate) {
+        return { sucesso: false, mensagem: `Até a folha ${milhar(ate)} nenhum bloco chegou inteiro: o bloco ${milhar(falta.Numero)} vai até a folha ${milhar(falta.UltimaFolha)}.` };
       }
       ok = true;
       return { sucesso: true, blocos: 0, mensagem: "Esses blocos já estavam registrados como chegados." };
@@ -257,14 +269,27 @@ async function registrarChegada(pool, { loteId, ateFolha, data, por }) {
   }
 }
 
-// A liderança ativa da congregação (quem pode receber ou devolver o bloco): a mesma lista no rastreio da entrada e no "Entregue a" da saída.
+// A liderança ativa da congregação @c (quem pode receber ou devolver o bloco): a mesma lista no rastreio da entrada e no "Entregue a" da saída,
+// e a mesma conferência quando a saída ou a entrada se grava (pessoaNaLista): o mesmo filtro, sobre "l" (Lideranca) junto de "m" (MembroReferencia).
+const LIDERANCA_ATIVA = "l.EscopoTipo = 'CONGREGACAO' AND l.EscopoId = @c AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))";
 async function liderancaDaCongregacao(pool, congregacaoId) {
   return (await pool.request().input("c", sql.Int, congregacaoId).query(`
     SELECT m.MembroId, m.Nome, MIN(p.Nome) AS Papel
     FROM Lideranca l JOIN MembroReferencia m ON m.MembroId = l.MembroId LEFT JOIN Papeis p ON p.PapelId = l.PapelId
-    WHERE l.EscopoTipo = 'CONGREGACAO' AND l.EscopoId = @c AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))
+    WHERE ${LIDERANCA_ATIVA}
     GROUP BY m.MembroId, m.Nome ORDER BY m.Nome`)).recordset.map((l) => ({ membroId: Number(l.MembroId), nome: l.Nome, papel: l.Papel || "" }));
 }
+
+// A pessoa escolhida na saída ou na entrada é uma das que a tela oferece: o nome escrito, sempre; a matrícula, só se é da liderança ativa da
+// congregação (na entrada também quem levou o bloco). Conferida dentro da transação (a linha do bloco está travada: nada de outra conexão) e só
+// depois de achar o bloco, com a mesma recusa para a matrícula de fora da lista e para a que não existe (nada diz se a pessoa existe).
+async function pessoaNaLista(t, { membroId, congregacaoId, quemLevou = null }) {
+  if (membroId === null || (quemLevou !== null && membroId === quemLevou)) return true;
+  const r = await pedidoNaTransacao(t).input("c", sql.Int, congregacaoId).input("m", sql.Int, membroId)
+    .query(`SELECT TOP 1 1 AS ok FROM Lideranca l JOIN MembroReferencia m ON m.MembroId = l.MembroId WHERE ${LIDERANCA_ATIVA} AND l.MembroId = @m`);
+  return !!r.recordset[0];
+}
+const PESSOA_NAO_CONFERE = "A pessoa escolhida não confere.";
 
 // Para o "Registrar saída" da r30 (só a Tesouraria Geral): sem congregação, as congregações ATIVAS em ordem de nome, com a área de cada uma (a
 // frase do "Levado pela área"); com ela, a congregação e a liderança dela (a lista do "Entregue a"). A inativa e a que não existe: a mesma resposta.
@@ -304,10 +329,6 @@ async function entregar(pool, { primeiraFolha, folha, congregacaoId, pessoa, lev
     const c = (await pedidoNaTransacao(t).input("c", sql.Int, cong).query(`SELECT Nome, Ativa FROM Congregacoes WHERE CongregacaoId = @c`)).recordset[0];
     if (!c) return { sucesso: false, mensagem: "Escolha a congregação." };
     if (!c.Ativa) return { sucesso: false, mensagem: `A congregação ${c.Nome} não está ativa: o bloco só sai para congregação ativa.` };   // revisão M3
-    if (membroId !== null) {
-      const m = (await pedidoNaTransacao(t).input("m", sql.Int, membroId).query(`SELECT 1 AS ok FROM MembroReferencia WHERE MembroId = @m`)).recordset[0];
-      if (!m) return { sucesso: false, mensagem: "A pessoa escolhida não confere." };
-    }
     // como na exceção da folha: acha o bloco sem trava e trava só a linha dele, pela chave (travar a faixa do índice dava impasse; a exceção, o
     // desfazer e a devolução travam a mesma linha antes de mexer nas folhas; a última volta do bloco só se lê depois da trava)
     const achado = (await pedidoNaTransacao(t).input("pf", sql.Int, pf)
@@ -346,6 +367,8 @@ async function entregar(pool, { primeiraFolha, folha, congregacaoId, pessoa, lev
     // a entrega não vem antes da chegada da gráfica (revisão M2; a devolução já confere a data contra a entrega) nem antes da volta do bloco (r30)
     if (dia < iso(b.ChegouEm)) return { sucesso: false, mensagem: `Antes da chegada do bloco (${dataBr(b.ChegouEm)}).` };
     if (voltouParcial && dia < iso(volta.DataRegistro)) return { sucesso: false, mensagem: `Antes da volta do bloco (${dataBr(volta.DataRegistro)}).` };
+    // quem recebeu: o nome escrito ou alguém da liderança da congregação (a lista do "Entregue a"), por último (revisão de fora, S1)
+    if (!(await pessoaNaLista(t, { membroId, congregacaoId: cong }))) return { sucesso: false, mensagem: PESSOA_NAO_CONFERE };
     await pedidoNaTransacao(t).input("id", sql.Int, b.BlocoId).input("c", sql.Int, cong).input("d", sql.Date, dia)
       .query(`UPDATE FinBlocos SET Situacao = 'ENTREGUE', CongregacaoId = @c, EntregueEm = @d WHERE BlocoId = @id AND Situacao = 'NA_GERAL'`);
     const inicio = voltouParcial ? Number(volta.PrimeiraFolha) : Number(b.PrimeiraFolha);
@@ -585,6 +608,7 @@ async function livroDosBlocos(pool, usuario, { geral, pagina, porPagina }) {
     if (condAgora) agoraOnde += " AND " + condAgora;
   }
   pedido.input("pular", sql.Int, (pagina - 1) * porPagina).input("porPagina", sql.Int, porPagina);
+  const ondeSql = onde.length ? "WHERE " + onde.join(" AND ") : "";
   const r = await pedido.query(`
     SELECT l.RegistroId, l.Tipo, l.DataRegistro, l.LevadoPelaArea, l.Quantidade, l.PessoaNome, pm.Nome AS PessoaMembro, rp.Nome AS RegistradoPor,
            l.PrimeiraFolha AS FaixaPrimeira, l.UltimaFolha AS FaixaUltima, l.Parcial, sx.PrimeiraFolha AS EntregaDe, b.UltimaFolha AS BlocoUltima,
@@ -608,10 +632,13 @@ async function livroDosBlocos(pool, usuario, { geral, pagina, porPagina }) {
                            AND f.Folha BETWEEN sx.PrimeiraFolha AND CASE WHEN l.Parcial = 1 THEN l.PrimeiraFolha - 1 ELSE b.UltimaFolha END) AS ComDestinoNaEntrega,
                         (SELECT COUNT(*) FROM FinFolhas f WHERE l.Tipo = 'ENTRADA' AND l.Parcial = 1 AND f.BlocoId = l.BlocoId AND (f.SaidaId IS NULL OR f.SaidaId <= l.SaidaId)
                            AND f.Folha BETWEEN l.PrimeiraFolha AND l.UltimaFolha) AS ComDestinoNaFaixaLivre) fa
-    ${onde.length ? "WHERE " + onde.join(" AND ") : ""}
+    ${ondeSql}
     ORDER BY l.DataRegistro DESC, l.RegistroId DESC
     OFFSET @pular ROWS FETCH NEXT @porPagina ROWS ONLY`);
   const linhas = r.recordset;
+  // a página além do fim (no celular que virou, as páginas passam de 3 para 5): a contagem à parte, com as mesmas condições (o WHERE só olha a
+  // linha do livro, "l")
+  const total = linhas.length ? Number(linhas[0].Total) : pagina > 1 ? await contarAParte(pedido, `FROM FinLivroBlocos l ${ondeSql}`) : 0;
   const agora = geral ? null : regra.blocosAgora((await pedidoAgora.query(`
     SELECT b.UltimaFolha - fx.Inicio + 1 AS Total, CASE WHEN ue.UsadasDaEntrega = 0 THEN 0 ELSE u.Usadas END AS Usadas FROM FinBlocos b ${FAIXA_ATUAL} WHERE ${agoraOnde}`)).recordset);
   return {
@@ -642,7 +669,7 @@ async function livroDosBlocos(pool, usuario, { geral, pagina, porPagina }) {
       return { ...base, contagem, parcial, usadas: ate - Number(l.EntregaDe) + 1, pendentes: Math.max(0, ate - Number(l.EntregaDe) + 1 - Number(l.ComDestinoNaEntrega || 0)),
         faixaLivre: parcial ? { primeiraFolha: Number(l.FaixaPrimeira), ultimaFolha: Number(l.FaixaUltima) } : null };
     }),
-    total: linhas.length ? Number(linhas[0].Total) : 0, pagina, porPagina, agora, escopo
+    total, pagina, porPagina, agora, escopo
   };
 }
 
@@ -727,10 +754,6 @@ async function devolver(pool, { primeiraFolha, folha, pessoa, parcial, primeiraE
   const t = await abrirTransacao(pool);
   let ok = false;
   try {
-    if (p.membroId !== null) {
-      const m = (await pedidoNaTransacao(t).input("m", sql.Int, p.membroId).query(`SELECT 1 AS ok FROM MembroReferencia WHERE MembroId = @m`)).recordset[0];
-      if (!m) return { sucesso: false, mensagem: "A pessoa escolhida não confere." };
-    }
     // como na exceção da folha: acha sem trava e trava a linha pela chave (as gravações do bloco travam o mesmo recurso, na mesma ordem)
     const achado = (await pedidoNaTransacao(t).input("pf", sql.Int, pf)
       .query(`SELECT TOP 1 BlocoId FROM FinBlocos WHERE PrimeiraFolha <= @pf AND UltimaFolha >= @pf ORDER BY PrimeiraFolha DESC`)).recordset[0];
@@ -771,6 +794,10 @@ async function devolver(pool, { primeiraFolha, folha, pessoa, parcial, primeiraE
       if (outra) return { sucesso: false, mensagem: `A folha ${milhar(branco)} não pode ser a primeira em branco: a ${milhar(outra)} já tem destino.` };
       if (depois.some((x) => Number(x.Folha) === branco)) return { sucesso: false, mensagem: `A folha ${milhar(branco)} não pode ser a primeira em branco: ela é inexistente.` };
       livresDaParcial = regra.faixaLivre(branco, ultima, depois.map((x) => Number(x.Folha)));
+    }
+    // quem devolveu: o nome escrito, quem levou o bloco ou alguém da liderança da congregação (a lista do rastreio), por último (revisão de fora, S1)
+    if (!(await pessoaNaLista(t, { membroId: p.membroId, congregacaoId: b.CongregacaoId, quemLevou: saida.pessoaMembroId }))) {
+      return { sucesso: false, mensagem: PESSOA_NAO_CONFERE };
     }
     // completa: o bloco fecha; parcial: volta para a Geral (sem congregação), com as folhas da primeira em branco ao fim livres para outra saída
     const u = await pedidoNaTransacao(t).input("id", sql.Int, b.BlocoId).input("d", sql.Date, dia).query(emParte

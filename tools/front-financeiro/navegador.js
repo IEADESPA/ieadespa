@@ -209,6 +209,12 @@ function apiFinanceiro(nivel, opcoes) {
         return { corpo: { sucesso: true, registros: [], total: 0, pagina: 1, porPagina, agora: nivel === "geral" ? null : { emUso: 0, esperando: 0, aDevolver: 0 }, escopo: opcoes.escopo || ESCOPO[nivel] } };
       }
       const lista = nivel === "geral" ? [...estado.saidas, ...LIVRO] : LIVRO.filter((r) => r.tipo === "saida" || r.tipo === "entrada");
+      if (opcoes.livroCurto) {
+        // 14 registros em páginas de verdade; a página além do fim volta sem registro, com o total certo (como o servidor: revisão de fora, E2)
+        const curto = Array.from({ length: 14 }, (_, i) => ({ ...lista[i % lista.length], id: 900 + i }));
+        return { corpo: { sucesso: true, registros: curto.slice((pagina - 1) * porPagina, pagina * porPagina), total: curto.length, pagina, porPagina,
+          agora: nivel === "geral" ? null : AGORA[nivel], escopo: ESCOPO[nivel] } };
+      }
       return { corpo: { sucesso: true, registros: lista.slice(0, porPagina), total: nivel === "geral" ? 412 : 37, pagina, porPagina,
         agora: nivel === "geral" ? null : AGORA[nivel], escopo: ESCOPO[nivel] } };
     }
@@ -842,6 +848,30 @@ async function provarLivro() {
   await clicar(s.page, "Registrar entrada");
   ok((await textoTela(s.page)).includes("Primeira folha do bloco"), "celular: tocar em \"Registrar entrada\" abre o formulário");
   await fechar(s, "livro geral celular");
+
+  // revisão de fora (E2): no celular, na página 5 (os registros 13 e 14, páginas de 3); a tela alarga (o aparelho virou) e as páginas passam a 5:
+  // a página 5 já não existe, e a tela volta para a última (a 3, os registros 11 a 14) em vez de mostrar o livro vazio
+  s = await abrir("local", "celular", { livroCurto: true });
+  await clicar(s.page, "Livro de entrada e saída");
+  await calmo(s.page);
+  for (let i = 0; i < 4; i++) {
+    const n = pedidos(s.api, "/api/financeiro/blocos/livro").length;
+    await s.page.evaluate(() => { const b = document.querySelector("#financeiroRaiz button[aria-label='Próxima página']"); if (b) b.click(); });
+    await esperarPedido(s.api, "/api/financeiro/blocos/livro", "GET", n);
+    await calmo(s.page);
+  }
+  t = await textoTela(s.page);
+  ok(t.includes("13 a 14 de 14 registros"), "livro curto celular: na página 5 (páginas de 3)", t.slice(t.indexOf(" de 14") - 20, t.indexOf(" de 14") + 20));
+  const v0 = pedidos(s.api, "/api/financeiro/blocos/livro").length;
+  await s.page.setViewport({ width: 1280, height: 800, isMobile: true, hasTouch: true });
+  const fim0 = Date.now() + 4000;
+  while (Date.now() < fim0 && !(pedidos(s.api, "/api/financeiro/blocos/livro").slice(v0).some((p) => p.busca.pagina === "3"))) await espera(50);
+  await calmo(s.page);
+  const virou = pedidos(s.api, "/api/financeiro/blocos/livro").slice(v0).map((p) => `${p.busca.pagina || "1"}/${p.busca.porPagina}`);
+  ok(virou[0] === "5/5" && virou[virou.length - 1] === "3/5", "livro curto: alargou, pediu a página 5 em páginas de 5 e voltou para a última (a 3)", virou);
+  t = await textoTela(s.page);
+  ok(t.includes("11 a 14 de 14 registros") && !t.includes("nenhum registro"), "livro curto: mostra a última página (11 a 14), não o livro vazio", t.slice(Math.max(0, t.indexOf(" de 14") - 20), t.indexOf(" de 14") + 20));
+  await fechar(s, "livro curto celular que alarga");
 
   s = await abrir("local", "celular");
   await clicar(s.page, "Livro de entrada e saída");

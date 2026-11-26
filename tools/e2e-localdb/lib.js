@@ -77,7 +77,9 @@ const IP_PUBLICO = { "x-forwarded-for": "9.9.9.9, 177.8.9.10:443, 10.0.0.1:80" }
 const hojeBr = () => require(path.join(API, "shared/dataBrasilia.js")).hojeBrasilia();
 
 // Lixo de toda espécie para tentar quebrar qualquer campo: tipos errados, texto enorme, tag, SQL, nulo, controle, datas impossíveis.
-const LIXO = [null, undefined, true, false, 0, -1, 1.5, 2 ** 40, "", " ", "abc", "0x10", "1e1", [], [1], {}, { a: 1 }, "x".repeat(5000), "<img src=x onerror=alert(1)>", "'; DROP TABLE SetoresTecnicos; --", "' OR 1=1 --", "\u0000", "a\u0000b", "😀", "‮evil", "0001-01-01", "9999-12-31", "2026-02-30", "2026-13-45", "20261008", "NaN"];
+const LIXO = [null, undefined, true, false, 0, -1, 1.5, 2 ** 40, "", " ", "abc", "0x10", "1e1", [], [1], {}, { a: 1 }, "x".repeat(5000), "<img src=x onerror=alert(1)>", "'; DROP TABLE SetoresTecnicos; --", "' OR 1=1 --", "\u0000", "a\u0000b", "😀", "‮evil", "0001-01-01", "9999-12-31", "2026-02-30", "2026-13-45", "20261008", "NaN",
+  // o nome de uma propriedade que todo objeto tem: uma tabela de escolhas consultada com ele não pode achar nada (revisão de fora, L2)
+  "constructor", "__proto__"];
 // Um retrato do estado das tabelas dos Setores Técnicos e da vistoria (contagem + soma de verificação): se uma chamada recusada mexeu em algo, muda.
 async function retrato() {
   const t = ['SetoresTecnicos', 'SetoresTecnicosMembros', 'SetoresTecnicosAdesoes', 'SetoresTecnicosIntervencoes', 'VistoriasAntecedentes', 'VistoriasDocumentos', 'VistoriasAnulacoes', 'Notificacoes', 'AuditLog'];
@@ -102,4 +104,14 @@ async function fuzz(rotulo, handler, { acao, metodo = 'POST', token, base, campo
   ok(mudancas.length === 0, rotulo + ': chamada recusada nunca altera o banco', mudancas.slice(0, 5));
 }
 
-module.exports = { termoHashDo, LIXO, retrato, fuzz, API, sql, auth, q, um, escalar, ok, fim, chamar, GET, POST, sessao, GERAL, LIDER, PIN, IP_PUBLICO, hojeBr, obterPool, falhasLista, shimEncerrar, path };
+// A pessoa na liderança ativa de uma congregação (uma liderança por pessoa, como no cadastro): a lista que a tela do Financeiro oferece no
+// "Entregue a" e no "quem devolve", e o papel do histórico da folha. Põe ou move a liderança dela para a congregação, como tesoureira.
+async function naLiderancaDe(membroId, congregacaoId) {
+  await q(`UPDATE Lideranca SET EscopoTipo = 'CONGREGACAO', EscopoId = @c, AtivoAte = NULL,
+             PapelId = COALESCE((SELECT TOP 1 PapelId FROM Papeis WHERE Nome = 'Tesoureiro'), PapelId) WHERE MembroId = @m`, { m: membroId, c: congregacaoId });
+  if (!Number(await escalar("SELECT COUNT(*) FROM Lideranca WHERE MembroId = @m", { m: membroId }))) {
+    await q("INSERT INTO Lideranca (MembroId, PapelId, EscopoTipo, EscopoId) SELECT TOP 1 @m, PapelId, 'CONGREGACAO', @c FROM Papeis WHERE Nome = 'Tesoureiro'", { m: membroId, c: congregacaoId });
+  }
+}
+
+module.exports = { naLiderancaDe, termoHashDo, LIXO, retrato, fuzz, API, sql, auth, q, um, escalar, ok, fim, chamar, GET, POST, sessao, GERAL, LIDER, PIN, IP_PUBLICO, hojeBr, obterPool, falhasLista, shimEncerrar, path };

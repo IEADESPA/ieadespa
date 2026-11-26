@@ -43,6 +43,9 @@
     carregando = false;
     if (!r.ok) { if (!r.cancelado) erro = r.mensagem; return; }
     erro = "";
+    // a página passou do fim (o celular virou e as páginas passaram de 3 para 5, ou o livro mudou): volta para a última que existe, que o efeito
+    // pede de novo
+    if (pg > 1 && !r.dados.registros.length && r.dados.total) { pagina = Math.ceil(r.dados.total / r.dados.porPagina); return; }
     dados = r.dados;
     escopo.tela = r.dados.escopo;
   }

@@ -1208,6 +1208,13 @@ Depois da revisão do Financeiro até `4c06d58`:
     - Licença por candidatura: só uma aberta por pessoa, e o registro do retorno diz a situação real.
     - Trocar ou apagar o e-mail de quem tem cargo vigente: só a secretaria do nível do cargo, ou de cima, com a
       confirmação reforçada.
+  - **O processo disciplinar (ele, 26/11/2026):**
+    - A Suspensão Temporária na JAI tem o teto de 90 dias e não é mais "indeterminada". Nos outros órgãos (Tribunal,
+      CEI), a suspensão sem dias continua valendo.
+    - Quem responde ao processo não registra nada no próprio processo, nem a defesa, o defensor ou o recurso. Ele
+      entrega, e outra pessoa da secretaria registra.
+    - O relator tem de ser do órgão que julga: no órgão da congregação ou da área, quem já pode agir no processo; no
+      órgão central, quem tem assento ativo nele.
 - **A movimentação (saída e volta): volta para o desenho (rodada 29).** Ele marcou a versão, mas disse que ainda não está
   boa. As regras novas dele:
   - **O membro sai sozinho, pelo aplicativo, na hora:** pede a carta de mudança no próprio celular e sai na mesma hora,

@@ -40,7 +40,8 @@ const ID = {
   cliGeral: BASE_ID + 108, cliOutraArea: BASE_ID + 109,
   licDup1: BASE_ID + 110, licDup2: BASE_ID + 111, licSozinha: BASE_ID + 112, licRetornoReal: BASE_ID + 113,
   avisoSecGeral: BASE_ID + 114, cartaSemConfirmacao: BASE_ID + 115,
-  emailArea: BASE_ID + 117, emailSemCargo: BASE_ID + 118, terminalL4: BASE_ID + 119, medidaRel: BASE_ID + 120
+  emailArea: BASE_ID + 117, emailSemCargo: BASE_ID + 118, terminalL4: BASE_ID + 119, medidaRel: BASE_ID + 120,
+  voltaArea: BASE_ID + 121, voltaLocal: BASE_ID + 122, voltaSemCargo: BASE_ID + 123, pinGeral: BASE_ID + 124
 };
 const SENHA = "Senha-Do-Roteiro-3#2026";
 let ipSeq = 1;
@@ -111,7 +112,7 @@ async function principal() {
   await aplicarMigracao(301);
   const lic301 = (id) => escalar(`SELECT CONCAT(Status, '|', ISNULL(CONVERT(varchar(10), DataRetornoDecidida, 120), '-'), '|', ISNULL(ObservacaoRetorno, '-'))
     FROM LicencasCandidatura WHERE LicencaId = @id`, { id });
-  const fechadaPela301 = (mantida) => `DUPLICADA|${hojeBrasilia()}|Fechada pela migração 301: licença duplicada; a licença aberta da pessoa é a nº ${mantida}.`;
+  const fechadaPela301 = (mantida) => `DUPLICADA|${hojeBrasilia()}|Registro em duplicidade, encerrado na conferência do sistema: a licença que vale é a nº ${mantida}.`;
   const estado1 = [await lic301(dup1Meio), await lic301(dup1Antiga), await lic301(dup1Nova)];
   ok(estado1[1] === "EM_LICENCA|-|-" && estado1[0] === fechadaPela301(dup1Antiga) && estado1[2] === fechadaPela301(dup1Antiga),
     "fica aberta a mais antiga pela data; as outras viram DUPLICADA, com a data de hoje e o número da que ficou", estado1);
@@ -690,6 +691,54 @@ async function principal() {
   const textoFalse = await tentar(() => medida({ membroId: ID.medidaRel, motivo: "Apuração de contas (roteiro)", suspenderAcessoSistema: "false" }));
   ok(textoFalse.status === 400 && (await escalar("SELECT COUNT(*) FROM MedidasCautelares WHERE MembroId = @m", { m: ID.medidaRel })) === 1,
     "o texto \"false\" em suspender o acesso: 400, nenhuma medida a mais", resumo(textoFalse));
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 11. a volta ao rol ativo e o PIN provisório de quem tem cargo: a regra do nível do cargo e a confirmação recente ==");
+  // Quando a secretaria age pela pessoa que tem cargo, vale a regra do nível do cargo e a confirmação reforçada (25 e 26/11/2026). INATIVO não encerra o cargo
+  // (o login só exige ATIVO): devolver a ATIVO devolve o acesso do cargo; o PIN provisório abre a sessão de titular da pessoa.
+  LID.voltaArea = await lideranca(ID.voltaArea, pArea, "AREA", area);
+  LID.voltaLocal = await lideranca(ID.voltaLocal, pTes, "CONGREGACAO", sede);
+  LID.pinGeral = await lideranca(ID.pinGeral, pGeralFin, "GLOBAL", null);
+  const inativaArea = await tentar(() => pessoas("POST", { token: daArea(), corpo: ficha(ID.voltaArea, { status: "INATIVO" }) }));
+  ok(inativaArea.body && inativaArea.body.sucesso === true && (await statusDe(ID.voltaArea)) === "INATIVO" && (await fimDoCargo(ID.voltaArea)) === "vigente",
+    "o cenário: a secretaria da área inativa quem tem cargo de área, e o cargo continua vigente", resumo(inativaArea));
+  await q("UPDATE MembroReferencia SET Status = 'INATIVO', SituacaoMembro = 'SEM_COMUNHAO', DataSaida = '2026-10-01' WHERE MembroId IN (@a, @b)", { a: ID.voltaLocal, b: ID.voltaSemCargo });
+  const voltaLocalDaArea = await tentar(() => pessoas("POST", { token: local(), corpo: ficha(ID.voltaArea, { status: "ATIVO" }) }));
+  ok(voltaLocalDaArea.status === 403 && /nível do cargo/.test(voltaLocalDaArea.body && voltaLocalDaArea.body.mensagem) && (await statusDe(ID.voltaArea)) === "INATIVO",
+    "cargo de área: a secretaria local não devolve a ATIVO (403, nada muda)", resumo(voltaLocalDaArea));
+  const fichaSemSituacao = ficha(ID.voltaArea);
+  delete fichaSemSituacao.status;
+  const voltaSemCampo = await tentar(() => pessoas("POST", { token: local(), corpo: fichaSemSituacao }));
+  ok(voltaSemCampo.status === 403 && (await statusDe(ID.voltaArea)) === "INATIVO", "nem pela ficha sem o campo da situação (que vale ATIVO)", resumo(voltaSemCampo));
+  const voltaAreaSemFator = await tentar(() => pessoas("POST", { token: daAreaSemFator, corpo: ficha(ID.voltaArea, { status: "ATIVO" }) }));
+  ok(voltaAreaSemFator.status === 428 && (await statusDe(ID.voltaArea)) === "INATIVO", "a secretaria da área sem a confirmação recente: 428", resumo(voltaAreaSemFator));
+  const voltaArea = await tentar(() => pessoas("POST", { token: daArea(), corpo: ficha(ID.voltaArea, { status: "ATIVO" }) }));
+  ok(voltaArea.body && voltaArea.body.sucesso === true && (await statusDe(ID.voltaArea)) === "ATIVO", "com a confirmação recente, a secretaria da área devolve a ATIVO", resumo(voltaArea));
+  const voltaLocalSemFator = await tentar(() => pessoas("POST", { token: localSemFator(), corpo: ficha(ID.voltaLocal, { status: "ATIVO" }) }));
+  ok(voltaLocalSemFator.status === 428 && (await statusDe(ID.voltaLocal)) === "INATIVO", "cargo local: a secretaria local sem a confirmação recente recebe 428", resumo(voltaLocalSemFator));
+  const voltaLocal = await tentar(() => pessoas("POST", { token: local(), corpo: ficha(ID.voltaLocal, { status: "ATIVO" }) }));
+  ok(voltaLocal.body && voltaLocal.body.sucesso === true && (await statusDe(ID.voltaLocal)) === "ATIVO", "e com ela devolve", resumo(voltaLocal));
+  const voltaSemCargo = await tentar(() => pessoas("POST", { token: localSemFator(), corpo: ficha(ID.voltaSemCargo, { status: "ATIVO" }) }));
+  ok(voltaSemCargo.body && voltaSemCargo.body.sucesso === true && (await statusDe(ID.voltaSemCargo)) === "ATIVO", "sem cargo: a secretaria local devolve como sempre", resumo(voltaSemCargo));
+
+  const pinProvisorio = (token, membroId) => tentar(() => chamarRota("GestaoPinMembro/index.js", { metodo: "POST", token, corpo: { membroId } }));
+  const pinsDe = (m) => escalar("SELECT COUNT(*) FROM MembroPins WHERE MembroId = @m", { m });
+  for (const [rotulo, alvo] of [["de área", ID.voltaArea], ["geral", ID.pinGeral]]) {
+    const r = await pinProvisorio(local(), alvo);
+    ok(r.status === 403 && /PIN/.test(r.body && r.body.mensagem) && !(r.body && r.body.pin) && (await pinsDe(alvo)) === 0,
+      `cargo ${rotulo}: a secretaria local não gera o PIN provisório (403, nada gravado)`, resumo(r).replace(/"pin":"\d+"/, '"pin":"####"'));
+  }
+  const pinAreaSemFator = await pinProvisorio(daAreaSemFator, ID.voltaArea);
+  ok(pinAreaSemFator.status === 428 && (await pinsDe(ID.voltaArea)) === 0, "a secretaria da área sem a confirmação recente: 428", resumo(pinAreaSemFator));
+  const pinArea = await pinProvisorio(daArea(), ID.voltaArea);
+  ok(pinArea.status === 200 && /^\d{4}$/.test((pinArea.body && pinArea.body.pin) || "") && (await pinsDe(ID.voltaArea)) === 1,
+    "com a confirmação recente, a secretaria da área gera", `${pinArea.status} ${pinArea.body && pinArea.body.sucesso}`);
+  const pinLocalSemFator = await pinProvisorio(localSemFator(), ID.voltaLocal);
+  ok(pinLocalSemFator.status === 428 && (await pinsDe(ID.voltaLocal)) === 0, "cargo local: a secretaria local sem a confirmação recente recebe 428", resumo(pinLocalSemFator));
+  const pinLocal = await pinProvisorio(local(), ID.voltaLocal);
+  ok(pinLocal.status === 200 && (await pinsDe(ID.voltaLocal)) === 1, "e com ela gera", `${pinLocal.status} ${pinLocal.body && pinLocal.body.sucesso}`);
+  const pinSemCargo = await pinProvisorio(localSemFator(), ID.voltaSemCargo);
+  ok(pinSemCargo.status === 200 && (await pinsDe(ID.voltaSemCargo)) === 1, "sem cargo: a secretaria local gera como sempre", `${pinSemCargo.status} ${pinSemCargo.body && pinSemCargo.body.sucesso}`);
 }
 
 principal().then(() => fim("e2e-152 (acesso, parte 3)")).catch((e) => { console.error(e); ok(false, "o roteiro quebrou: " + (e && e.message)); fim("e2e-152 (acesso, parte 3)"); });

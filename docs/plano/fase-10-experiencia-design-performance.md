@@ -1437,6 +1437,28 @@ guardadas para quando o módulo 3 começar. O levantamento completo do desenhist
     muda sozinho;
   - na página da congregação, o membro vê o endereço, os horários e o dirigente, a secretaria vê os números de pessoas,
     e o dinheiro e o patrimônio só a tesouraria e a Geral veem.
+- **A rodada 35 conferida por ele (26 e 27/11/2026).** Vale o que está aqui, não a descrição da rodada acima:
+  - **Aprovadas sem observação:** a assinatura reforçada, as áreas e os números (igrejas), mudar de área, fechar ou
+    juntar e os termos guardados.
+  - **A agenda:** aprovada, com uma correção: **a ceia geral é no sábado**, não no domingo. No fim de semana dela, o
+    domingo da congregação não tem ceia local: é um culto local comum (o "culto alternativo").
+  - **Os perfis por cargo: as duas primeiras telas REPROVADAS** (o perfil do cargo com a lista de módulos e a passagem
+    de quem já tem acesso). As outras telas dos perfis ficam aprovadas. O que ele quer:
+    - **A pessoa pode ter vários cargos em níveis diferentes ao mesmo tempo** (ex.: tesoureiro local e pastor de área;
+      líder da EBD local e líder dos homens na área). Cada cargo dá o acesso **no nível dele**: ela vê o Financeiro só
+      da congregação e o que é do pastor, na área inteira. Um cargo não alarga o outro.
+    - **O módulo dado a um cargo já traz as funções do nível**, sem marcar subfunção por subfunção: o Financeiro dado ao
+      tesoureiro local mostra só o que é do local; o mesmo Financeiro dado a um cargo geral mostra tudo o que é do geral.
+    - **O 1º e o 2º do cargo** (tesoureiro, secretário) têm as mesmas prerrogativas.
+    - **Não há passagem:** depois da importação, ninguém tem cargo; cada um recebe o acesso quando é posto no cargo. O
+      acesso sem cargo fica só como exceção (com prazo e motivo, pela Geral). As duas pessoas que entram hoje precisam
+      continuar entrando no dia de ligar (cuidado da construção).
+  - **Afastar do cargo: REPROVADO como ideia.** Não existe licença por viagem nem afastamento manual; quem viaja continua
+    no cargo, e o 2º faz o mesmo que o 1º. O cargo só acaba por causa: a disciplina (pelo processo, sozinho), a licença
+    por candidatura política e a saída da igreja (carta de mudança). Quem volta da disciplina ou de outra igreja **não
+    recebe o cargo de volta**. Quando o 1º sai, o 2º passa a 1º e se escolhe um novo 2º.
+  - **Rodada 36, a última até o lançamento:** os perfis refeitos e o cargo vago (o 2º que sobe), com a correção da
+    agenda. Depois dela, o desenhista para; o resto se confere na homologação.
 
 ### A varredura antes da construção: as respostas dele (20/11/2026, noite)
 

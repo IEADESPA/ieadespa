@@ -4,13 +4,15 @@
 //
 // As regras dele (docs/plano/fase-10-experiencia-design-performance.md, rodadas 29 e 31, e as decisões D1 a D9 do diário):
 //  - o destino é só a cidade e o estado, nunca o nome da igreja; em branco, fica Parauapebas - PA;
-//  - a situação: o congregado sai "em Paz", nunca em Observação; "em Observação" é só para quem está sem comunhão ou em disciplina, com o tempo e sem o
-//    motivo; a ficha em arrolamento (D1) não diz a situação: leva a frase de que o cadastro estava em atualização;
+//  - a situação: o congregado (e o novo convertido) sai "em Paz", nunca em Observação; "em Observação" é só para quem está sem comunhão ou em disciplina,
+//    com o tempo e sem o motivo (as respostas dele de 26/11: o processo em andamento, a disciplina sem data para terminar, "sem comunhão desde"); a ficha
+//    em arrolamento (D1) não diz a situação: leva a frase de que o cadastro estava em atualização;
+//  - o tratamento: todo adulto é "o irmão" ou "a irmã" (membro, congregado ou em arrolamento); o menor de 18, "o menor" ou "a menor" (26/11);
 //  - a carta impressa é curta: a última função (com a data da consagração) e o último cargo; com mais de 2 cargos ativos, os ativos do maior grau (D9);
 //  - sem assinatura: o QR, o protocolo e os nomes impressos. O QR confere a carta pela impressão digital guardada no dia (com sal: ela não é o hash dos
 //    dados, que se apagam) e, sem câmera, pelo código curto do rodapé;
 //  - a carta vale 30 dias (a página do QR mostra os dados até o 30º dia, inclusive); depois, vence e os dados se apagam; com 1 ano, o resto da ficha.
-// Os casos que esperam a resposta dele voltam como `pendente` (sem texto inventado): a rota recusa até a regra chegar.
+// O que a carta não sabe dizer volta como `pendente` (sem texto inventado): a rota recusa, com a mensagem de MENSAGENS_PENDENTES.
 const crypto = require("crypto");
 
 const CIDADE_PADRAO = "Parauapebas - PA";
@@ -55,18 +57,16 @@ function destinoDaCarta(texto) {
   return { ok: true, destino: `${cidade} - ${uf}` };
 }
 
-// ---------- os textos que esperam a resposta dele (UM lugar só) ----------
-// Enquanto a regra não chega (perguntas 1 e 3 da missão B, 26/11: a Observação sem data de fim e o tratamento do adulto congregado ou em arrolamento), a
-// carta desses casos não sai e a rota responde com a mensagem daqui. Quando a resposta chegar, o texto entra em situacaoDaCarta/tratamentoDaCarta e a
-// chave sai desta lista. SITUACAO_DESCONHECIDA é regra (resposta de 26/11): a carta recusa até a secretaria pôr uma das situações conhecidas.
-const AINDA_SEM_TEXTO = "A carta desta situação ainda não pode sair pelo sistema. Procure a secretaria da sua congregação.";
+// ---------- as recusas da carta (UM lugar só) ----------
+// SITUACAO_DESCONHECIDA é regra dele (26/11): a carta recusa até a secretaria pôr uma das situações conhecidas. As outras duas não são casos dele e ficam
+// recusadas, sem texto inventado (decisão da construção, 27/11, "para conferir"): a exclusão julgada que ainda vale (a pessoa já está fora do rol) e a
+// disciplina julgada sem a data do julgamento (o "por quanto tempo" não sai sem o começo, e "sem data para terminar" seria falso com o fim gravado).
+const SO_A_SECRETARIA = "A carta desta situação não sai pelo sistema. Procure a secretaria da sua congregação.";
 const MENSAGENS_PENDENTES = Object.freeze({
   SITUACAO_DESCONHECIDA: "A situação desta pessoa na ficha não é uma das que a carta conhece. A secretaria precisa pôr Membro em comunhão, Congregado ou " +
     "Membro sem comunhão antes de a carta sair.",
-  DISCIPLINA_SEM_PRAZO: AINDA_SEM_TEXTO,
-  DISCIPLINA_NAO_JULGADA: AINDA_SEM_TEXTO,
-  SEM_COMUNHAO: AINDA_SEM_TEXTO,
-  TRATAMENTO: AINDA_SEM_TEXTO
+  EXCLUSAO: SO_A_SECRETARIA,
+  DISCIPLINA_SEM_INICIO: SO_A_SECRETARIA
 });
 
 // ---------- a situação ----------
@@ -81,27 +81,34 @@ function duracaoPorExtenso(inicio, ate) {
 }
 
 /**
- * A situação na carta. `disciplina`: o processo disciplinar ativo (shared/disciplina.js), { julgado, inicio, ate } ou null.
- * Devolve { codigo, membro, texto } (membro: a caixa marcada, true = Membro, false = Congregado, null = nenhuma) ou { pendente } enquanto a regra não chegou.
+ * A situação na carta. `disciplina`: o processo disciplinar ativo (shared/disciplina.js, sem a exclusão de antes da readmissão), { julgado, exclusao, inicio,
+ * ate } ou null — `ate` nulo é a disciplina sem data para terminar (a Disciplina Rigorosa, o prazo indeterminado). `semComunhaoDesde`: a data do afastamento
+ * da ficha (MembroReferencia.DataAfastamento), ou null.
+ * Devolve { codigo, membro, texto } (membro: a caixa marcada, true = Membro, false = Congregado, null = nenhuma) ou { pendente } (MENSAGENS_PENDENTES).
  */
-function situacaoDaCarta({ situacaoMembro, disciplina = null } = {}) {
+function situacaoDaCarta({ situacaoMembro, disciplina = null, semComunhaoDesde = null } = {}) {
   // o novo convertido (não batizado) sai como congregado (resposta de 26/11)
   if (situacaoMembro === "CONGREGADO" || situacaoMembro === "NOVO_CONVERTIDO") return { codigo: "PAZ", membro: false, texto: "em Paz" };
   if (situacaoMembro === "ARROLAMENTO") return { codigo: "ARROLAMENTO", membro: null, texto: null, frase: FRASE_ARROLAMENTO };
   if (situacaoMembro !== "EM_COMUNHAO" && situacaoMembro !== "SEM_COMUNHAO") return { pendente: "SITUACAO_DESCONHECIDA" };
+  const observacao = (texto) => ({ codigo: "OBSERVACAO", membro: true, texto: `em Observação (${texto})` });
   if (disciplina) {
-    if (!disciplina.julgado) return { pendente: "DISCIPLINA_NAO_JULGADA" };
-    if (!disciplina.ate || !disciplina.inicio) return { pendente: "DISCIPLINA_SEM_PRAZO" };
-    return { codigo: "OBSERVACAO", membro: true, texto: `em Observação (em disciplina por ${duracaoPorExtenso(disciplina.inicio, disciplina.ate)}, até ${dataBr(disciplina.ate)})` };
+    if (disciplina.exclusao) return { pendente: "EXCLUSAO" };
+    // o processo ainda não julgado: em andamento ou no afastamento cautelar (Art. 100), resposta de 26/11
+    if (!disciplina.julgado) return observacao("processo em andamento");
+    if (!disciplina.ate) return observacao("em disciplina, sem data para terminar");
+    if (!disciplina.inicio) return { pendente: "DISCIPLINA_SEM_INICIO" };
+    return observacao(`em disciplina por ${duracaoPorExtenso(disciplina.inicio, disciplina.ate)}, até ${dataBr(disciplina.ate)}`);
   }
-  if (situacaoMembro === "SEM_COMUNHAO") return { pendente: "SEM_COMUNHAO" };
+  // sem comunhão sem processo (26/11): desde a data do afastamento da ficha. Sem ela, não se inventa uma (nem hoje, nem a saída, nem o dia em que a
+  // secretaria completou o arrolamento): a carta diz só "sem comunhão" (D1: só os dados que existem; decisão da construção, 27/11, "para conferir")
+  if (situacaoMembro === "SEM_COMUNHAO") return observacao(semComunhaoDesde ? `sem comunhão desde ${dataBr(semComunhaoDesde)}` : "sem comunhão");
   return { codigo: "COMUNHAO", membro: true, texto: "em Comunhão" };
 }
 
-/** "o irmão", "a irmã", "o menor", "a menor"; sem o sexo na ficha, as duas formas; o adulto congregado e o em arrolamento: null (espera a regra) */
-function tratamentoDaCarta({ sexo, menor, codigo }) {
+/** "o irmão", "a irmã", "o menor", "a menor" (todo adulto, seja membro, congregado ou em arrolamento: resposta de 26/11); sem o sexo na ficha, as duas formas */
+function tratamentoDaCarta({ sexo, menor }) {
   if (menor) return sexo === "M" ? "o menor" : sexo === "F" ? "a menor" : "o(a) menor";
-  if (codigo !== "COMUNHAO" && codigo !== "OBSERVACAO") return null;
   return sexo === "M" ? "o irmão" : sexo === "F" ? "a irmã" : "o(a) irmão(ã)";
 }
 
@@ -179,17 +186,16 @@ const porData = (campo) => (x, y) => (x[campo] ? (y[campo] ? x[campo].localeComp
 
 /**
  * O conteúdo guardado da carta (SaidasDoRol.Conteudo): os dados de hoje, o histórico inteiro (a página do QR) e a seleção curta (o papel), tirado ANTES da
- * vacância. `fontes`: shared/saidaRolDb.js::lerFontesDaCarta. Devolve { pendente } quando a situação ou o tratamento ainda não têm regra.
+ * vacância. `fontes`: shared/saidaRolDb.js::lerFontesDaCarta. Devolve { pendente } quando a carta não sabe dizer a situação (MENSAGENS_PENDENTES).
  * Só o que a carta mostra: nada de nascimento, contato ou número interno (o conteúdo se apaga aos 30 dias, mas até lá vai à página pública).
  */
 function montarConteudoDaCarta(fontes, { dia, destino, protocolo, codigo, pedido, junto, assinaturas }) {
   const m = fontes.membro;
   const idade = idadeNoDia(m.nascimento, dia);
   const menor = idade !== null && idade < 18;
-  const situacao = situacaoDaCarta({ situacaoMembro: m.situacaoMembro, disciplina: fontes.disciplina });
+  const situacao = situacaoDaCarta({ situacaoMembro: m.situacaoMembro, disciplina: fontes.disciplina, semComunhaoDesde: m.semComunhaoDesde || null });
   if (situacao.pendente) return { pendente: situacao.pendente };
-  const tratamento = tratamentoDaCarta({ sexo: m.sexo, menor, codigo: situacao.codigo });
-  if (!tratamento) return { pendente: "TRATAMENTO" };
+  const tratamento = tratamentoDaCarta({ sexo: m.sexo, menor });
   const arrolamento = situacao.codigo === "ARROLAMENTO";
   const cargos = (fontes.cargos || []).map((c) => ({ nome: c.nome, grau: Number(c.grau) || 0, inicio: c.inicio || null, fim: c.ativo ? dia : c.fim || null, ativo: !!c.ativo }));
   const consagracoes = (fontes.consagracoes || []).map((c) => ({ nome: c.nome, data: c.data || null })).sort(porData("data"));

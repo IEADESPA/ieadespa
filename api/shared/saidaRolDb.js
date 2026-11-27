@@ -14,18 +14,22 @@ const DIA = (col) => `CONVERT(varchar(10), ${col}, 120)`;
 const GRAU_LOCAL = ordemDoCargo("CONGREGACAO");
 const GRAU_GERAL = ordemDoCargo("GLOBAL");
 
-// a disciplina ativa (a mesma regra de shared/disciplina.js::CONDICAO_SQL_ATIVO), a mais recente
+// a disciplina ativa (a mesma regra de shared/disciplina.js::CONDICAO_SQL_ATIVO), a mais recente — sem a exclusão julgada ANTES da última admissão (a
+// readmissão da Trava 8-A, como em disciplina.membrosSobDisciplina): o readmitido não sai "em disciplina" por causa da exclusão antiga
 const SQL_DISCIPLINA = `SELECT TOP 1 p.Status, p.Resultado, ${DIA("p.DataConclusao")} AS DataConclusao, ${DIA("p.DataTerminoPrevisao")} AS DataTerminoPrevisao,
          tp.Codigo AS Penalidade
   FROM ProcessosDisciplinares p LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = p.PenalidadeId
   WHERE p.MembroId = @id AND ${require("./disciplina").CONDICAO_SQL_ATIVO}
+    AND NOT EXISTS (SELECT 1 FROM MembroReferencia mr WHERE mr.MembroId = p.MembroId AND ISNULL(p.Resultado, '') = 'EXCLUSAO'
+                    AND ISNULL(p.DataConclusao, '99991231') < ISNULL(mr.DataAdmissao, '19000101'))
   ORDER BY p.DataAbertura DESC`;
 
 /** as fontes da carta de uma pessoa, já normalizadas; null se a pessoa não existe. `executor`: a transação (ou o pool). `dia`: o dia da saída (Brasília) */
 async function lerFontesDaCarta(executor, sql, membroId, dia) {
   const lotes = [
     `SELECT m.MembroId, m.Nome, m.Sexo, ${DIA("m.DataNascimento")} AS DataNascimento, m.Status, m.SituacaoMembro, m.CongregacaoId, c.Nome AS Congregacao,
-            a.Nome AS Area, m.FormaAdmissao, ${DIA("m.DataAdmissao")} AS DataAdmissao, ${DIA("m.DataBatismo")} AS DataBatismo, m.EstadoCivil, m.CargoMinisterial
+            a.Nome AS Area, m.FormaAdmissao, ${DIA("m.DataAdmissao")} AS DataAdmissao, ${DIA("m.DataBatismo")} AS DataBatismo, m.EstadoCivil, m.CargoMinisterial,
+            ${DIA("m.DataAfastamento")} AS DataAfastamento
      FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN Areas a ON a.AreaId = c.AreaId
      WHERE m.MembroId = @id`,
     `SELECT TOP 1 t.Local FROM CandidatosBatismo cb JOIN TurmasBatismo t ON t.TurmaId = cb.TurmaId AND t.Status = N'REALIZADA'
@@ -71,14 +75,19 @@ async function lerFontesDaCarta(executor, sql, membroId, dia) {
   if (consagracoes.length === 0 && m.CargoMinisterial) consagracoes.push({ nome: ROTULO_CARGO[m.CargoMinisterial] || m.CargoMinisterial, data: null });
   const d = lido(8)[0];
   const julgado = !!d && d.Status === "JULGADO";
-  const disciplina = d ? { julgado, inicio: julgado ? d.DataConclusao : null, ate: julgado && d.Penalidade !== "DISCIPLINA_RIGOROSA" ? d.DataTerminoPrevisao : null } : null;
+  // ate nulo: sem data para terminar (a Disciplina Rigorosa vale até a Prova de Reintegração, sem prazo; o prazo indeterminado). exclusao: a exclusão julgada
+  // que ainda vale — a carta não a escreve (shared/saidaMembro.js, MENSAGENS_PENDENTES.EXCLUSAO)
+  const disciplina = d ? { julgado, exclusao: julgado && d.Resultado === "EXCLUSAO", inicio: julgado ? d.DataConclusao : null,
+    ate: julgado && d.Penalidade !== "DISCIPLINA_RIGOROSA" ? d.DataTerminoPrevisao : null } : null;
   const espirito = lido(2)[0];
   const origem = lido(9)[0];
 
   return {
     membro: { membroId: m.MembroId, nome: m.Nome, sexo: m.Sexo || null, nascimento: m.DataNascimento, status: m.Status, situacaoMembro: m.SituacaoMembro,
       congregacaoId: m.CongregacaoId, congregacao: m.Congregacao || null, area: m.Area || null, formaAdmissao: m.FormaAdmissao || null,
-      dataAdmissao: m.DataAdmissao, dataBatismo: m.DataBatismo, estadoCivil: m.EstadoCivil || null },
+      dataAdmissao: m.DataAdmissao, dataBatismo: m.DataBatismo, estadoCivil: m.EstadoCivil || null,
+      // "sem comunhão desde" (resposta de 26/11): a data do afastamento que a secretaria lançou na ficha; sem ela, a carta não inventa uma
+      semComunhaoDesde: m.DataAfastamento || null },
     localBatismo: (lido(1)[0] && lido(1)[0].Local) || null,
     espiritoSanto: espirito ? { data: espirito.DataMarco, aproximada: !!espirito.DataAproximada } : null,
     consagracoes, cargos, disciplina,

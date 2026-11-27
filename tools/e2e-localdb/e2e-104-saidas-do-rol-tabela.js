@@ -4,7 +4,8 @@
 //  - quem pede por si é a própria pessoa; o filho que sai junto aponta a saída de quem pediu;
 //  - o protocolo e o código curto não se repetem; o código só tem os símbolos do papel (sem I, O, 0, 1 nem minúscula); a impressão é hex minúsculo;
 //  - a carta viva tem o conteúdo em JSON; a apagada não tem conteúdo nem destino e tem a data; a etapa do apagamento leva a data dela;
-//  - a impressão digital calculada na rota (shared/saidaMembro.js) confere depois da ida e volta do conteúdo pelo banco (com acento).
+//  - a impressão digital calculada na rota (shared/saidaMembro.js) confere depois da ida e volta do conteúdo pelo banco (com acento);
+//  - a situação e o tratamento da carta (as respostas dele de 26/11) saem da ficha e dos processos de verdade (shared/saidaRolDb.js).
 // Roda sobre a base cenario-189 (`BASE=cenario-189 bash rodar.sh roteiro e2e-104-saidas-do-rol-tabela.js`).
 const L = require("./lib");
 const { ok, fim, q, escalar, obterPool } = L;
@@ -129,6 +130,40 @@ async function principal() {
   ok(fontes.disciplina === null && fontes.espiritoSanto === null && fontes.localBatismo === null, "sem disciplina, sem marco e sem turma de batismo: nada inventado");
   const conteudo = saida.montarConteudoDaCarta(fontes, { dia: "2026-11-25", destino: "Belém - PA", protocolo: "CARTA-2026-9999", codigo: "K7P4M2", pedido: { como: "PROPRIO" } });
   ok(conteudo.curto.cargos.length === 1 && /^Dirigente/.test(conteudo.curto.cargos[0].nome) && conteudo.curto.funcao.nome === "Diácono", "a fotografia sai da leitura de verdade", conteudo.curto);
+
+  // 10c. a situação e o tratamento na carta (as respostas dele de 26/11), da ficha e dos processos de verdade: a Débora, adulta, sem o sexo na ficha
+  const carta = async () => {
+    const f = await require(L.path.join(L.API, "shared/saidaRolDb.js")).lerFontesDaCarta(await obterPool(), L.sql, DEBORA, "2026-11-25");
+    return saida.montarConteudoDaCarta(f, { dia: "2026-11-25", destino: "Belém - PA", protocolo: "CARTA-2026-9998", codigo: "K7P4M2", pedido: { como: "PROPRIO" } });
+  };
+  const textoDa = async () => { const c = await carta(); return c.pendente ? `pendente:${c.pendente}` : `${c.tratamento} | ${c.situacao.texto}`; };
+  const caso = async (esperado, rotulo) => { const t = await textoDa(); ok(t === esperado, rotulo, t); };
+  await q(`UPDATE MembroReferencia SET SituacaoMembro = N'SEM_COMUNHAO', DataAfastamento = '2025-08-17', DataNascimento = '1985-02-01' WHERE MembroId = ${DEBORA}`);
+  await caso("o(a) irmão(ã) | em Observação (sem comunhão desde 17/08/2025)", "sem comunhão sem processo: desde a data do afastamento da ficha; sem o sexo, as duas formas");
+  await q(`UPDATE MembroReferencia SET DataAfastamento = NULL, Sexo = N'F' WHERE MembroId = ${DEBORA}`);
+  await caso("a irmã | em Observação (sem comunhão)", "sem a data do afastamento: só \"sem comunhão\", sem data inventada");
+  const proc = await escalar(`INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status) OUTPUT INSERTED.ProcessoId VALUES (${DEBORA}, '2026-11-01', 'EM_ANDAMENTO')`);
+  await caso("a irmã | em Observação (processo em andamento)", "o processo em andamento: em Observação (processo em andamento), sem o motivo");
+  await q(`UPDATE ProcessosDisciplinares SET Status = 'AFASTAMENTO_CAUTELAR' WHERE ProcessoId = ${proc}`);
+  await caso("a irmã | em Observação (processo em andamento)", "o afastamento cautelar: também processo em andamento");
+  await q(`UPDATE ProcessosDisciplinares SET Status = 'JULGADO', Resultado = 'SANCAO', DataConclusao = '2026-11-10',
+             PenalidadeId = (SELECT PenalidadeId FROM TiposPenalidade WHERE Codigo = 'DISCIPLINA_RIGOROSA') WHERE ProcessoId = ${proc}`);
+  await caso("a irmã | em Observação (em disciplina, sem data para terminar)", "a Disciplina Rigorosa (vale até a prova, sem prazo): sem data para terminar");
+  await q(`UPDATE ProcessosDisciplinares SET DataTerminoPrevisao = '2027-05-10',
+             PenalidadeId = (SELECT PenalidadeId FROM TiposPenalidade WHERE Codigo = 'SUSPENSAO_TEMPORARIA') WHERE ProcessoId = ${proc}`);
+  await caso("a irmã | em Observação (em disciplina por 6 meses, até 10/05/2027)", "a suspensão com prazo: por quanto tempo e até quando");
+  await q(`UPDATE ProcessosDisciplinares SET Resultado = 'EXCLUSAO', PenalidadeId = NULL, DataTerminoPrevisao = NULL WHERE ProcessoId = ${proc}`);
+  await caso("pendente:EXCLUSAO", "a exclusão que ainda vale: a carta não a escreve (recusa)");
+  await q(`UPDATE MembroReferencia SET DataAdmissao = '2026-11-20' WHERE MembroId = ${DEBORA}`);
+  await caso("a irmã | em Observação (sem comunhão)", "readmitida depois da exclusão (Trava 8-A): a exclusão antiga não conta");
+  await q(`UPDATE MembroReferencia SET SituacaoMembro = N'CONGREGADO' WHERE MembroId = ${DEBORA}`);
+  await caso("a irmã | em Paz", "a adulta congregada: a irmã, em Paz");
+  await q(`UPDATE MembroReferencia SET SituacaoMembro = N'ARROLAMENTO' WHERE MembroId = ${DEBORA}`);
+  const arrol = await carta();
+  ok(!arrol.pendente && arrol.tratamento === "a irmã" && arrol.situacao.codigo === "ARROLAMENTO" && arrol.situacao.frase === saida.FRASE_ARROLAMENTO,
+    "a adulta em arrolamento: a irmã, com a frase do cadastro em atualização", arrol.situacao);
+  await q(`UPDATE MembroReferencia SET SituacaoMembro = N'SITUACAO_INVENTADA_E2E' WHERE MembroId = ${DEBORA}`);
+  await caso("pendente:SITUACAO_DESCONHECIDA", "a situação que a carta não conhece: recusa");
 
   // 10. a CartasTransito (o "processar" antigo) não vê nada disto (D2)
   ok((await escalar(`SELECT COUNT(*) FROM CartasTransito WHERE MembroId IN (${CARLOS}, ${LUCAS}, ${MARIA})`)) === 0, "nada vai para a CartasTransito (o processar antigo nunca vê)");

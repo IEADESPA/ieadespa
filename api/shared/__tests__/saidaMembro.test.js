@@ -68,29 +68,47 @@ describe("a situação na carta (r31-carta: Comunhão, Paz, Observação com o t
     expect(s.situacaoDaCarta({ situacaoMembro: null })).toEqual({ pendente: "SITUACAO_DESCONHECIDA" });
     expect(s.MENSAGENS_PENDENTES.SITUACAO_DESCONHECIDA).toMatch(/secretaria/);
   });
-  test("os casos que esperam a resposta dele ficam pendentes, sem texto inventado, e cada um tem a mensagem num lugar só", () => {
-    const pend = (e) => s.situacaoDaCarta(e).pendente;
-    expect(pend({ situacaoMembro: "EM_COMUNHAO", disciplina: { julgado: true, inicio: "2026-01-10", ate: null } })).toBe("DISCIPLINA_SEM_PRAZO");
-    expect(pend({ situacaoMembro: "EM_COMUNHAO", disciplina: { julgado: false, inicio: "2026-11-20", ate: null } })).toBe("DISCIPLINA_NAO_JULGADA");
-    expect(pend({ situacaoMembro: "SEM_COMUNHAO", semComunhaoDesde: "2026-04-02" })).toBe("SEM_COMUNHAO");
-    for (const k of ["DISCIPLINA_SEM_PRAZO", "DISCIPLINA_NAO_JULGADA", "SEM_COMUNHAO", "TRATAMENTO"]) expect(typeof s.MENSAGENS_PENDENTES[k]).toBe("string");
+  // as respostas dele de 26/11/2026 (memória do projeto, "Gestão de membros"): a Observação sem data de fim e o tratamento do adulto
+  test("processo ainda não julgado (em andamento ou no afastamento cautelar): em Observação (processo em andamento)", () => {
+    const obs = { codigo: "OBSERVACAO", membro: true, texto: "em Observação (processo em andamento)" };
+    expect(s.situacaoDaCarta({ situacaoMembro: "EM_COMUNHAO", disciplina: { julgado: false, inicio: null, ate: null } })).toEqual(obs);
+    expect(s.situacaoDaCarta({ situacaoMembro: "SEM_COMUNHAO", semComunhaoDesde: "2026-04-02", disciplina: { julgado: false, inicio: null, ate: null } })).toEqual(obs);
+  });
+  test("disciplina julgada sem prazo (a Disciplina Rigorosa, o prazo indeterminado): em Observação (em disciplina, sem data para terminar)", () => {
+    expect(s.situacaoDaCarta({ situacaoMembro: "SEM_COMUNHAO", disciplina: { julgado: true, inicio: "2026-01-10", ate: null } }))
+      .toEqual({ codigo: "OBSERVACAO", membro: true, texto: "em Observação (em disciplina, sem data para terminar)" });
+  });
+  test("sem comunhão sem processo: em Observação (sem comunhão desde a data do afastamento); sem a data na ficha, não inventa uma", () => {
+    expect(s.situacaoDaCarta({ situacaoMembro: "SEM_COMUNHAO", semComunhaoDesde: "2026-04-02" }))
+      .toEqual({ codigo: "OBSERVACAO", membro: true, texto: "em Observação (sem comunhão desde 02/04/2026)" });
+    expect(s.situacaoDaCarta({ situacaoMembro: "SEM_COMUNHAO", semComunhaoDesde: null }))
+      .toEqual({ codigo: "OBSERVACAO", membro: true, texto: "em Observação (sem comunhão)" });
+    // a data é só para quem está sem comunhão: a ficha em comunhão com uma data antiga de afastamento continua em Comunhão
+    expect(s.situacaoDaCarta({ situacaoMembro: "EM_COMUNHAO", semComunhaoDesde: "2020-01-01" }).texto).toBe("em Comunhão");
+  });
+  test("o novo convertido e o congregado continuam em Paz mesmo com processo aberto", () => {
+    expect(s.situacaoDaCarta({ situacaoMembro: "NOVO_CONVERTIDO", disciplina: { julgado: false, inicio: null, ate: null } }).codigo).toBe("PAZ");
+    expect(s.situacaoDaCarta({ situacaoMembro: "CONGREGADO", disciplina: { julgado: true, inicio: "2026-01-10", ate: null } }).codigo).toBe("PAZ");
+  });
+  test("o que não é um dos casos dele não vira texto: a exclusão ainda valendo e a disciplina julgada sem a data do julgamento", () => {
+    expect(s.situacaoDaCarta({ situacaoMembro: "EM_COMUNHAO", disciplina: { julgado: true, exclusao: true, inicio: "2026-01-10", ate: null } })).toEqual({ pendente: "EXCLUSAO" });
+    expect(s.situacaoDaCarta({ situacaoMembro: "EM_COMUNHAO", disciplina: { julgado: true, inicio: null, ate: "2027-01-10" } })).toEqual({ pendente: "DISCIPLINA_SEM_INICIO" });
+    // as recusas que sobraram, cada uma com a mensagem num lugar só (as que esperavam a resposta dele saíram da lista)
+    expect(Object.keys(s.MENSAGENS_PENDENTES).sort()).toEqual(["DISCIPLINA_SEM_INICIO", "EXCLUSAO", "SITUACAO_DESCONHECIDA"]);
+    for (const k of Object.keys(s.MENSAGENS_PENDENTES)) expect(s.MENSAGENS_PENDENTES[k]).toMatch(/secretaria/);
   });
 });
 
-describe("o tratamento na carta (r31-carta: o irmão, a irmã, o menor)", () => {
-  test("membro: o irmão / a irmã; menor de 18: o menor / a menor", () => {
-    expect(s.tratamentoDaCarta({ sexo: "M", menor: false, codigo: "COMUNHAO" })).toBe("o irmão");
-    expect(s.tratamentoDaCarta({ sexo: "F", menor: false, codigo: "OBSERVACAO" })).toBe("a irmã");
-    expect(s.tratamentoDaCarta({ sexo: "M", menor: true, codigo: "PAZ" })).toBe("o menor");
-    expect(s.tratamentoDaCarta({ sexo: "F", menor: true, codigo: "COMUNHAO" })).toBe("a menor");
+describe("o tratamento na carta (r31-carta e a resposta dele de 26/11: todo adulto é o irmão ou a irmã)", () => {
+  test("adulto: o irmão / a irmã, seja membro, congregado ou em arrolamento; menor de 18: o menor / a menor", () => {
+    expect(s.tratamentoDaCarta({ sexo: "M", menor: false })).toBe("o irmão");
+    expect(s.tratamentoDaCarta({ sexo: "F", menor: false })).toBe("a irmã");
+    expect(s.tratamentoDaCarta({ sexo: "M", menor: true })).toBe("o menor");
+    expect(s.tratamentoDaCarta({ sexo: "F", menor: true })).toBe("a menor");
   });
   test("sem o sexo na ficha, não inventa: as duas formas", () => {
-    expect(s.tratamentoDaCarta({ sexo: null, menor: false, codigo: "COMUNHAO" })).toBe("o(a) irmão(ã)");
-    expect(s.tratamentoDaCarta({ sexo: null, menor: true, codigo: "PAZ" })).toBe("o(a) menor");
-  });
-  test("o adulto congregado e o adulto em arrolamento esperam a resposta dele", () => {
-    expect(s.tratamentoDaCarta({ sexo: "M", menor: false, codigo: "PAZ" })).toBeNull();
-    expect(s.tratamentoDaCarta({ sexo: "F", menor: false, codigo: "ARROLAMENTO" })).toBeNull();
+    expect(s.tratamentoDaCarta({ sexo: null, menor: false })).toBe("o(a) irmão(ã)");
+    expect(s.tratamentoDaCarta({ sexo: null, menor: true })).toBe("o(a) menor");
   });
 });
 
@@ -296,16 +314,30 @@ describe("a fotografia da carta (o conteúdo guardado: o histórico inteiro para
   });
   test("arrolamento (D1): sem a chegada do sistema pago, com a frase; só os dados que existem", () => {
     const c = s.montarConteudoDaCarta(fontes({ membro: { situacaoMembro: "ARROLAMENTO" } }), opcoes);
-    // o adulto em arrolamento espera a regra do tratamento
-    expect(c.pendente).toBe("TRATAMENTO");
+    // o adulto em arrolamento é "o irmão" (resposta de 26/11)
+    expect(c.pendente).toBeUndefined();
+    expect(c.tratamento).toBe("o irmão");
     const m = s.montarConteudoDaCarta(fontes({ membro: { situacaoMembro: "ARROLAMENTO", nascimento: "2012-01-01" } }), opcoes);
     expect(m.situacao).toEqual({ codigo: "ARROLAMENTO", membro: null, texto: null, frase: s.FRASE_ARROLAMENTO });
     expect(m.historico.chegada).toBeNull();
     expect(m.historico.batismoAguas).toEqual({ data: "2009-03-12", local: "Congregação Vila Nova" });
   });
-  test("a situação sem regra: a fotografia não sai (pendente)", () => {
-    expect(s.montarConteudoDaCarta(fontes({ membro: { situacaoMembro: "SEM_COMUNHAO" } }), opcoes).pendente).toBe("SEM_COMUNHAO");
-    expect(s.montarConteudoDaCarta(fontes({ raiz: { disciplina: { julgado: false, inicio: null, ate: null } } }), opcoes).pendente).toBe("DISCIPLINA_NAO_JULGADA");
+  test("sem comunhão: a data do afastamento da ficha vai para o texto; o processo em andamento, sem motivo; a situação que a carta não conhece não sai", () => {
+    expect(s.montarConteudoDaCarta(fontes({ membro: { situacaoMembro: "SEM_COMUNHAO", semComunhaoDesde: "2025-08-17" } }), opcoes).situacao)
+      .toEqual({ codigo: "OBSERVACAO", membro: true, texto: "em Observação (sem comunhão desde 17/08/2025)" });
+    expect(s.montarConteudoDaCarta(fontes({ membro: { situacaoMembro: "SEM_COMUNHAO" } }), opcoes).situacao.texto).toBe("em Observação (sem comunhão)");
+    const proc = s.montarConteudoDaCarta(fontes({ raiz: { disciplina: { julgado: false, inicio: null, ate: null } } }), opcoes);
+    expect(proc.situacao.texto).toBe("em Observação (processo em andamento)");
+    expect(proc.tratamento).toBe("o irmão");
+    expect(s.montarConteudoDaCarta(fontes({ membro: { situacaoMembro: "INATIVO_QUALQUER" } }), opcoes)).toEqual({ pendente: "SITUACAO_DESCONHECIDA" });
+    expect(s.montarConteudoDaCarta(fontes({ raiz: { disciplina: { julgado: true, exclusao: true, inicio: "2026-01-10", ate: null } } }), opcoes)).toEqual({ pendente: "EXCLUSAO" });
+    // a data do afastamento não vai para a fotografia como campo próprio (só no texto da situação)
+    expect(JSON.stringify(s.montarConteudoDaCarta(fontes({ membro: { situacaoMembro: "SEM_COMUNHAO", semComunhaoDesde: "2025-08-17" } }), opcoes))).not.toMatch(/semComunhaoDesde/);
+  });
+  test("o adulto congregado: o irmão, em Paz", () => {
+    const c = s.montarConteudoDaCarta(fontes({ membro: { situacaoMembro: "CONGREGADO", sexo: "F" } }), opcoes);
+    expect(c.tratamento).toBe("a irmã");
+    expect(c.situacao).toEqual({ codigo: "PAZ", membro: false, texto: "em Paz" });
   });
   test("a mesma ficha dá sempre a mesma fotografia (e a mesma impressão)", () => {
     const sal = "0f".repeat(16);

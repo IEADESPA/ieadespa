@@ -1123,6 +1123,20 @@ Depois da revisão do Financeiro até `4c06d58`:
 - **Onde se marca a inexistente (ele, 24/11):** ninguém confere o lote folha por folha quando ele chega da gráfica.
   A inexistente aparece no lançamento, na planilha, e se marca ali, do mesmo jeito que a cancelada ou a arrancada. Na
   devolução parcial, a inexistente no fim do bloco não impede: as folhas em branco antes dela voltam livres.
+- **Decididas pela sessão na construção (26/11/2026, "para conferir" na homologação), pela regra "o desenho mais novo vale":**
+  - o botão "Cadastrar lote da gráfica" dourado (r30) e a procura também na aba Blocos do celular (r30);
+  - o aviso de confirmação embaixo, no meio, nas telas novas de Membros e Finanças (nas telas antigas fica no alto);
+  - os textos das listas vazias que não tinham desenho: "Nenhum bloco nesta situação.", "Nenhum bloco nesta situação
+    com esse número.", "Nenhum bloco com a sua congregação." e "Nenhum bloco com as congregações da área.".
+- **O lançamento (parte 3), decidido pela sessão pelas regras dele (26/11, "para conferir"):**
+  - o erro se corrige na própria linha ("Corrigir", com motivo): a linha mostra o valor novo, e o histórico guarda o
+    antigo, o novo, o motivo, quem e quando. Nada se apaga. A nota já conferida pelo Conselho vira "Pedir correção"
+    (com a auditoria, na 2ª leva);
+  - a procura do dizimista é na Igreja inteira, mostrando só o nome, o número e a congregação;
+  - lança-se no mês atual e no anterior, nunca depois de hoje, e no anterior só enquanto a congregação não mandou o
+    relatório daquele mês;
+  - a cancelada, a arrancada e a inexistente se marcam na própria planilha, como ele decidiu em 24/11;
+  - "marcada em novembro" sai dos 4 pontos da tela, com o fundo azul da linha.
 
 ### Rodada 28: o que ele aprovou (23/11/2026)
 
@@ -1185,6 +1199,49 @@ Depois da revisão do Financeiro até `4c06d58`:
     resto, a Secretaria Geral manda o arquivo de novo (o sistema não guarda CPF nem contato).
   - Os textos construídos sem desenho ("As linhas que faltaram", o aviso "faltam N dias" e "Descartar a importação")
     ele aprova vendo na homologação.
+  - **O completar exige a data** (sem ela, a ficha continua em arrolamento). A linha da importação que deu erro ao
+    gravar fica fora da importação do resto: a secretaria cadastra à mão.
+- **As respostas dele à volta 6 (25/11):**
+  - **As duas datas:** o batismo é quando a pessoa vira membro, e a data de entrada (admissão, a que conta os 90 dias)
+    é a do batismo. A ficha guarda também a **data da conversão** (desde quando é congregado), quando houver: ela
+    serve só para a caminhada da pessoa (a ficha 360) e não conta para o rol nem para o voto.
+  - **O congregado não tem cadeira em órgão nenhum** (conselho, comissão, Câmara, diretoria): o sistema recusa e
+    explica, como no cargo. Por isso ele nem aparece na lista do órgão nem na da assembleia; não há marca "não conta".
+  - **O congregado pode servir:** coopera nos serviços (ministério de menores, setor técnico, cuidado pastoral,
+    expansão) e pode ter carteirinha, com as travas que cada serviço já tem. Só não vota, não conta em reunião e não
+    tem cargo nem cadeira.
+- **As respostas dele sobre o acesso (25/11):**
+  - **Afastar, pôr de licença, inativar ou desligar quem tem cargo** é da secretaria **do nível daquele cargo** (o
+    cargo local, a secretaria local; o de área, a área; o geral, a Geral), sem esperar a Geral: "são 300, 400 cargos;
+    quem conhece é o local". Com o processo, a pessoa **perde na hora o acesso que o cargo dava** e fica só com o
+    perfil de membro dela.
+  - **Afastar do cargo é separado do rol:** afastar do **cargo** tira só o acesso do cargo, e a pessoa continua
+    membro ativo, entrando no aplicativo (carteirinha, contribuições). Já o membro **afastado, de licença ou inativo no
+    rol** perde também a entrada de membro, como hoje. O "afastar do cargo" entra com o cargo, no desenho da
+    Estrutura.
+  - **A data de saída** vai de **2006 (a fundação da igreja) até hoje**: nem antes, nem no futuro. Dado antigo errado
+    que vier pela importação se pensa quando aparecer.
+  - **A avaliação das congregações (PSC):** o ano da fundação e os anos sob tutela **não contam** na cobrança.
+  - **A licença por candidatura:** quem não volta depois da eleição fica **INATIVO** no rol (pode voltar um dia pelo
+    caminho normal). Se falecer durante a licença, a secretaria marca FALECIDO na ficha, e a licença fecha sozinha.
+  - **A simulação de emancipação:** o critério do encarregado em comunhão só a CME da própria área e a Geral veem; para
+    as outras, a Extensão aparece como "não dá para avaliar daqui".
+  - **As cartas, a licença e o e-mail (decididas pela sessão em 25 e 26/11, pelas regras dele):**
+    - A Carta de Mudança só é emitida e processada depois da confirmação do próprio membro, e o prazo de 30 dias conta
+      da confirmação.
+    - O membro sai mesmo tendo cargo e mesmo sendo o último que administra os acessos. Nesse caso, a Geral é avisada na
+      confirmação.
+    - Quando a secretaria age pela pessoa que tem cargo, vale a regra do nível do cargo e a confirmação reforçada.
+    - Licença por candidatura: só uma aberta por pessoa, e o registro do retorno diz a situação real.
+    - Trocar ou apagar o e-mail de quem tem cargo vigente: só a secretaria do nível do cargo, ou de cima, com a
+      confirmação reforçada.
+  - **O processo disciplinar (ele, 26/11/2026):**
+    - A Suspensão Temporária na JAI tem o teto de 90 dias e não é mais "indeterminada". Nos outros órgãos (Tribunal,
+      CEI), a suspensão sem dias continua valendo.
+    - Quem responde ao processo não registra nada no próprio processo, nem a defesa, o defensor ou o recurso. Ele
+      entrega, e outra pessoa da secretaria registra.
+    - O relator tem de ser do órgão que julga: no órgão da congregação ou da área, quem já pode agir no processo; no
+      órgão central, quem tem assento ativo nele.
 - **A movimentação (saída e volta): volta para o desenho (rodada 29).** Ele marcou a versão, mas disse que ainda não está
   boa. As regras novas dele:
   - **O membro sai sozinho, pelo aplicativo, na hora:** pede a carta de mudança no próprio celular e sai na mesma hora,
@@ -1306,6 +1363,93 @@ guardadas para quando o módulo 3 começar. O levantamento completo do desenhist
   7. **O ponto de culto guarda** o bairro, o dia e a hora, o responsável e o endereço da casa; o endereço só a
      liderança vê.
   8. **O mapa:** a congregação vê o ponto de cada membro dela; a área e a Geral veem só a contagem por bairro.
+- **A rodada 32 conferida por ele (24 e 25/11/2026):** o painel e a ficha da congregação **aprovados sem mudança**; os
+  cultos, o termo de posse e o mapa aprovados **com estes ajustes** (vão para a rodada 33):
+  - **Os cultos:** a **Geral monta a agenda padrão semanal** e manda para todas as congregações; a congregação não
+    mexe no padrão. Ela pode **acrescentar** cultos novos, que entram na hora (a Geral vê no painel). Para **mudar**
+    um culto do padrão, a congregação pede, e a Geral aceita ou recusa.
+  - **O termo de posse** fica em três partes, com um aceite só (no celular ou no balcão, com o PIN): (1) o **texto
+    oficial do Regimento**, Art. 117, "Termo de Posse e Adesão ao Regimento Interno" (já traz o serviço voluntário da
+    Lei 9.608/98, sem vínculo de emprego); (2) o **termo de LGPD**; (3) o **termo de acesso ao sistema**. O PDF sai com
+    o QR (a página do QR não mostra CPF nem endereço).
+  - **A virada do ano** (resposta 3 ajustada): a renovação em lote ("continuam em 2027") é **só do executivo, feita
+    pela Geral**: os dirigentes e os pastores de área. A diretoria da congregação não se renova em lote nem é
+    cadastrada antes pelo dirigente que sai: no ano novo, o dirigente (novo ou o mesmo) cadastra a diretoria dele.
+  - **O mapa** (a dúvida dele: o mapa erra e o bairro digitado pode não existir nele): a **contagem por bairro usa o
+    bairro da ficha, não o mapa**, e a ficha passa a **escolher o bairro numa lista fixa de Parauapebas**, que a Geral
+    cuida. O ponto de cada membro (só a congregação vê) sai do CEP e do número (erro de uns 50 m), e a secretaria
+    pode **arrastar o alfinete** para o lugar certo.
+- **A rodada 33 conferida por ele (25/11/2026):**
+  - **O mapa: aprovado** ("ficou melhor"). Só há congregações em **Parauapebas**: uma lista de bairros só.
+  - **Os cultos: a agenda ficou rasa; precisa ser personalizada.** Há culto que é **só da Sede** e culto que é **só
+    das congregações**, e o **culto de domingo muda de tipo a cada domingo** (a agenda tem de dizer o tipo de cada
+    domingo do mês). Vai para a rodada 34.
+  - **O termo de posse:**
+    - **Todo mundo que trabalha na igreja e tem acesso ao sistema** assina o seu termo de serviço voluntário do ano,
+      não só o dirigente. O termo é **personalizado para cada cargo ou função** (a parte 1 muda conforme o cargo).
+    - **O aceite no balcão** pode ser feito em qualquer nível: local, área ou Geral.
+    - **Assinam o Presidente e o Secretário Geral** (os dois juntos, como no estatuto), além de quem toma posse e de
+      quem deu a posse. Os dois têm **uma página para aceitar os termos de todo mundo**.
+    - **O PDF** (com CPF e endereço) baixam a própria pessoa, quem a pôs no cargo, o Presidente e o Secretário Geral.
+      A página do QR continua sem CPF nem endereço.
+    - **A virada: aprovada.** A diretoria local fica uns dias sem acesso até o dirigente cadastrar e cada um aceitar o
+      termo ("no máximo uma semana"); o acesso volta sozinho com o aceite.
+    - Depois: **os perfis de acesso de cada cargo**, ligados ao cargo na congregação (a missão do cargo com acesso).
+- **A rodada 33 (25/11/2026), publicada numa página nova:** `https://claude.ai/artifact/NF7zseCp4zVWsUEwUzmQDG`, com
+  os ajustes acima em 3 telas: os cultos (a Geral monta a agenda padrão e responde aos pedidos; a congregação acrescenta
+  e pede; a área acompanha), o termo de posse em três partes (o aceite no celular e no balcão, o PDF de duas folhas, a
+  página do QR, a virada do executivo pela Geral e a diretoria cadastrada pelo dirigente em janeiro) e o mapa (a lista
+  dos bairros e vilas de Parauapebas, o bairro na ficha e o alfinete). Os textos da LGPD e do acesso ao sistema (partes 2
+  e 3) foram redigidos pelo desenhista e esperam a conferência dele. O painel e a ficha aprovados mudam só no texto da
+  virada (a explicação da rodada lista cada linha).
+- **A rodada 34 (25/11/2026), publicada numa página nova:** `https://claude.ai/artifact/6sztidgaZ5r3a46jdZYzfi`, com
+  os ajustes da 33 em 2 telas (o mapa e a virada, aprovados, não voltam):
+  - **os cultos com a agenda personalizada:** cada culto do padrão diz para quem é (todas, só a Sede ou só as
+    congregações); o culto de domingo às 18h tem o tipo de cada domingo do mês (1º a 5º, e a Sede pode ter outro tipo no
+    mesmo domingo); Vila Nova e a Sede veem cada uma só os seus cultos; a congregação também pede a mudança do tipo de um
+    domingo. Os nomes dos cultos e dos domingos são de mentira, para ele conferir;
+  - **o termo de posse de todos que trabalham e usam o sistema:** a parte 1 por cargo (o dirigente com o Art. 117; os
+    outros modelos, redigidos pelo desenhista, para ele conferir, cuidados pela Secretaria Geral); o balcão em qualquer
+    nível; as quatro assinaturas (quem toma posse, quem deu a posse, o Presidente e o Secretário Geral) e a página dos
+    dois para assinar em lote, com filtro, podendo abrir; o PDF só para os quatro; a área vê a situação e o QR dos outros.
+    O acesso vale desde o aceite da pessoa; a assinatura dos dois completa o termo.
+- **A rodada 34 conferida por ele (25/11/2026): as 2 telas aprovadas (versão única).** Os "para conferir" ficam como
+  desenhados. As observações dele:
+  - **O último domingo do mês:** à tarde, a reunião do Ministério; à noite, a ceia local. É o **último** domingo: o 5º
+    quando o mês tem 5, o 4º quando tem 4. A agenda tem a regra "último domingo do mês", não um número fixo.
+  - **A ceia geral** acontece a cada 3 ou 4 meses (a Geral marca as datas). No dia da ceia geral **não há ceia local**:
+    a agenda troca sozinha naquele domingo. A configuração entra na agenda (mostrada na rodada 35, sem tela nova).
+  - **A validade jurídica do termo assinado pelo sistema** (a dúvida dele: a autenticação da pessoa, não o texto).
+    - A assinatura por PIN ou senha é uma **assinatura eletrônica**: a lei brasileira (MP 2.200-2/2001, art. 10, § 2º, e
+      Lei 14.063/2020) aceita a assinatura fora do ICP-Brasil quando as partes admitem aquele meio. O peso dela num
+      processo depende de provar **quem** assinou e **que o texto não mudou**.
+    - **Decidido pela sessão, para dar esse peso:**
+      - no ato de assinar, o PIN ou a senha **mais o código por e-mail**;
+      - o resumo criptográfico do texto assinado guardado com a assinatura;
+      - o QR e o código de conferência no PDF;
+      - a cópia do termo assinado no e-mail da pessoa;
+      - a trilha com o dia, a hora e o aparelho;
+      - uma frase no próprio termo: a pessoa declara que aceita assinar pelo sistema.
+    - **Confirmar com o advogado da igreja antes da produção.** Se ele pedir mais, a assinatura pelo gov.br (gratuita) entra
+      como opção para os termos que pedirem.
+- **A rodada 35 (26/11/2026), a última do Módulo 3, publicada numa página nova:** `https://claude.ai/artifact/G6iCv25ZBDB6bcK9pjYHYC`, com 7 telas (35
+  perfis, 70 desenhos):
+  - **os perfis de acesso de cada cargo:** a Geral cuida de um perfil por cargo (os módulos em que o cargo entra, os de
+    hoje); o alcance vem do nível; exige 90 dias de membro e o termo aceito; os acessos de cada congregação e da área; a
+    recusa de quem não tem os 90 dias; o "meu acesso"; o acesso sem cargo, com prazo e motivo, dado pela Geral; e **a
+    passagem** de quem já tem acesso (412 hoje, em 5 grupos; ninguém fica sem entrar no dia de ligar);
+  - **afastar do cargo:** pela secretaria do nível do cargo, com o motivo; o cargo fica "afastado", sem o acesso; a
+    pessoa continua membro ativo; depois, devolver o acesso ou pôr outro;
+  - **a agenda** com a regra do último domingo (à tarde, a reunião do Ministério; à noite, a Santa Ceia, a ceia local) e
+    as ceias gerais marcadas pela Geral (a ceia local sai sozinha naquele domingo);
+  - **a assinatura reforçada** (o PIN mais o código por e-mail, a frase de aceite, a cópia no e-mail; no balcão sem
+    e-mail, o documento com foto; no lote, um código só) e a linha nova do PDF;
+  - **o que a 32 deixou para depois:** as áreas e os números (com os níveis acima da área desligados, só a Geral vê), a
+    congregação nova e o ponto de culto novo, mudar de área, fechar ou juntar (com a numeração que desce) e os termos
+    guardados.
+  - 9 perguntas que o plano não respondia ficaram na explicação da página (a passagem, os papéis de outros módulos,
+    afastar o dirigente, o acesso sem cargo, os cargos da Geral, a reunião do Ministério e a ceia geral, o balcão sem
+    e-mail e o lote, o prazo de guarda dos termos e o saldo da congregação que fecha).
 - **O painel da Estrutura ("quem precisa de atenção"):** o cargo vago, o cargo vencendo, os dados velhos e o termo de
   posse pendente, e todos os avisos do módulo. Cada nível vê os seus tipos de aviso, como no Financeiro.
 - **A Sede:** fica numa área, a **Área 1 ("Distrito Sede")**, com os pontos de culto dela. É área de uma congregação
@@ -1320,6 +1464,38 @@ guardadas para quando o módulo 3 começar. O levantamento completo do desenhist
     muda sozinho;
   - na página da congregação, o membro vê o endereço, os horários e o dirigente, a secretaria vê os números de pessoas,
     e o dinheiro e o patrimônio só a tesouraria e a Geral veem.
+- **A rodada 35 conferida por ele (26 e 27/11/2026).** Vale o que está aqui, não a descrição da rodada acima:
+  - **Aprovadas sem observação:** a assinatura reforçada, as áreas e os números (igrejas), mudar de área, fechar ou
+    juntar e os termos guardados.
+  - **A agenda:** aprovada, com uma correção: **a ceia geral é no sábado**, não no domingo. No fim de semana dela, o
+    domingo da congregação não tem ceia local: é um culto local comum (o "culto alternativo").
+  - **Os perfis por cargo: as duas primeiras telas REPROVADAS** (o perfil do cargo com a lista de módulos e a passagem
+    de quem já tem acesso). As outras telas dos perfis ficam aprovadas. O que ele quer:
+    - **A pessoa pode ter vários cargos em níveis diferentes ao mesmo tempo** (ex.: tesoureiro local e pastor de área;
+      líder da EBD local e líder dos homens na área). Cada cargo dá o acesso **no nível dele**: ela vê o Financeiro só
+      da congregação e o que é do pastor, na área inteira. Um cargo não alarga o outro.
+    - **O módulo dado a um cargo já traz as funções do nível**, sem marcar subfunção por subfunção: o Financeiro dado ao
+      tesoureiro local mostra só o que é do local; o mesmo Financeiro dado a um cargo geral mostra tudo o que é do geral.
+    - **O 1º e o 2º do cargo** (tesoureiro, secretário) têm as mesmas prerrogativas.
+    - **Não há passagem:** depois da importação, ninguém tem cargo; cada um recebe o acesso quando é posto no cargo. O
+      acesso sem cargo fica só como exceção (com prazo e motivo, pela Geral). As duas pessoas que entram hoje precisam
+      continuar entrando no dia de ligar (cuidado da construção).
+  - **Afastar do cargo: REPROVADO como ideia.** Não existe licença por viagem nem afastamento manual; quem viaja continua
+    no cargo, e o 2º faz o mesmo que o 1º. O cargo só acaba por causa: a disciplina (pelo processo, sozinho), a licença
+    por candidatura política e a saída da igreja (carta de mudança). Quem volta da disciplina ou de outra igreja **não
+    recebe o cargo de volta**. Quando o 1º sai, o 2º passa a 1º e se escolhe um novo 2º.
+  - **Rodada 36, a última até o lançamento:** os perfis refeitos e o cargo vago (o 2º que sobe), com a correção da
+    agenda. Depois dela, o desenhista para; o resto se confere na homologação.
+- **A rodada 36 (27/11/2026), a ÚLTIMA de telas novas** (uma r37 só para revisar tela reprovada da 36), publicada em
+  `https://claude.ai/artifact/XvrTGUH4v34BgVnMHFRaQY`. Tem 5 telas, numa versão única cada (44 desenhos). Os fontes estão no
+  ramo `desenho-r36`.
+  - **o perfil de cada cargo:** o módulo ligado mostra, só para leitura, as funções do nível;
+  - **vários cargos:** o João, tesoureiro local e pastor de área; o Lucas, EBD local e homens na área; o acesso sem cargo;
+  - **o cargo vago:** o aviso no painel; a 2ª que sobe a 1ª, com confirmação e termo; o novo 2º; o que vê quem saiu;
+  - **a agenda:** a ceia geral no sábado e, no domingo seguinte, o culto local sem ceia;
+  - **a área nova e trocar o pastor de área.**
+  - Ficaram "para a construção": os textos da importação, os centros de custo, ligar um nível acima da área e os avisos
+    do painel.
 
 ### A varredura antes da construção: as respostas dele (20/11/2026, noite)
 
@@ -1332,6 +1508,10 @@ guardadas para quando o módulo 3 começar. O levantamento completo do desenhist
   dízimo cai no mês atual.
 - **Departamentos e Missões ficam FORA da 1ª entrega.** Continuam como hoje até nascer o módulo de cada um, e aí entram
   por ele.
+  - **Mudou em 25/11/2026 (ele):** os **centros de custo** dos departamentos e das secretarias entram no Financeiro já
+    em janeiro, com o saldo que veio de dezembro e o lançar das entradas e saídas de cada um pela Tesouraria Geral. O
+    módulo de Departamentos (relatórios, a tesouraria de cada um) continua para depois. Ver
+    [o plano até 01/01](plano-ate-01-01-2027.md#8-os-centros-de-custo-dos-departamentos-e-das-secretarias-a-mudança-dele-25112026).
 - **Só duas formas de receber: espécie e digital (Pix).** Maquininha, TED e cheque não existem por enquanto.
 - **O extrato:** a conta geral é no **banco Cora**.
   - Até existir a ligação automática (a v10.16 prevê o Pix pela Cora), alguém da Tesouraria Geral baixa o arquivo do

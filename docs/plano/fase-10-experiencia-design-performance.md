@@ -1459,6 +1459,16 @@ guardadas para quando o módulo 3 começar. O levantamento completo do desenhist
     recebe o cargo de volta**. Quando o 1º sai, o 2º passa a 1º e se escolhe um novo 2º.
   - **Rodada 36, a última até o lançamento:** os perfis refeitos e o cargo vago (o 2º que sobe), com a correção da
     agenda. Depois dela, o desenhista para; o resto se confere na homologação.
+- **A rodada 36 (27/11/2026), a ÚLTIMA de telas novas** (uma r37 só para revisar tela reprovada da 36), publicada em
+  `https://claude.ai/artifact/XvrTGUH4v34BgVnMHFRaQY`. Tem 5 telas, numa versão única cada (44 desenhos). Os fontes estão no
+  ramo `desenho-r36`.
+  - **o perfil de cada cargo:** o módulo ligado mostra, só para leitura, as funções do nível;
+  - **vários cargos:** o João, tesoureiro local e pastor de área; o Lucas, EBD local e homens na área; o acesso sem cargo;
+  - **o cargo vago:** o aviso no painel; a 2ª que sobe a 1ª, com confirmação e termo; o novo 2º; o que vê quem saiu;
+  - **a agenda:** a ceia geral no sábado e, no domingo seguinte, o culto local sem ceia;
+  - **a área nova e trocar o pastor de área.**
+  - Ficaram "para a construção": os textos da importação, os centros de custo, ligar um nível acima da área e os avisos
+    do painel.
 
 ### A varredura antes da construção: as respostas dele (20/11/2026, noite)
 

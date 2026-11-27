@@ -4,7 +4,9 @@
 //      processo de cargo, e a recusa vem depois de todas as outras que quem salva provoca à vontade (a sonda sem gravar nada responde igual para todos);
 //   2. o "processar" das Cartas de Mudança confere a pessoa DENTRO da transação: quem faleceu ou saiu do rol por outra causa não vira "desligado por carta"
 //      (a carta é cancelada e a ficha fica como está), e quem foi readmitido no meio do processamento não é minimizado;
-//   3. a licença por candidatura começa 90 dias antes do pleito: o pleito que já passou e o registro antes da hora são recusados; dentro dos 90 dias começa hoje.
+//   3. a licença por candidatura começa 90 dias antes do pleito: o pleito que já passou e o registro antes da hora são recusados; dentro dos 90 dias começa hoje;
+//   4. o PIN provisório: o PIN, a queda das sessões e a trilha juntos (a primeira vez e a troca), e "avisado por e-mail" só quando o e-mail saiu (aqui não há
+//      serviço de e-mail: a resposta diz que o aviso não saiu e a trilha registra).
 process.env.AUTH_SECRET = "segredo-do-roteiro-da-revisao-3-" + "x".repeat(24);
 const L = require("./lib");
 const { ok, fim, q, escalar, obterPool } = L;
@@ -13,7 +15,8 @@ const { chamarRota } = require("./lib-afm");
 const BASE_ID = 1530000;
 const ID = {
   geral: BASE_ID + 1, secLocal: BASE_ID + 2, comum: BASE_ID + 3, excluido: BASE_ID + 4, emCargo: BASE_ID + 5, proponente: BASE_ID + 6,
-  cartaFalecida: BASE_ID + 10, cartaExcluida: BASE_ID + 11, cartaReadmitido: BASE_ID + 12, cartaJaDesligada: BASE_ID + 13, cartaNormal: BASE_ID + 14
+  cartaFalecida: BASE_ID + 10, cartaExcluida: BASE_ID + 11, cartaReadmitido: BASE_ID + 12, cartaJaDesligada: BASE_ID + 13, cartaNormal: BASE_ID + 14,
+  pinComEmail: BASE_ID + 20, pinSemEmail: BASE_ID + 21
 };
 const NOME_SEDE = "Sede Revisao E2E153";
 const NOME_OUTRA = "Outra Revisao E2E153";
@@ -172,6 +175,40 @@ async function principal() {
   const gravada = await escalar("SELECT CONCAT(CONVERT(varchar(10), DataPleito, 120), '|', CONVERT(varchar(10), DataInicioLicenca, 120)) FROM LicencasCandidatura WHERE MembroId = @id", { id: ID.comum });
   ok(dentro.status === 201 && (await statusDe(ID.comum)) === "LICENCA_CANDIDATURA" && gravada === `${diasDeHoje(60)}|${diasDeHoje(0)}`
     && fala(dentro).includes(`a partir de hoje (${dataBr(diasDeHoje(0))})`), "dentro dos 90 dias: a licença começa hoje, e é hoje o início gravado e dito", `${resumo(dentro)} ${gravada}`);
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 4. o PIN provisório: o PIN, as sessões e a trilha juntos; o aviso por e-mail só quando saiu ==");
+  await q("UPDATE MembroReferencia SET Email = N'pin.teste@exemplo.org' WHERE MembroId = @id", { id: ID.pinComEmail });
+  const gerarPin = (membroId) => chamarRota("GestaoPinMembro/index.js", { metodo: "POST", token: soPessoas(), corpo: { membroId } });
+  const linhaPin = (id) => q("SELECT PinHash, CAST(Provisorio AS INT) AS Provisorio, DefinidoPorMembroId, CASE WHEN ProvisorioExpiraEm > SYSUTCDATETIME() THEN 1 ELSE 0 END AS Vale FROM MembroPins WHERE MembroId = @id", { id });
+  const trilhaPin = (id) => q("SELECT Acao, ISNULL(DadosDepois, N'') AS DadosDepois, UsuarioId FROM AuditLog WHERE Tabela = N'MembroPins' AND RegistroId = @id ORDER BY AuditId", { id });
+  const sessoesAbertas = (id) => escalar("SELECT COUNT(*) FROM SessoesAtivas WHERE MembroId = @id AND Encerrada = 0", { id });
+  ok((await linhaPin(ID.pinComEmail)).length === 0, "antes: a pessoa não tem PIN (a gravação vai pelo INSERT)");
+  await q("INSERT INTO SessoesAtivas (MembroId, DispositivoInfo) VALUES (@m, N'e2e-153'), (@m, N'e2e-153')", { m: ID.pinComEmail });
+  const pin1 = await gerarPin(ID.pinComEmail);
+  const depois1 = await linhaPin(ID.pinComEmail);
+  const trilha1 = await trilhaPin(ID.pinComEmail);
+  ok(pin1.status === 200 && pin1.body.sucesso === true && /^\d{4,8}$/.test(String(pin1.body.pin || "")), "o PIN é gerado e entregue na resposta", resumo(pin1));
+  ok(depois1.length === 1 && depois1[0].Provisorio === 1 && depois1[0].DefinidoPorMembroId === ID.secLocal && depois1[0].Vale === 1,
+    "o PIN provisório fica gravado (INSERT), com quem gerou e a validade", JSON.stringify(depois1));
+  ok((await sessoesAbertas(ID.pinComEmail)) === 0, "as sessões abertas da pessoa caíram");
+  ok(pin1.body.avisadoPorEmail === false && pin1.body.avisoEmailNaoSaiu === true && /aviso por e-mail não saiu/.test(fala(pin1)),
+    "sem serviço de e-mail: a resposta NÃO diz que avisou, e diz que o aviso não saiu", resumo(pin1));
+  const geradoUm = trilha1.filter((t) => t.Acao === "PIN_PROVISORIO_GERADO");
+  const naoSaiuUm = trilha1.filter((t) => t.Acao === "Aviso do PIN provisório não enviado");
+  ok(geradoUm.length === 1 && geradoUm[0].UsuarioId === ID.secLocal && /"sessoesEncerradas":2/.test(geradoUm[0].DadosDepois),
+    "a trilha guarda quem gerou e as 2 sessões encerradas", JSON.stringify(trilha1));
+  ok(naoSaiuUm.length === 1 && naoSaiuUm[0].UsuarioId === ID.secLocal, "a trilha registra que o aviso por e-mail não saiu", JSON.stringify(trilha1));
+  ok(!JSON.stringify(trilha1).includes(String(pin1.body.pin)) && !JSON.stringify(trilha1).includes("pin.teste@exemplo.org"), "a trilha não leva o PIN nem o e-mail");
+  const pin2 = await gerarPin(ID.pinComEmail);
+  const depois2 = await linhaPin(ID.pinComEmail);
+  ok(pin2.status === 200 && depois2.length === 1 && depois2[0].PinHash !== depois1[0].PinHash && depois2[0].Provisorio === 1,
+    "gerar de novo troca o PIN (UPDATE), sem linha repetida", JSON.stringify(depois2.map((l) => l.Provisorio)));
+  ok((await trilhaPin(ID.pinComEmail)).filter((t) => t.Acao === "PIN_PROVISORIO_GERADO").length === 2, "cada geração deixa a sua linha na trilha");
+  const semEmail = await gerarPin(ID.pinSemEmail);
+  const trilhaSem = await trilhaPin(ID.pinSemEmail);
+  ok(semEmail.status === 200 && semEmail.body.avisadoPorEmail === false && semEmail.body.avisoEmailNaoSaiu === false && !/não saiu/.test(fala(semEmail))
+    && trilhaSem.length === 1 && trilhaSem[0].Acao === "PIN_PROVISORIO_GERADO", "quem não tem e-mail: nada de aviso nem de 'não saiu'; só a linha da geração", `${resumo(semEmail)} ${JSON.stringify(trilhaSem)}`);
 }
 
 principal().then(() => fim("e2e-153 (acesso, revisão de fora)")).catch((e) => { console.error(e); ok(false, "o roteiro quebrou: " + (e && e.message)); fim("e2e-153 (acesso, revisão de fora)"); });

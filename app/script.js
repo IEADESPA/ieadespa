@@ -877,7 +877,7 @@ async function gerarPinProvisorioAcao(membroId) {
   } catch (_) { return; }
   if (!data.sucesso) { cx.textContent = data.mensagem || "Não foi possível gerar o PIN."; return; }
   cx.innerHTML = `<p class="vol-selo-ok">PIN provisório de ${escaparHtmlEbd(data.nome)}: <strong style="font-size:1.4rem;letter-spacing:0.2em;">${escaparHtmlEbd(data.pin)}</strong></p>
-    <p class="subtitle">Entregue pessoalmente. Vale por ${Number(data.validadeDias)} dias; a pessoa cria o próprio PIN ao entrar. Esta tela não mostra o PIN de novo.${data.avisadoPorEmail ? " A pessoa também foi avisada por e-mail." : ""}</p>`;
+    <p class="subtitle">Entregue pessoalmente. Vale por ${Number(data.validadeDias)} dias; a pessoa cria o próprio PIN ao entrar. Esta tela não mostra o PIN de novo.${data.avisadoPorEmail ? " A pessoa também foi avisada por e-mail." : data.avisoEmailNaoSaiu ? " Atenção: o aviso por e-mail não saiu; avise a pessoa por outro meio." : ""}</p>`;
 }
 
 // ---- Termos de Compromisso/Confidencialidade (v2.7) — bloqueio real, ver

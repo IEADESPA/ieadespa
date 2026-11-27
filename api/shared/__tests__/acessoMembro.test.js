@@ -3,21 +3,28 @@
 // roteiro ponta a ponta. O que importa aqui: a resposta de falha é UMA só, a tentativa é reservada antes de conferir, e a sessão do PIN não tem permissão.
 let mockRegras = [];
 let mockConsultas = [];
-jest.mock("../db", () => ({
-  getPool: async () => ({ request: () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
-    mockConsultas.push({ sql: texto, inputs: { ...inputs } });
+let mockTransacoes = [];
+jest.mock("../db", () => {
+  // cada consulta guarda em que transação rodou (null = fora de transação); a transação guarda como terminou
+  const novaRequisicao = (transacao) => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
+    mockConsultas.push({ sql: texto, inputs: { ...inputs }, transacao: transacao ? transacao.id : null });
     for (const [padrao, valor] of mockRegras) if (padrao.test(texto)) return { recordset: typeof valor === "function" ? valor(inputs) : valor, rowsAffected: [0] };
     return { recordset: [], rowsAffected: [0] };
-  } }; return r; } }),
-  sql: new Proxy({}, { get: () => () => undefined })
-}));
-jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), sha256: () => "" }));
+  } }; return r; };
+  class Transaction { constructor() { this.id = mockTransacoes.length + 1; this.estado = "nova"; mockTransacoes.push(this); }
+    async begin() { this.estado = "aberta"; } async commit() { this.estado = "confirmada"; } async rollback() { this.estado = "desfeita"; } }
+  class Request { constructor(transacao) { return novaRequisicao(transacao); } }
+  return { getPool: async () => ({ request: () => novaRequisicao(null) }),
+    sql: new Proxy({ Transaction, Request }, { get: (alvo, prop) => (prop in alvo ? alvo[prop] : () => undefined) }) };
+});
+jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => true), sha256: () => "" }));
 const mockEmails = [];
-jest.mock("../notificacaoEmail", () => ({ enviarEmailNotificacao: jest.fn(async (e) => { mockEmails.push(e); }) }));
+let mockEmailSai = true;   // enviarEmailNotificacao devolve false (sem lançar) quando o serviço não manda
+jest.mock("../notificacaoEmail", () => ({ enviarEmailNotificacao: jest.fn(async (e) => { mockEmails.push(e); return mockEmailSai; }) }));
 
 const auth = require("../auth");
 const pin = require("../pinMembro");
-const { registrarAuditoria } = require("../auditoria");
+const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("../auditoria");
 const hEntrar = require("../../MembroEntrar/index.js");
 const hPin = require("../../MembroPin/index.js");
 const hGestao = require("../../GestaoPinMembro/index.js");
@@ -36,7 +43,7 @@ const quando = (padrao, valor) => mockRegras.push([padrao, valor]);
 const rodou = (padrao) => mockConsultas.filter(c => padrao.test(c.sql));
 const tokenDe = (membroId, extra = {}) => auth.reassinarSessao({ membroId, permissoes: [], escopoCongregacoes: [], termosPendentes: [], ...extra });
 
-beforeEach(() => { mockRegras = []; mockConsultas = []; mockEmails.length = 0; registrarAuditoria.mockClear(); });
+beforeEach(() => { mockRegras = []; mockConsultas = []; mockTransacoes = []; mockEmails.length = 0; mockEmailSai = true; registrarAuditoria.mockClear(); registrarAuditoriaNaTransacao.mockClear(); });
 
 const HASH_7392 = pin.hashPin("7392", 20);
 const livre = { EstavaBloqueado: false, Falhas: 1, BloqueadaAgora: false };
@@ -378,11 +385,46 @@ describe("GestaoPinMembro — PIN provisório gerado pela Secretaria", () => {
     membroDaCentral();
     quando(/SELECT @@ROWCOUNT AS n/, [{ n: 1 }]);
     const r = await chamar(hGestao, { token: secretaria(), corpo: { membroId: 20 } });
-    expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ tabela: "MembroPins", registroId: 20, acao: "PIN_PROVISORIO_GERADO", usuarioId: 5 });
-    expect(JSON.stringify(registrarAuditoria.mock.calls)).not.toContain(r.body.pin);
+    expect(registrarAuditoriaNaTransacao.mock.calls[0][1]).toMatchObject({ tabela: "MembroPins", registroId: 20, acao: "PIN_PROVISORIO_GERADO", usuarioId: 5 });
+    expect(JSON.stringify([registrarAuditoria.mock.calls, registrarAuditoriaNaTransacao.mock.calls[0][1]])).not.toContain(r.body.pin);
     expect(mockEmails).toHaveLength(1);
     expect(mockEmails[0].email).toBe("ana@exemplo.org");
     expect(JSON.stringify(mockEmails)).not.toContain(r.body.pin);
+  });
+  // Revisão de fora, 26/11/2026 (S4/E2): o PIN, a queda das sessões e a trilha numa transação só; (S3/E1/L5) "avisado por e-mail" só se o e-mail saiu.
+  test("o PIN, a queda das sessões e a trilha na MESMA transação, confirmada; o e-mail só depois do commit", async () => {
+    membroDaCentral();
+    const r = await chamar(hGestao, { token: secretaria(), corpo: { membroId: 20 } });
+    expect(r.status).toBe(200);
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["confirmada"]);
+    for (const padrao of [/MembroPins/, /SET Falhas = 0, BloqueadoAte = NULL/, /UPDATE SessoesAtivas SET Encerrada = 1/]) {
+      expect(rodou(padrao).length).toBeGreaterThan(0);
+      for (const c of rodou(padrao)) expect(c.transacao).toBe(1);
+    }
+    expect(registrarAuditoriaNaTransacao.mock.calls[0][0]).toBe(mockTransacoes[0]);
+    expect(registrarAuditoria).not.toHaveBeenCalled();
+  });
+  test("a trilha que falha desfaz o PIN e a queda das sessões: nenhum PIN é entregue", async () => {
+    membroDaCentral();
+    registrarAuditoriaNaTransacao.mockImplementationOnce(async () => { throw new Error("banco fora"); });
+    let r = null, erro = null;
+    try { r = await chamar(hGestao, { token: secretaria(), corpo: { membroId: 20 } }); } catch (e) { erro = e; }
+    expect(erro || (r && r.status >= 500)).toBeTruthy();
+    expect(r && r.body && r.body.pin).toBeFalsy();
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["desfeita"]);
+    expect(mockEmails).toHaveLength(0);
+  });
+  test("o e-mail que não sai: avisadoPorEmail falso, a resposta diz, e a trilha registra (sem o PIN e sem o endereço inteiro)", async () => {
+    membroDaCentral();
+    mockEmailSai = false;
+    const r = await chamar(hGestao, { token: secretaria(), corpo: { membroId: 20 } });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ sucesso: true, avisadoPorEmail: false, avisoEmailNaoSaiu: true });
+    expect(r.body.mensagem).toMatch(/aviso por e-mail não saiu/);
+    expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ tabela: "MembroPins", registroId: 20, acao: "Aviso do PIN provisório não enviado", usuarioId: 5 });
+    const trilha = JSON.stringify(registrarAuditoria.mock.calls);
+    expect(trilha).not.toContain(r.body.pin);
+    expect(trilha).not.toContain("ana@exemplo.org");
   });
   describe("escopo por Extensão da Tenda: vale a regra de PESSOA (congregação e extensão)", () => {
     const daExtensao = (extra = {}) => tokenDe(5, { permissoes: ["pessoas"], escopoCongregacoes: ["Central"], escopoExtensaoNome: "Tenda Jardim", ...extra });

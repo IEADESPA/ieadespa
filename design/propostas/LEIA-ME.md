@@ -72,6 +72,7 @@ nunca dentro do desenho: o que está no desenho é o que o construtor faz.
 
 ## Publicar
 
+- **A página da rodada 36, a ÚLTIMA de telas novas**: `https://claude.ai/artifact/XvrTGUH4v34BgVnMHFRaQY` ("Propostas de tela · rodada 36"), publicada em 27/11/2026 com o `logo.png` junto e o banco (`db`) das escolhas (ids `r36-*` e `geral-r36`; testado: gravar e apagar). Fontes: `r36-*.js`, `montar-r36.js` e `conferir-r36.js` (44 desenhos, 0 problema); uma r37 só existe para revisar uma tela da 36 que ele reprovar.
 - **A página da rodada 35**: `https://claude.ai/artifact/G6iCv25ZBDB6bcK9pjYHYC` ("Propostas de tela · rodada 35"), publicada em 26/11/2026, com o banco (`db`) das escolhas (ids `r35-*` e `geral-r35`).
 - **A página da rodada 34**: `https://claude.ai/artifact/6sztidgaZ5r3a46jdZYzfi` ("Propostas de tela · rodada 34"),
   publicada em 25/11/2026 (versão 2, id 1795631022-db04), com o banco (`db`) das escolhas (testado: gravar e apagar).

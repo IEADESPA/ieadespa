@@ -51,6 +51,8 @@ const corpoFicha = (extra = {}) => ({ membroId: 5, nome: "Pessoa Cinco", congreg
 // espaço do fim (a rota usa a sigla que o catálogo devolve). Situação que a Secretaria acrescentou num caso: mockCatalogoExtra.
 const CATALOGO_STATUS = [["ATIVO", 1], ["LICENÇA", 1], ["INATIVO", 1], ["DESLIGADO", 1], ["FALECIDO", 1], ["LICENCA_CANDIDATURA", 1], ["TRANSFERIDO", 0]];
 let mockCatalogoExtra = [];
+// O catálogo das situações do membro (SituacoesMembro), como as migrações o semeiam.
+const CATALOGO_SITUACAO = ["CONGREGADO", "EM_COMUNHAO", "SEM_COMUNHAO"];
 const noCatalogo = (sigla) => (typeof sigla !== "string" ? undefined
   : [...CATALOGO_STATUS, ...mockCatalogoExtra].find(([s]) => s.toUpperCase() === sigla.replace(/ +$/, "").toUpperCase()));
 
@@ -58,7 +60,8 @@ function regrasDaFicha(ficha) {
   mockRegras = [
     [/FROM StatusMembro WHERE Sigla = @sigla/, (e) => { const l = noCatalogo(e.sigla); return { recordset: l ? [{ Sigla: l[0], Ativa: l[1] }] : [] }; }],
     [/SELECT TOP 1 Nome FROM Congregacoes/, { recordset: [{ Nome: "Central" }] }],
-    [/FROM CargosMinisteriais WHERE Sigla/, { recordset: [{ x: 1 }] }],
+    [/FROM CargosMinisteriais WHERE Sigla/, (e) => ({ recordset: [{ Sigla: String(e.sigla).replace(/ +$/, "").toUpperCase(), x: 1 }] })],
+    [/FROM SituacoesMembro WHERE Sigla/, (e) => { const s = String(e.sigla).replace(/ +$/, "").toUpperCase(); return { recordset: CATALOGO_SITUACAO.includes(s) ? [{ Sigla: s, x: 1 }] : [] }; }],
     [/sp_getapplock/, { recordset: [{ resultado: 0 }] }],
     [/SELECT l\.EscopoTipo, l\.EscopoId FROM Lideranca l/, () => ({ recordset: mockCargo ? [{ EscopoTipo: mockCargo.tipo, EscopoId: mockCargo.id }] : [] })],
     [/SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id/, { recordset: [{ Nome: "Central" }] }],
@@ -921,5 +924,73 @@ describe("a Extensão informada e o escopo", () => {
     const r = await chamar("POST", { token: local(), corpo: corpoFicha({ extensaoId: 8 }) });
     expect(r.body.mensagem).toMatch(/Extensão da Tenda inválida/);
     expect(gravacoes()).toHaveLength(0);
+  });
+});
+
+// Revisão de fora, 26/11/2026 (L8): o catálogo compara sem caixa e sem o espaço do fim; a ficha grava a sigla que ele devolve, não o texto que veio.
+describe("a situação do membro e o cargo ministerial na forma do catálogo", () => {
+  test("\"em_comunhao \" é gravada como EM_COMUNHAO", async () => {
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ situacaoMembro: "em_comunhao " }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(gravacoes()[0].entradas.situacaoMembro).toBe("EM_COMUNHAO");
+  });
+
+  test("o cargo escrito em minúsculas é o mesmo cargo do catálogo: gravado como DIACONO, sem contar como troca de cargo", async () => {
+    regrasDaFicha(fichaNoBanco({ CargoAnterior: "DIACONO" }));
+    const r = await chamar("POST", { token: sessao(77, { nivel: "CONGREGACAO", escopoCongregacoes: ["Central"] }), corpo: corpoFicha({ cargoMinisterial: "diacono ", cargoOriginal: "DIACONO" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(gravacoes()[0].entradas.cargoMinisterial).toBe("DIACONO");
+  });
+
+  test("a situação fora do catálogo continua recusada", async () => {
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ situacaoMembro: "QUALQUER" }) });
+    expect(r.body.sucesso).toBe(false);
+    expect(gravacoes()).toHaveLength(0);
+  });
+});
+
+// Revisão de fora, 26/11/2026 (L7): a causa disciplinar que quem salva não vê fica na MESMA saída; numa saída nova (de uma situação que não é de saída para
+// DESLIGADO ou FALECIDO) vale a causa enviada, e a vacância recebe a causa nova.
+describe("a causa disciplinar oculta não é reaplicada numa saída nova", () => {
+  const vacanciaCom = () => mockConsultas.map((c) => c.texto).filter((t) => /^VACANCIA/.test(t));
+
+  test("o readmitido (ATIVO, com a EXCLUSAO antiga) que falece: fica FALECIMENTO, e a vacância recebe FALECIMENTO", async () => {
+    regrasDaFicha(fichaNoBanco({ Status: "ATIVO", MotivoAnterior: "EXCLUSAO" }));
+    mockRegras.unshift([/AlvoAdministra/, { recordset: [{ TemCargoVigente: 0, AlvoAdministra: 0, Outros: 1 }] }]);
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "FALECIDO", motivoSaida: "FALECIMENTO" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(gravacoes()[0].entradas.motivoSaida).toBe("FALECIMENTO");
+    expect(vacanciaCom()).toEqual(["VACANCIA 5 FALECIMENTO"]);
+  });
+
+  test("o readmitido desligado sem a causa no pedido: a causa antiga não volta (a vacância registra DESLIGAMENTO)", async () => {
+    regrasDaFicha(fichaNoBanco({ Status: "ATIVO", MotivoAnterior: "ABANDONO_DIGITAL" }));
+    mockRegras.unshift([/AlvoAdministra/, { recordset: [{ TemCargoVigente: 0, AlvoAdministra: 0, Outros: 1 }] }]);
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "DESLIGADO" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(gravacoes()[0].entradas.motivoSaida).toBeNull();
+    expect(vacanciaCom()).toEqual(["VACANCIA 5 DESLIGAMENTO"]);
+  });
+
+  test("a mesma saída (DESLIGADO por EXCLUSAO): quem não vê não apaga nem troca a causa", async () => {
+    regrasDaFicha(fichaNoBanco({ Status: "DESLIGADO", MotivoAnterior: "EXCLUSAO", DataSaidaAnterior: "2026-03-01" }));
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "DESLIGADO", motivoSaida: "DESLIGAMENTO" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(gravacoes()[0].entradas.motivoSaida).toBe("EXCLUSAO");
+  });
+
+  test("de uma saída para a outra (DESLIGADO por EXCLUSAO para FALECIDO): a data e a causa da saída ficam", async () => {
+    regrasDaFicha(fichaNoBanco({ Status: "DESLIGADO", MotivoAnterior: "EXCLUSAO", DataSaidaAnterior: "2026-03-01" }));
+    mockRegras.unshift([/AlvoAdministra/, { recordset: [{ TemCargoVigente: 0, AlvoAdministra: 0, Outros: 1 }] }]);
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "FALECIDO", motivoSaida: "FALECIMENTO" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(gravacoes()[0].entradas).toMatchObject({ motivoSaida: "EXCLUSAO", dataSaida: "2026-03-01" });
+  });
+
+  test("quem vê a disciplina da pessoa grava a causa que mandou, como antes", async () => {
+    regrasDaFicha(fichaNoBanco({ Status: "DESLIGADO", MotivoAnterior: "EXCLUSAO", DataSaidaAnterior: "2026-03-01" }));
+    const r = await chamar("POST", { token: sessao(77, { permissoes: ["pessoas", "disciplina"] }), corpo: corpoFicha({ status: "DESLIGADO", motivoSaida: "DESLIGAMENTO" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(gravacoes()[0].entradas.motivoSaida).toBe("DESLIGAMENTO");
   });
 });

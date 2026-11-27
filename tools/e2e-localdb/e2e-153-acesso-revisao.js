@@ -8,7 +8,9 @@
 //   4. o PIN provisório: o PIN, a queda das sessões e a trilha juntos (a primeira vez e a troca), e "avisado por e-mail" só quando o e-mail saiu (aqui não há
 //      serviço de e-mail: a resposta diz que o aviso não saiu e a trilha registra);
 //   5. a trava do último administrador dentro da transação: duas suspensões de acesso ao mesmo tempo, cada uma num processo com a sua conexão, contra as
-//      duas últimas pessoas que administram os acessos: só uma passa.
+//      duas últimas pessoas que administram os acessos: só uma passa;
+//   6. a ficha: a situação do membro e o cargo gravados com a sigla do catálogo (o banco compara sem caixa e sem o espaço do fim), e a causa disciplinar
+//      antiga, que quem salva não vê, não é reaplicada numa saída nova (o readmitido que falece fica com a causa FALECIMENTO).
 process.env.AUTH_SECRET = "segredo-do-roteiro-da-revisao-3-" + "x".repeat(24);
 const L = require("./lib");
 const { ok, fim, q, escalar, obterPool } = L;
@@ -18,7 +20,8 @@ const BASE_ID = 1530000;
 const ID = {
   geral: BASE_ID + 1, secLocal: BASE_ID + 2, comum: BASE_ID + 3, excluido: BASE_ID + 4, emCargo: BASE_ID + 5, proponente: BASE_ID + 6,
   cartaFalecida: BASE_ID + 10, cartaExcluida: BASE_ID + 11, cartaReadmitido: BASE_ID + 12, cartaJaDesligada: BASE_ID + 13, cartaNormal: BASE_ID + 14,
-  pinComEmail: BASE_ID + 20, pinSemEmail: BASE_ID + 21, adminA: BASE_ID + 30, adminB: BASE_ID + 31
+  pinComEmail: BASE_ID + 20, pinSemEmail: BASE_ID + 21, adminA: BASE_ID + 30, adminB: BASE_ID + 31,
+  fichaCatalogo: BASE_ID + 40, readmitido: BASE_ID + 41
 };
 const NOME_SEDE = "Sede Revisao E2E153";
 const NOME_OUTRA = "Outra Revisao E2E153";
@@ -250,6 +253,27 @@ async function principal() {
   ok(medidas === 1 && (depoisA.alvoAdministra ? 1 : 0) + (depoisB.alvoAdministra ? 1 : 0) === 1,
     "uma medida só no banco, e uma pessoa continua administrando os acessos", `${medidas} ${JSON.stringify([depoisA, depoisB])}`);
   for (const r of retirados) await q("UPDATE Lideranca SET AtivoAte = @ate WHERE LiderancaId = @id", { id: r.id, ate: r.ate || null });
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 6. a ficha: a sigla do catálogo; a causa disciplinar antiga não volta numa saída nova ==");
+  const cargoDoCatalogo = await escalar("SELECT TOP 1 Sigla FROM CargosMinisteriais WHERE Sigla <> N'MEMBRO' ORDER BY Sigla");
+  await q("UPDATE MembroReferencia SET CargoMinisterial = @c WHERE MembroId = @id", { id: ID.fichaCatalogo, c: cargoDoCatalogo });
+  const comCaixa = await pessoas("POST", { token: geral(), corpo: ficha(ID.fichaCatalogo, { situacaoMembro: "em_comunhao ", cargoMinisterial: `${cargoDoCatalogo.toLowerCase()} `, cargoOriginal: cargoDoCatalogo }) });
+  const gravado = await escalar("SELECT CONCAT(SituacaoMembro, '|', CargoMinisterial) FROM MembroReferencia WHERE MembroId = @id", { id: ID.fichaCatalogo });
+  ok(comCaixa.body && comCaixa.body.sucesso === true && gravado === `EM_COMUNHAO|${cargoDoCatalogo}`, "\"em_comunhao \" e o cargo em minúsculas são gravados com a sigla do catálogo",
+    `${resumo(comCaixa)} ${gravado}`);
+  ok(comCaixa.body && comCaixa.body.membro && comCaixa.body.membro.capacidade && comCaixa.body.membro.capacidade.emComunhao === true && comCaixa.body.membro.situacaoMembro === "EM_COMUNHAO",
+    "e a pessoa conta como em comunhão (a capacidade eleitoral reconhece a situação)", JSON.stringify(comCaixa.body && comCaixa.body.membro && { s: comCaixa.body.membro.situacaoMembro, c: comCaixa.body.membro.capacidade }));
+  const historicoCargo = await escalar("SELECT COUNT(*) FROM CargosMinisteriaisHistorico WHERE MembroId = @id", { id: ID.fichaCatalogo });
+  ok(historicoCargo === 0, "o mesmo cargo escrito de outro jeito não conta como troca de cargo (nada no histórico)", String(historicoCargo));
+  // o readmitido: ATIVO, com a EXCLUSAO de antes guardada (escondida de quem não tem "disciplina")
+  await q("UPDATE MembroReferencia SET Status = 'ATIVO', MotivoSaida = 'EXCLUSAO', DataSaida = NULL WHERE MembroId = @id", { id: ID.readmitido });
+  const faleceu = await pessoas("POST", { token: soPessoas(), corpo: ficha(ID.readmitido, { status: "FALECIDO", situacaoMembro: "SEM_COMUNHAO", motivoSaida: "FALECIMENTO" }) });
+  const fichaFalecido = await escalar("SELECT CONCAT(Status, '|', MotivoSaida) FROM MembroReferencia WHERE MembroId = @id", { id: ID.readmitido });
+  ok(faleceu.body && faleceu.body.sucesso === true && fichaFalecido === "FALECIDO|FALECIMENTO",
+    "o readmitido que falece fica com a causa FALECIMENTO, não com a EXCLUSAO antiga", `${resumo(faleceu)} ${fichaFalecido}`);
+  const mesmaSaida = await pessoas("POST", { token: soPessoas(), corpo: ficha(ID.readmitido, { status: "FALECIDO", situacaoMembro: "SEM_COMUNHAO", motivoSaida: null, telefone: "91900000153" }) });
+  ok(mesmaSaida.body && mesmaSaida.body.sucesso === true, "salvar de novo a mesma saída segue funcionando", resumo(mesmaSaida));
 }
 
 principal().then(() => fim("e2e-153 (acesso, revisão de fora)")).catch((e) => { console.error(e); ok(false, "o roteiro quebrou: " + (e && e.message)); fim("e2e-153 (acesso, revisão de fora)"); });

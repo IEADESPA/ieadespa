@@ -228,11 +228,14 @@ module.exports = async function (context, req) {
   if (method === "POST") {
     const {
       membroId: membroIdCorpo, nome, congregacaoId, status, dataNascimento, dataAdmissao, dizimistaFiel,
-      situacaoMembro, departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId,
+      situacaoMembro: situacaoPedida, departamentoId, cargoMinisterial: cargoPedido, telefone, email, endereco, extensaoId,
       dataBatismo, formaAdmissao, origem, igrejaAnterior,
       dataRitoRecebimento, nomeLidoRito, ministranteRito, estadoCivil,
       dataAfastamento, motivoSaida, dataSaida, sexo, cargoDesde, enderecoPartes
     } = req.body || {};
+    // O cargo ministerial e a situação do membro passam pelo catálogo, que compara sem caixa e sem o espaço do fim (o SQL Server): daqui em diante valem
+    // a sigla que o catálogo devolve, não o texto que veio ("em_comunhao" seria aceito e gravado assim, e depois não contaria como EM_COMUNHAO).
+    let cargoMinisterial = cargoPedido, situacaoMembro = situacaoPedida;
     if (!membroIdCorpo || !nome) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, nome." } };
       return;
@@ -260,11 +263,12 @@ module.exports = async function (context, req) {
       }
     }
     if (cargoMinisterial) {
-      const cm = await pool.request().input("sigla", sql.NVarChar(30), cargoMinisterial).query(`SELECT TOP 1 1 AS x FROM CargosMinisteriais WHERE Sigla = @sigla`);
+      const cm = await pool.request().input("sigla", sql.NVarChar(30), cargoMinisterial).query(`SELECT TOP 1 Sigla FROM CargosMinisteriais WHERE Sigla = @sigla`);
       if (cm.recordset.length === 0) {
         context.res = { status: 200, body: { sucesso: false, mensagem: `Cargo ministerial "${cargoMinisterial}" não está cadastrado.` } };
         return;
       }
+      cargoMinisterial = String(cm.recordset[0].Sigla);   // a sigla do catálogo (revisão de fora, 26/11/2026, L8)
     }
 
     // Formas de admissão fixas do Estatuto Art. 6º §1º — regra jurídica, não catálogo
@@ -339,11 +343,12 @@ module.exports = async function (context, req) {
     // editável por tela via GestaoCatalogos, diferente de FORMAS_ADMISSAO/CAUSAS_SAIDA,
     // que são regra jurídica fixa) — hoje era texto livre, sem checagem nenhuma.
     if (situacaoMembro) {
-      const sit = await pool.request().input("sigla", sql.NVarChar(30), situacaoMembro).query(`SELECT TOP 1 1 AS x FROM SituacoesMembro WHERE Sigla = @sigla`);
+      const sit = await pool.request().input("sigla", sql.NVarChar(30), situacaoMembro).query(`SELECT TOP 1 Sigla FROM SituacoesMembro WHERE Sigla = @sigla`);
       if (sit.recordset.length === 0) {
         context.res = { status: 200, body: { sucesso: false, mensagem: `Situação "${situacaoMembro}" não está cadastrada no catálogo.` } };
         return;
       }
+      situacaoMembro = String(sit.recordset[0].Sigla);   // a sigla do catálogo (revisão de fora, 26/11/2026, L8)
     }
 
     const existente = await pool.request().input("id", sql.Int, membroId).query(`
@@ -433,7 +438,6 @@ module.exports = async function (context, req) {
     const vDiscSalvar = auth.visaoDaPermissao(usuario, "disciplina");
     const veDisciplinaDaPessoa = existia && !!(vDiscSalvar && noEscopoDaPessoa(vDiscSalvar, existente.recordset[0].CongregacaoNome, existente.recordset[0].ExtensaoNome));
     const motivoOculto = existia && SAIDAS_DISCIPLINARES.has(motivoAnterior) && !veDisciplinaDaPessoa;
-    const motivoSaidaFinal = motivoOculto ? motivoAnterior : (motivoSaida || null);
     const statusAnterior = existia ? existente.recordset[0].Status : null;
     const emailAnterior = existia ? existente.recordset[0].EmailAnterior : null;
     // Sem a situação no pedido, ATIVO (como sempre). A situação já gravada fica, mesmo que a Secretaria a tenha desativado no catálogo. Outra situação: só a ativa
@@ -476,6 +480,11 @@ module.exports = async function (context, req) {
     // encerra Assentos/Liderança/Cargo — mesmo racional já usado em GestaoCartas/processar
     // e na exclusão disciplinar, agora coberto também no fluxo manual de edição da Pessoa.
     const entrandoEmStatusTerminal = STATUS_TERMINAIS.includes(statusFinal) && statusAnterior !== statusFinal;
+    // A causa disciplinar que quem salva não vê fica como estava na MESMA saída (e de uma saída para a outra, que guarda a data da saída). Uma saída NOVA
+    // (entrar em DESLIGADO ou FALECIDO vindo de uma situação que não é de saída) tem a causa dela: a antiga não é reaplicada (revisão de fora, 26/11/2026, L7:
+    // o readmitido que depois falecia ficava "falecido por exclusão", e a vacância e a credencial recebiam a causa antiga).
+    const saidaNova = entrandoEmStatusTerminal && !STATUS_TERMINAIS.includes(statusAnterior);
+    const motivoSaidaFinal = motivoOculto && !saidaNova ? motivoAnterior : (motivoSaida || null);
     // sair do rol ativo (para qualquer outra situação, inclusive as terminais) corta o acesso: quem tem cargo de liderança passa pela conferência
     const saindoDoRolAtivo = existia && statusAnterior !== statusFinal && statusFinal !== "ATIVO";
     if (saindoDoRolAtivo && !(await conferirSaidaDeLideranca(pool, req, context, usuario, membroId))) return;

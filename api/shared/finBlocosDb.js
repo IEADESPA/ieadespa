@@ -562,6 +562,9 @@ async function marcarExcecaoNaTransacao(t, usuario, { geral, v, por }) {
   }
   const ja = (await pedidoNaTransacao(t).input("f", sql.Int, v.folha).query(`SELECT Destino FROM FinFolhas WHERE Folha = @f`)).recordset[0];
   if (ja) return MUDOU(`A folha ${milhar(v.folha)} já tem destino (${regra.destinoDaTela(ja.Destino)}).`);
+  // a folha ligada a um dízimo por Pix (incremento 4) está reservada: o recibo foi escrito nela e ela se lança na planilha, preenchida com o Pix
+  const ligada = (await pedidoNaTransacao(t).input("f", sql.Int, v.folha).query(`SELECT 1 AS x FROM FinDizimosDigitais WHERE Folha = @f AND Situacao = 'LIGADO'`)).recordset[0];
+  if (ligada) return { sucesso: false, mensagem: `A folha ${milhar(v.folha)} está ligada a um dízimo por Pix: ela se lança na planilha, preenchida com o Pix.` };
   // a folha guarda a entrega em que foi usada (a última saída do bloco, que está entregue: regra de 24/11/2026) e o papel de quem marcou, na hora
   const papel = await papelNaHora(t, { geral, membroId: por, congregacaoId: b.CongregacaoId });
   const id = (await pedidoNaTransacao(t).input("b", sql.Int, b.BlocoId).input("f", sql.Int, v.folha).input("d", sql.NVarChar(12), v.destino)
@@ -793,6 +796,14 @@ async function devolver(pool, { primeiraFolha, folha, pessoa, parcial, primeiraE
       const outra = depois.filter((x) => x.Destino !== "INEXISTENTE").reduce((m, x) => Math.max(m, Number(x.Folha)), 0);
       if (outra) return { sucesso: false, mensagem: `A folha ${milhar(branco)} não pode ser a primeira em branco: a ${milhar(outra)} já tem destino.` };
       if (depois.some((x) => Number(x.Folha) === branco)) return { sucesso: false, mensagem: `A folha ${milhar(branco)} não pode ser a primeira em branco: ela é inexistente.` };
+      // a folha ligada a um dízimo por Pix (incremento 4) tem o recibo escrito: não volta em branco
+      const ligada = (await pedidoNaTransacao(t).input("id", sql.Int, b.BlocoId).input("x", sql.Int, branco).query(`
+        SELECT TOP 1 d.Folha FROM FinDizimosDigitais d
+        WHERE d.BlocoId = @id AND d.Situacao = 'LIGADO' AND d.Folha >= @x AND NOT EXISTS (SELECT 1 FROM FinFolhas f WHERE f.Folha = d.Folha)
+        ORDER BY d.Folha`)).recordset[0];
+      if (ligada) {
+        return { sucesso: false, mensagem: `A folha ${milhar(ligada.Folha)} está ligada a um dízimo por Pix e ainda não foi lançada: lance-a antes; a primeira em branco vem depois dela.` };
+      }
       livresDaParcial = regra.faixaLivre(branco, ultima, depois.map((x) => Number(x.Folha)));
     }
     // quem devolveu: o nome escrito, quem levou o bloco ou alguém da liderança da congregação (a lista do rastreio), por último (revisão de fora, S1)

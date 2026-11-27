@@ -61,7 +61,7 @@ motivo), e toda ação grava na trilha. Toda migração é idempotente (`IF NOT 
 | 204 | `FinLancamentos` | a folha preenchida: bloco, folha, dia, hora (sozinha), tipo (dízimo, oferta de culto, oferta voluntária), forma (espécie ou Pix), valor, a voluntária junto do dízimo, o dizimista (matrícula ou nome digitado), "Este mês" ou "Mês posterior" e o mês em que soma (calculado) |
 | 204 | `FinRelatoriosMes` | o relatório do mês de cada congregação: a folha em que começa (a 1ª marcada "mês posterior" no mês anterior) e a última, a situação (aberto, mandado, conferido pela Geral, fechado pelo Conselho Fiscal), a reabertura só com o voto do Conselho e a autorização do Ministério |
 | 205 | o papel na hora, no histórico da folha | o portão da parte 2 (26/11/2026, I2): `FinFolhas.PapelNaHora` e `FinFolhasDesfeitas.PapelNaHora` e `DesfeitaPapel` (NVARCHAR(260), aceitam vazio) guardam o papel de quem marcou e de quem desfez como o histórico o escreve, na hora do ato ("tesoureira de Vila Nova", "Tesouraria Geral"); a linha de antes fica vazia e o histórico mostra só o nome. A 205 era do dízimo digital: daqui em diante, as do plano andaram um número (206 a 212); os centros de custo de dezembro tomam o número livre seguinte |
-| 206 | `FinDizimosDigitais` | o Pix que o membro informa; ligado a uma folha do bloco (quem liga escolhe a folha livre) ou excluído com o motivo (o membro é avisado) |
+| 206 | `FinDizimosDigitais` | o incremento 4 (27/11/2026, construída): o Pix que o membro informa (o valor e o dia e a hora; a congregação vem do cadastro); ligado a uma folha do bloco (quem liga escolhe a folha livre: a folha fica reservada, `Folha` com índice único filtrado e a entrega pela chave composta, como a 202) ou excluído com o motivo (o membro é avisado; a regra `DIZIMO_DIGITAL_EXCLUIDO` semeada). Ver a seção 8 |
 | 207 | `FinPreRepasses`, `FinComprovantesPix`, `FinDespesasCongregacionais` | o pré-repasse por período (corte com dia e hora), os comprovantes anexados (foto ou PDF), as despesas congregacionais (cadastra a congregação, aceita a Geral; obra só o Presidente) |
 | 208 | `FinCaixaDias`, `FinCaixaMovimentos`, `FinRecibos` | o caixa único da Geral (abre e fecha; espécie e Pix separados; "a espécie virou Pix" com o comprovante; espécie zero no fim do dia) e o recibo com o código do QR |
 | 209 | `FinExtratoBanco`, `FinExtratoCongregacao` | o arquivo do extrato da Cora (até a ligação automática) e o extrato de cada congregação na Geral (entra Pix e espécie; sai a parte da Geral quando o relatório fecha e a despesa dela paga pela Geral) |
@@ -333,3 +333,29 @@ dos centros de custo vai mexer em dezembro).
    travado, nada no cartão do celular), e o tom azul da linha também, como no mural.
 6. **O "Pré-repasse" e a coluna "Entrega" da área:** até o incremento 5, só o que foi lançado, sem número de repasse inventado.
 7. **O seletor "Lançando por / Trocar"** é uma peça de `front/src/comum/`, do r20-seletor aprovado, para o Membros usar depois.
+
+## 8. O incremento 4 (o dízimo digital): o que foi construído (27/11/2026)
+
+**O desenho:** r22 `r22-dizimo-digital` op. 1 (quem liga escolhe a folha livre do bloco de papel e digita o número; só o lançar e o
+fechar ficam impedidos), com o r20 para o membro e a área, e o r24 na planilha ("Há 2 dízimos digitais para ligar", "Salvar: ligue
+antes", o chip "Pix ligado").
+
+**O servidor:** a migração 206, a regra pura `shared/finDizimoDigital.js` (com os testes antes), as consultas
+`shared/finDizimoDigitalDb.js` e as rotas `FinDizimoDigital` (`financeiro/dizimo-digital/{acao?}`: a lista, a área, a conferência da
+folha, ligar e excluir) e `MeuDizimoDigital` (`meu-dizimo-digital/{matricula}`: o membro informa e vê os passos). O e2e 206 no LocalDB
+`fin` cobre a migração, cada nível, o "403/404 igual", o lixo e as corridas.
+
+**As regras (as do construtor, todas para conferir com ele):**
+
+1. O membro informa o valor e o dia e a hora do Pix (o mês de agora ou o anterior, nunca depois de hoje); no máximo 5 esperando a
+   tesouraria por membro. Quem deu vem da sessão e a congregação, do cadastro; nunca do pedido.
+2. **Ligar é reservar a folha:** a folha tem de ser de uma entrega em curso à congregação do Pix, sem destino e sem outro Pix. Ela se
+   lança na planilha, preenchida com o Pix: a folha nova vai só com o "Referente a" ("Este mês": dízimo, Pix, o valor e o membro do Pix;
+   "Mês posterior": só a linha, e no mês seguinte ela se preenche com o Pix); o pedido não traz o nome nem o valor dela.
+3. **A trava:** com algum Pix esperando, a planilha abre para ver, mas o salvar é recusado ("Há N dízimos por Pix para ligar"). O
+   seletor da Geral e a área dizem quantos. A exceção da folha (na aba Folhas e na planilha) e a devolução parcial não passam por cima
+   da folha reservada.
+4. Excluir só com o motivo; o aviso ao membro sai depois da gravação (no sininho). Quem liga e exclui: a congregação ou a Tesouraria
+   Geral por ela (fica registrado); a área só acompanha.
+5. Não há "desfazer a ligação" (a folha reservada se lança); corrigir o lançamento que veio do Pix segue a regra da r27. O 3º passo
+   ("conferido no extrato") fica para a parte 7; o comprovante, para a tela do membro (ponto de encaixe).

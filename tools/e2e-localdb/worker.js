@@ -9,7 +9,9 @@ const handlers = { setores: "GestaoSetoresTecnicos/index.js", vistorias: "Gestao
   // FASE 10, Financeiro (e2e-200): os blocos de recibo
   finBlocos: "FinBlocos/index.js",
   // FASE 10, Financeiro, incremento 3 (e2e-204): o lançamento
-  finLancamentos: "FinLancamentos/index.js" };
+  finLancamentos: "FinLancamentos/index.js",
+  // FASE 10, Financeiro, incremento 4 (e2e-206): o dízimo digital (ligar o Pix à folha)
+  finDizimoDigital: "FinDizimoDigital/index.js" };
 (async () => {
   const pool = await obterPool();                      // a ponte já está de pé e conectada
   const espera = () => spec.t0 - Date.now();

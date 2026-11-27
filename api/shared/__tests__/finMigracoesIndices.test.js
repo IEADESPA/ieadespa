@@ -1,12 +1,13 @@
 // Financeiro (revisão de 23/11/2026, I3): a regra 3 do banco (api/CLAUDE.md, "Banco (SQL Server)") nas migrações do Financeiro (faixa 200+).
 // Toda chave estrangeira das tabelas Fin* tem um índice que começa por ela (a chave primária, um UNIQUE ou um CREATE INDEX), menos a de
-// "quem registrou" (CriadoPor, RegistradoPor, DesfeitaPor), que a regra dispensa. Sem o índice, a junção e o "apagar o pai" varrem a tabela.
+// "quem registrou" (CriadoPor, RegistradoPor, DesfeitaPor; e, no dízimo digital da 206, quem ligou e quem excluiu: LigadoPor, ExcluidoPor),
+// que a regra dispensa. Sem o índice, a junção e o "apagar o pai" varrem a tabela.
 // A prova no banco de verdade é o e2e-200 (sys.index_columns depois de a 200 e a 201 rodarem duas vezes).
 const fs = require("fs");
 const path = require("path");
 
 const PASTA = path.join(__dirname, "..", "..", "..", "sql", "migrations");
-const QUEM_REGISTROU = new Set(["CriadoPor", "RegistradoPor", "DesfeitaPor"]);
+const QUEM_REGISTROU = new Set(["CriadoPor", "RegistradoPor", "DesfeitaPor", "LigadoPor", "ExcluidoPor"]);
 
 function lerMigracoesDoFinanceiro() {
   return fs.readdirSync(PASTA).filter((n) => /^2\d\d_.*\.sql$/.test(n)).sort().map((n) => ({ nome: n, texto: fs.readFileSync(path.join(PASTA, n), "utf8") }));

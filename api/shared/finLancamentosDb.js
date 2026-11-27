@@ -16,6 +16,7 @@ const { hojeBrasilia } = require("./dataBrasilia");
 const { abrirTransacao, pedidoNaTransacao, fecharTransacao, marcarExcecaoNaTransacao } = require("./finBlocosDb");
 const regraBlocos = require("./finBlocos");
 const regra = require("./finLancamentos");
+const regraPix = require("./finDizimoDigital");
 
 const MUDOU = (mensagem) => ({ sucesso: false, conflito: true, mensagem });
 const milhar = (n) => Number(n).toLocaleString("pt-BR");
@@ -118,7 +119,20 @@ async function planilha(pool, { congregacaoId, mes, podeLancar }) {
   }
   const mandouAnterior = await relatorioMandado(pool.request(), congregacaoId, anterior);
   const lancavel = podeLancar && (mes === agora || (mes === anterior && !mandouAnterior));
-  const limpa = ({ blocoId, saidaId, ...l }) => l;
+  // o dízimo digital (incremento 4): os Pix esperando a tesouraria (sem ligar, não se salva) e as folhas ligadas a um Pix nas entregas da planilha:
+  // a reservada vem preenchida com o Pix (`ligadas`); a já lançada leva a marca "Pix ligado"
+  const pix = await pool.request().input("c", sql.Int, congregacaoId).input("fx", sql.NVarChar(sql.MAX), JSON.stringify(faixas.map((f) => ({ de: f.de, ate: f.ate })))).query(`
+    SELECT COUNT(*) AS n FROM FinDizimosDigitais WHERE CongregacaoId = @c AND Situacao = 'INFORMADO';
+    SELECT d.Folha, d.Valor, d.MembroId, m.Nome AS Membro, l.Valor AS Lancado
+    FROM OPENJSON(@fx) WITH (De INT '$.de', Ate INT '$.ate') x
+    JOIN FinDizimosDigitais d ON d.Folha BETWEEN x.De AND x.Ate AND d.Situacao = 'LIGADO'
+    JOIN MembroReferencia m ON m.MembroId = d.MembroId
+    LEFT JOIN FinLancamentos l ON l.Folha = d.Folha
+    ORDER BY d.Folha`);
+  const [contagem, comPix] = pix.recordsets;
+  const ligadas = comPix.filter((x) => x.Lancado === null).map((x) => ({ folha: Number(x.Folha), membroId: Number(x.MembroId), membro: x.Membro, valor: regra.centavosDoBanco(x.Valor) }));
+  const pixLancado = new Set(comPix.filter((x) => x.Lancado !== null).map((x) => Number(x.Folha)));
+  const limpa = ({ blocoId, saidaId, ...l }) => (pixLancado.has(l.folha) ? { ...l, pixLigado: true } : l);
   return {
     sucesso: true,
     congregacao: { id: Number(c.CongregacaoId), nome: c.Nome, area: c.Area || null },
@@ -126,7 +140,8 @@ async function planilha(pool, { congregacaoId, mes, podeLancar }) {
     // o "Dia do lançamento": hoje no mês de agora; no anterior, o último dia dele (pode ser outro, dentro do mês)
     diaPadrao: mes === agora ? hoje : regra.ultimoDia(mes),
     comeca: p.comeca, proxima: p.proxima ? { folha: p.proxima.folha, bloco: p.proxima.bloco } : null,
-    marcadasNoAnterior: p.marcadasNoAnterior, linhas: p.linhas.map(limpa), totais: regra.totaisDoMes(doMes, mes), tira
+    marcadasNoAnterior: p.marcadasNoAnterior, linhas: p.linhas.map(limpa), totais: regra.totaisDoMes(doMes, mes), tira,
+    paraLigar: Number(contagem[0].n), ligadas
   };
 }
 
@@ -164,6 +179,10 @@ async function salvar(pool, usuario, { congregacaoId, dados, por, pelaGeral }) {
     const mandou = await relatorioMandado(pedidoNaTransacao(t), congregacaoId, regra.mesAnterior(regra.mesDe(hoje)));
     const d = regra.diaDoLancamento(dados.dia, hoje, mandou);
     if (!d.ok) return { sucesso: false, mensagem: d.mensagem };
+    // o dízimo digital (r22): sem ligar (ou excluir) cada Pix que espera a tesouraria, a planilha fica aberta para ver, mas não se salva
+    const paraLigar = Number((await pedidoNaTransacao(t).input("c", sql.Int, congregacaoId)
+      .query(`SELECT COUNT(*) AS n FROM FinDizimosDigitais WHERE CongregacaoId = @c AND Situacao = 'INFORMADO'`)).recordset[0].n);
+    if (paraLigar) return { sucesso: false, paraLigar, mensagem: `${paraLigar === 1 ? "Há 1 dízimo por Pix para ligar" : `Há ${paraLigar} dízimos por Pix para ligar`}: ligue cada um à folha do recibo de papel (ou exclua com o motivo) antes de salvar.` };
     // os blocos das folhas, travados na ordem (a devolução e a exceção da folha travam a mesma linha): as entregas só se leem depois da trava
     const blocos = (await pedidoNaTransacao(t).input("fs", sql.NVarChar(sql.MAX), JSON.stringify(folhas)).query(`
       SELECT DISTINCT b.BlocoId FROM OPENJSON(@fs) j JOIN FinBlocos b ON CAST(j.value AS INT) BETWEEN b.PrimeiraFolha AND b.UltimaFolha`)).recordset
@@ -176,6 +195,10 @@ async function salvar(pool, usuario, { congregacaoId, dados, por, pelaGeral }) {
     const estado = new Map((await pedidoNaTransacao(t).input("fs", sql.NVarChar(sql.MAX), JSON.stringify(folhas)).query(`
       SELECT f.Folha, f.Destino, l.LancamentoId, l.Referente, l.MesSoma, l.Valor
       FROM OPENJSON(@fs) j JOIN FinFolhas f ON f.Folha = CAST(j.value AS INT) LEFT JOIN FinLancamentos l ON l.Folha = f.Folha`)).recordset.map((x) => [Number(x.Folha), x]));
+    // as folhas ligadas a um Pix (o dízimo digital): o nome e o valor vêm do Pix, nunca do corpo
+    const doPix = new Map((await pedidoNaTransacao(t).input("fs", sql.NVarChar(sql.MAX), JSON.stringify(folhas)).query(`
+      SELECT d.Folha, d.MembroId, d.Valor FROM OPENJSON(@fs) j JOIN FinDizimosDigitais d ON d.Folha = CAST(j.value AS INT) AND d.Situacao = 'LIGADO'`)).recordset
+      .map((x) => [Number(x.Folha), { membroId: Number(x.MembroId), valor: regra.centavosDoBanco(x.Valor) }]));
 
     // 1ª passada: cada linha conferida (a regra pura e o estado da folha); a folha nova segue a ordem do bloco. A recusa leva o número da folha
     // (`folha`), para a tela marcar a linha.
@@ -187,8 +210,10 @@ async function salvar(pool, usuario, { congregacaoId, dados, por, pelaGeral }) {
       if (!fx) return recusa(`A folha ${n} não é de um bloco entregue a ${c.Nome}.`);
       const x = estado.get(l.folha);
       const marca = l.excecao !== undefined;
+      const pix = doPix.get(l.folha);
+      if (marca && pix) return recusa(`Folha ${n}: a folha está ligada a um dízimo por Pix; ela se lança com o Pix, não se marca.`);
       if (!x) {
-        const v = marca ? regra.excecaoNaPlanilha(l) : regra.validarLinha(l);
+        const v = marca ? regra.excecaoNaPlanilha(l) : pix ? regraPix.linhaDaFolhaLigada(l, pix) : regra.validarLinha(l);
         if (!v.ok) return recusa(v.mensagem);
         // a marca vale só na entrega em curso, como na aba Folhas: a folha sem destino de uma entrega que já voltou só se lança
         if (marca && !fx.aberta) return recusa(`Folha ${n}: o bloco ${milhar(fx.bloco)} já voltou desta entrega; a folha que ficou sem destino só se lança.`);
@@ -205,7 +230,7 @@ async function salvar(pool, usuario, { congregacaoId, dados, por, pelaGeral }) {
       if (marca || !x.LancamentoId || x.Referente !== "MES_POSTERIOR" || x.Valor !== null) return { ...MUDOU(`A folha ${n} já foi lançada: para mudar, use Corrigir.`), folha: l.folha };
       const somaEm = iso(x.MesSoma);
       if (somaEm !== d.mes) return recusa(`A folha ${n} soma em ${regra.nomeDoMes(somaEm)}: o nome e o valor entram na planilha de ${regra.nomeDoMes(somaEm)}.`);
-      const v = regra.validarLinha(l, { preencher: true });
+      const v = pix ? regraPix.linhaDaFolhaLigada(l, pix, { preencher: true }) : regra.validarLinha(l, { preencher: true });
       if (!v.ok) return recusa(v.mensagem);
       acoes.push({ nova: false, lancamentoId: Number(x.LancamentoId), ...v.linha });
     }
@@ -249,7 +274,7 @@ async function salvar(pool, usuario, { congregacaoId, dados, por, pelaGeral }) {
     if (lancadas.length) {
       await registrarAuditoriaNaTransacao(t, { tabela: "FinLancamentos", registroId: primeiroId, acao: "FIN_LANCAMENTO_SALVO", usuarioId: por, dadosDepois: {
         congregacaoId, dia: d.dia, pelaGeral: !!pelaGeral,
-        folhas: lancadas.map((a) => ({ folha: a.folha, nova: a.nova, referente: a.referente, tipo: a.tipo, forma: a.forma, valor: a.valor, voluntaria: a.voluntaria, membroId: a.membroId, comNomeDigitado: !!a.nome }))
+        folhas: lancadas.map((a) => ({ folha: a.folha, nova: a.nova, referente: a.referente, tipo: a.tipo, forma: a.forma, valor: a.valor, voluntaria: a.voluntaria, membroId: a.membroId, comNomeDigitado: !!a.nome, doPix: doPix.has(a.folha) }))
       } });
     }
     ok = true;
@@ -371,11 +396,12 @@ async function area(pool, usuario, { mes }) {
   if (cond === "") return { sucesso: true, mes, congregacoes: [], resumo: { congregacoes: 0, lancaram: 0, total: 0, precisam: 0 } };
   const onde = `c.Ativa = 1 ${cond ? "AND " + cond : ""}`;
   const r = await pedido.query(`
-    SELECT c.CongregacaoId, c.Nome, lm.Total, lm.Folhas, ul.Ultimo, es.Esperando
+    SELECT c.CongregacaoId, c.Nome, lm.Total, lm.Folhas, ul.Ultimo, es.Esperando, pl.ParaLigar
     FROM Congregacoes c
     OUTER APPLY (SELECT SUM(l.Valor + ISNULL(l.Voluntaria, 0)) AS Total, COUNT(l.Valor) AS Folhas FROM FinLancamentos l WHERE l.CongregacaoId = c.CongregacaoId AND l.MesSoma = @mes) lm
     OUTER APPLY (SELECT MAX(l.RegistradoEm) AS Ultimo FROM FinLancamentos l WHERE l.CongregacaoId = c.CongregacaoId) ul
     OUTER APPLY (SELECT COUNT(*) AS Esperando FROM FinLancamentos l WHERE l.CongregacaoId = c.CongregacaoId AND l.Valor IS NULL AND l.MesSoma <= @agora) es
+    OUTER APPLY (SELECT COUNT(*) AS ParaLigar FROM FinDizimosDigitais d WHERE d.CongregacaoId = c.CongregacaoId AND d.Situacao = 'INFORMADO') pl
     WHERE ${onde}
     ORDER BY c.Nome;
     WITH faixas AS (${FAIXAS("s.CongregacaoId IN (SELECT c.CongregacaoId FROM Congregacoes c WHERE " + onde + ")")})
@@ -397,6 +423,9 @@ async function area(pool, usuario, { mes }) {
   const lista = congs.map((c) => {
     const x = porCong.get(Number(c.CongregacaoId)) || { pendentes: 0, agora: null };
     const precisa = [];
+    // o dízimo digital primeiro: sem ligar, a congregação não salva (r22)
+    const pl = Number(c.ParaLigar) || 0;
+    if (pl) precisa.push(pl === 1 ? "1 dízimo por Pix para ligar" : `${pl} dízimos por Pix para ligar`);
     if (x.pendentes) precisa.push(x.pendentes === 1 ? "1 folha sem destino" : `${x.pendentes} folhas sem destino`);
     if (Number(c.Esperando)) precisa.push(Number(c.Esperando) === 1 ? "1 folha do mês posterior sem o nome e o valor" : `${c.Esperando} folhas do mês posterior sem o nome e o valor`);
     return {
@@ -424,4 +453,4 @@ async function seletor(pool, usuario) {
   });
 }
 
-module.exports = { congregacoesDoEscopo, seletor, planilha, salvar, corrigir, historico, procurarMembros, area, MAX_LINHAS };
+module.exports = { congregacoesDoEscopo, seletor, planilha, salvar, corrigir, historico, procurarMembros, area, MAX_LINHAS, FAIXAS, faixaDaLinha };

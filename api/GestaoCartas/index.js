@@ -9,7 +9,8 @@
 // A minimização é SOB DEMANDA (sem job/timer): cartas de Mudança com ≥30 dias da
 // confirmação têm os dados pessoais minimizados (Registro Histórico Mínimo), salvo
 // se o membro foi readmitido (DataAdmissao posterior ao pedido) — aí a carta é
-// cancelada ("o relógio zerou", Reg. Art. 131 §4º, II).
+// cancelada ("o relógio zerou", Reg. Art. 131 §4º, II). A readmissão e a situação são conferidas de novo dentro da transação de cada carta: quem já saiu
+// do rol por outra causa (falecido, desligado por outro motivo) fica como está e a carta é cancelada (revisão de fora, 26/11/2026).
 //
 // A Carta de Mudança é o desligamento, e só vale com a CONFIRMAÇÃO DO PRÓPRIO MEMBRO (SolicitarCarta: a sessão dele, com a declaração de ciência). Decisões de
 // 25/11/2026: a secretaria não emite a Mudança que o membro só pediu; o processamento só conta o prazo da confirmação e exige que ela exista. O membro sai
@@ -30,6 +31,9 @@ const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { obterTrava } = require("../shared/financeiroSeguro");
 const travaPermissoes = require("../shared/travaPermissoes");
 const { filtrarPorEscopo, pessoaAlcancavel } = require("../shared/escopoRotas");
+
+// as situações de quem já saiu do rol (as terminais da ficha, GestaoPessoas::STATUS_TERMINAIS): o "processar" não as troca pela saída por carta
+const SAIU_DO_ROL = ["DESLIGADO", "FALECIDO"];
 
 const SELECT_LISTA = `
   SELECT c.CartaId AS cartaId, c.MembroId AS membroId, m.Nome AS nome, cg.Nome AS congregacao,
@@ -169,6 +173,7 @@ module.exports = async function (context, req) {
     let minimizadas = 0;
     let canceladas = 0;
     let semConfirmacao = 0;
+    let jaSaiuDoRol = 0;
     let arquivosNaoApagados = 0;
 
     for (const c of candidatas) {
@@ -190,15 +195,35 @@ module.exports = async function (context, req) {
       } else if (dias !== null && dias >= diasMinimizacao) {
         // A carta concluída, a minimização (com a vacância) e a trilha numa transação só: ou tudo vale, ou nada muda e a carta volta no próximo processamento.
         // O estado da carta vai no WHERE (dois processamentos ao mesmo tempo: só um minimiza); a trava da escada põe em fila com a cerimônia da mesma pessoa.
-        const documentos = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
+        const desfecho = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
           if (!(await obterTrava(rq, `escada_${c.MembroId}`))) { await desistir(); return null; }
+          // A pessoa como está AGORA, com a linha travada até o commit (a ficha que grava a readmissão ou o falecimento espera esta transação): a leitura de
+          // antes do laço pode ter ficado velha (revisão de fora, 26/11/2026).
+          const atual = (await rq().input("m", sql.Int, c.MembroId).query(`SELECT Status, MotivoSaida, CONVERT(varchar(10), DataAdmissao, 120) AS DataAdmissao,
+              CONVERT(varchar(10), DataSaida, 120) AS DataSaida FROM MembroReferencia WITH (UPDLOCK, HOLDLOCK) WHERE MembroId = @m`)).recordset[0];
+          if (!atual) { await desistir(); return null; }
+          const readmitido = atual.DataAdmissao && c.dataReferencia && atual.DataAdmissao > c.dataReferencia;
+          // quem já saiu do rol por outra causa (o falecimento, a exclusão gravada na ficha...) fica como está: a carta perdeu o objeto
+          const saiuPorOutraCausa = SAIU_DO_ROL.includes(atual.Status) && atual.MotivoSaida !== "CARTA_MUDANCA";
+          if (readmitido || saiuPorOutraCausa) {
+            const cancelou = await rq().input("id", sql.Int, c.CartaId).query(`UPDATE CartasTransito SET Status = 'CANCELADA' WHERE CartaId = @id AND Status IN ('CONFIRMADA','EMITIDA')`);
+            if (!((cancelou.rowsAffected && cancelou.rowsAffected[0]) || 0)) { await desistir(); return null; }
+            await registrarAuditoriaNaTransacao(transacao, readmitido
+              ? { tabela: "CartasTransito", registroId: Number(c.CartaId), acao: "Cancelou carta por retorno do membro (processamento)", usuarioId: usuario.membroId,
+                dadosDepois: { status: "CANCELADA", membroId: c.MembroId } }
+              : { tabela: "CartasTransito", registroId: Number(c.CartaId), acao: "Cancelou carta: a pessoa já saiu do rol por outra causa (processamento)", usuarioId: usuario.membroId,
+                dadosDepois: { status: "CANCELADA", membroId: c.MembroId, situacaoNoRol: atual.Status } });
+            return { tipo: readmitido ? "RETORNO" : "JA_SAIU" };
+          }
           const concluiu = await rq().input("id", sql.Int, c.CartaId)
             .query(`UPDATE CartasTransito SET Status = 'CONCLUIDA' WHERE CartaId = @id AND Status IN ('CONFIRMADA','EMITIDA') AND DataConfirmacao IS NOT NULL AND DeclaracaoCiencia IS NOT NULL`);
           if (!((concluiu.rowsAffected && concluiu.rowsAffected[0]) || 0)) { await desistir(); return null; }
           // O membro sai mesmo sendo o último que administra os acessos (a saída é dele); a trilha registra, antes de a vacância encerrar o cargo.
           const ultimoAdministrador = travaPermissoes.ficariaSemAdministrador(await travaPermissoes.situacaoDoCargo(executor, sql, c.MembroId, hojeBrasilia()));
-          // A causa da saída é a da lista (CARTA_MUDANCA), a que a ficha e a vacância entendem; o motivo que o membro escreveu continua na carta.
-          const urls = await minimizarNaTransacao({ executor, transacao }, c.MembroId, { dataSaida: c.dataReferencia, motivo: "CARTA_MUDANCA" });
+          // A causa da saída é a da lista (CARTA_MUDANCA), a que a ficha e a vacância entendem; o motivo que o membro escreveu continua na carta. A saída por
+          // carta já gravada na ficha mantém a data dela.
+          const dataSaida = (atual.Status === "DESLIGADO" && atual.DataSaida) || c.dataReferencia;
+          const urls = await minimizarNaTransacao({ executor, transacao }, c.MembroId, { dataSaida, motivo: "CARTA_MUDANCA" });
           // a licença por candidatura ainda aberta fecha junto (decisão de 25/11/2026)
           await licencaCandidatura.encerrarLicencaAberta(executor, sql, c.MembroId, "Encerrada pela carta de mudança.", hojeBrasilia());
           // Irreversível (contatos e vínculo territorial zerados): fica na trilha QUEM mandou processar e QUAL carta, sem repetir o dado minimizado.
@@ -206,10 +231,12 @@ module.exports = async function (context, req) {
             tabela: "MembroReferencia", registroId: Number(c.MembroId), acao: "Minimizou dados de ex-membro (Carta de Mudança, Art. 132 §2º)", usuarioId: usuario.membroId,
             dadosDepois: { cartaId: c.CartaId, diasDesdeOPedido: dias, prazoDias: diasMinimizacao, ...(prazo.padrao ? { prazoPadrao: true } : {}), ...(ultimoAdministrador ? { ultimoAdministrador: true } : {}) }
           });
-          return urls;
+          return { tipo: "MINIMIZOU", urls };
         });
-        if (documentos === null) continue;   // outra alteração em andamento, ou a carta já mudou: fica para o próximo processamento
-        const naoApagados = await excluirDocumentos(documentos);   // os arquivos, só depois do commit
+        if (desfecho === null) continue;   // outra alteração em andamento, ou a carta já mudou: fica para o próximo processamento
+        if (desfecho.tipo === "RETORNO") { canceladas++; continue; }
+        if (desfecho.tipo === "JA_SAIU") { jaSaiuDoRol++; continue; }
+        const naoApagados = await excluirDocumentos(desfecho.urls);   // os arquivos, só depois do commit
         if (naoApagados.length) {
           // O banco já não tem o endereço: a trilha guarda quais arquivos ficaram para apagar à mão (o nome do arquivo é aleatório, sem dado de pessoa).
           arquivosNaoApagados += naoApagados.length;
@@ -229,6 +256,7 @@ module.exports = async function (context, req) {
         sucesso: true,
         mensagem: `✅ Processamento concluído: ${minimizadas} saída(s) minimizada(s), ${canceladas} carta(s) cancelada(s) por retorno`
           + (prazo.padrao ? ` (prazo padrão de ${diasMinimizacao} dias: a política de retenção dos ex-membros está inativa ou sem prazo).` : ` (prazo de ${diasMinimizacao} dias, da política de retenção).`)
+          + (jaSaiuDoRol ? ` ${jaSaiuDoRol} carta(s) cancelada(s) porque a pessoa já tinha saído do rol por outra causa (falecimento ou desligamento): a ficha dela não mudou.` : "")
           + (arquivosNaoApagados ? ` ${arquivosNaoApagados} arquivo(s) de documentos não puderam ser apagados do armazenamento agora: a trilha guarda quais.` : "")
           + (semConfirmacao ? ` ${semConfirmacao} carta(s) de mudança sem a confirmação do próprio membro ficam fora do processamento: peça a ele que confirme no aplicativo, ou cancele a carta.` : "")
       }

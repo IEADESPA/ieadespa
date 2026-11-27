@@ -15,6 +15,8 @@ const { emTransacao } = require("../shared/transacaoCurta");
 const estatuto = require("../shared/estatuto");
 const { exigirGeral } = require("../shared/escopoRotas");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
+
+const MSG_ULTIMO_ADMIN = "Não é possível suspender o acesso ao sistema desta pessoa: ela é a única com a permissão \"permissoes\" ativa — ninguém mais conseguiria gerenciar acesso/senha depois. Conceda a permissão a outra pessoa antes de aplicar essa medida.";
 const { encerrarDelegacoesDaPessoa } = require("../shared/delegacoes");
 
 const DIAS_RELATORIO = 30; // Art. 45 §2º
@@ -112,18 +114,20 @@ module.exports = async function (context, req) {
     if (suspenderAcessoSistema) {
       const situacao = await travaPermissoes.situacaoDoCargo(pool, sql, membroId, hojeBrasilia());   // o dia de Brasília, o mesmo do login
       if (travaPermissoes.ficariaSemAdministrador(situacao)) {
-        context.res = {
-          status: 200,
-          body: { sucesso: false, mensagem: "Não é possível suspender o acesso ao sistema desta pessoa: ela é a única com a permissão \"permissoes\" ativa — ninguém mais conseguiria gerenciar acesso/senha depois. Conceda a permissão a outra pessoa antes de aplicar essa medida." }
-        };
+        context.res = { status: 200, body: { sucesso: false, mensagem: MSG_ULTIMO_ADMIN } };
         return;
       }
     }
 
     // A medida, o fim dos cargos, as sessões, as delegações e a trilha numa transação só (shared/transacaoCurta.js): uma falha no meio desfaz tudo, e a nova
-    // tentativa não deixa uma medida "aplicada" sem a suspensão nem uma segunda medida igual.
-    const medidaId = await emTransacao(pool, async ({ rq, executor, transacao }) => {
+    // tentativa não deixa uma medida "aplicada" sem a suspensão nem uma segunda medida igual. A trava do último administrador é conferida de novo lá dentro,
+    // antes de gravar (duas suspensões ao mesmo tempo contra os dois últimos que administram não passam juntas).
+    const medidaId = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
       const hoje = hojeBrasilia();                    // a data da decisão é o dia de Brasília (shared/dataBrasilia.js)
+      if (suspenderAcessoSistema) {
+        const recusa = await travaPermissoes.conferirUltimoNaTransacao(rq, sql, membroId, hoje);
+        if (recusa) { await desistir(); return recusa; }
+      }
       const result = await rq()
         .input("membroId", sql.Int, membroId)
         .input("motivo", sql.NVarChar(1000), motivo.trim().slice(0, 1000))
@@ -164,6 +168,14 @@ module.exports = async function (context, req) {
       return id;
     });
 
+    if (medidaId === "ULTIMO") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: MSG_ULTIMO_ADMIN } };
+      return;
+    }
+    if (medidaId === "OCUPADA") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração de quem administra os acessos está em andamento. Tente de novo em instantes." } };
+      return;
+    }
     const criado = await pool.request().input("id", sql.Int, medidaId).query(`${SELECT_MEDIDA} WHERE mc.MedidaId = @id`);
     context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Medida cautelar aplicada.", medida: criado.recordset[0] } };
     return;

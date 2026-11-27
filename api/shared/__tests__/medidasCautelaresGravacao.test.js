@@ -50,6 +50,7 @@ beforeEach(() => {
   mockRegras = [
     [/SELECT MembroId FROM MembroReferencia WHERE MembroId = @id/, { recordset: [{ MembroId: 20 }] }],
     situacao(0, 1),
+    [/sp_getapplock/, { recordset: [{ resultado: 0 }] }],
     [/INSERT INTO MedidasCautelares/, { recordset: [{ MedidaId: 7 }], rowsAffected: [1] }],
     [/OUTPUT DELETED\.LiderancaId/, { recordset: [{ LiderancaId: 31, AtivoAteAnterior: "2027-12-31" }, { LiderancaId: 32, AtivoAteAnterior: null }], rowsAffected: [2] }],
     [/FROM MedidasCautelares mc/, { recordset: [{ medidaId: 7 }] }]
@@ -85,6 +86,30 @@ describe("quem administra os acessos", () => {
     mockRegras[1] = situacao(1, 1);
     const r = await aplicar(CORPO);
     expect(r.status).toBe(201);
+  });
+
+  // Revisão de fora, 26/11/2026 (L3): duas suspensões ao mesmo tempo contra os dois últimos que administram. A leitura de antes da transação ainda vê o
+  // outro; a de dentro, depois da trava única, já vê a outra suspensão confirmada: esta é recusada e nada fica gravado.
+  const travouUltimo = () => mockConsultas.some((c) => /sp_getapplock/.test(c.texto) && c.entradas.recurso === "acesso_ultimo_admin");
+  test("corrida: a conferência é refeita dentro da transação, depois da trava única, e recusa sem gravar", async () => {
+    mockRegras[1] = [/AlvoAdministra/, () => ({ recordset: [{ TemCargoVigente: 1, AlvoAdministra: 1, Outros: travouUltimo() ? 0 : 1 }] })];
+    const r = await aplicar(CORPO);
+    expect(r.status).toBe(200);
+    expect(r.body.sucesso).toBe(false);
+    expect(r.body.mensagem).toMatch(/única com a permissão "permissoes"/);
+    expect(rodou(/INSERT INTO MedidasCautelares|UPDATE Lideranca|UPDATE SessoesAtivas/)).toHaveLength(0);
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["desfeita"]);
+    const trava = rodou(/sp_getapplock/);
+    expect(trava).toHaveLength(1);
+    expect(trava[0].transacao).toBe(mockTransacoes[0]);
+    expect(auditoria.registrarAuditoriaNaTransacao).not.toHaveBeenCalled();
+  });
+
+  test("a trava única só entra quando o alvo administra os acessos", async () => {
+    const r = await aplicar(CORPO);
+    expect(r.status).toBe(201);
+    expect(rodou(/sp_getapplock/)).toHaveLength(0);
+    expect(rodou(/AlvoAdministra/).some((c) => c.transacao === mockTransacoes[0])).toBe(true);
   });
 });
 

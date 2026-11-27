@@ -120,6 +120,22 @@ async function gravarPin(pool, membroId, pin, { provisorioPor = null } = {}) {
   await limparTentativas(pool, membroId, "PIN");
 }
 
+// O mesmo de gravarPin, DENTRO da transação de quem chama (shared/transacaoCurta.js: `executor`): com XACT_ABORT, a chave repetida desfaria a transação, então
+// a linha é travada (UPDLOCK, SERIALIZABLE) e a inserção só acontece se ela não existe — duas gravações ao mesmo tempo fazem fila. O PIN provisório da Secretaria
+// usa esta: o PIN, a queda das sessões e a trilha entram juntos ou nada muda (revisão de fora, 26/11/2026).
+async function gravarPinNaTransacao(executor, membroId, pin, { provisorioPor = null } = {}) {
+  const prov = provisorioPor != null;
+  await executor.request().input("m", sql.Int, membroId).input("h", sql.NVarChar(200), hashPin(pin, membroId)).input("prov", sql.Bit, prov)
+    .input("dias", sql.Int, VALIDADE_PROVISORIO_DIAS).input("por", sql.Int, prov ? provisorioPor : null)
+    .query(`UPDATE MembroPins WITH (UPDLOCK, SERIALIZABLE) SET PinHash = @h, Provisorio = @prov,
+              ProvisorioExpiraEm = CASE WHEN @prov = 1 THEN DATEADD(DAY, @dias, SYSUTCDATETIME()) ELSE NULL END, DefinidoPorMembroId = @por, AtualizadoEm = SYSUTCDATETIME()
+            WHERE MembroId = @m;
+            IF @@ROWCOUNT = 0
+              INSERT INTO MembroPins (MembroId, PinHash, Provisorio, ProvisorioExpiraEm, DefinidoPorMembroId)
+              VALUES (@m, @h, @prov, CASE WHEN @prov = 1 THEN DATEADD(DAY, @dias, SYSUTCDATETIME()) ELSE NULL END, @por);`);
+  await limparTentativas(executor, membroId, "PIN");
+}
+
 // Reserva UMA tentativa de forma atômica ANTES de conferir a credencial. Devolve { bloqueado:true } se a pessoa já estava bloqueada (e nada foi
 // conferido), ou { bloqueado:false, falhas, bloqueadaAgora } com a tentativa já contada como falha — quem acerta chama limparTentativas.
 async function reservarTentativa(pool, membroId, canal, limite = LIMITE_FALHAS_PIN) {
@@ -162,5 +178,5 @@ module.exports = {
   PIN_REGEX, LIMITE_FALHAS_PIN, LIMITE_FALHAS_SENHA, LIMITE_FALHAS_ORIGEM_PIN, VALIDADE_PROVISORIO_DIAS, MENSAGEM_GENERICA,
   formatoPinValido, pinFraco, mensagemPinFraco, gerarPinProvisorio, derivadosDeNascimento,
   hashPin, verificarPin, conferenciaFalsa,
-  lerPin, gravarPin, reservarTentativa, limparTentativas
+  lerPin, gravarPin, gravarPinNaTransacao, reservarTentativa, limparTentativas
 };

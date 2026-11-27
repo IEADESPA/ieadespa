@@ -4,13 +4,14 @@
 //
 // O PIN é aleatório, sem nenhum dos padrões fáceis, vale por 7 dias e o membro é obrigado a trocar por um dele ao entrar. Aparece UMA vez, na tela da
 // Secretaria, que o entrega pessoalmente. Não vai para a auditoria, para o log nem para o e-mail; se o membro tem e-mail, é avisado de que a Secretaria
-// gerou um PIN provisório (para estranhar se não foi ele quem pediu). Gerar um novo também desbloqueia a pessoa.
+// gerou um PIN provisório (para estranhar se não foi ele quem pediu); a resposta só diz "avisado" quando o e-mail saiu. Gerar um novo também desbloqueia a pessoa.
 const { getPool, sql } = require("../shared/db");
 const auth = require("../shared/auth");
 const { noEscopoDaPessoa } = require("../shared/escopoRotas");
 const nivelDoCargo = require("../shared/nivelDoCargo");
 const pinMembro = require("../shared/pinMembro");
-const { registrarAuditoria } = require("../shared/auditoria");
+const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("../shared/auditoria");
+const { emTransacao } = require("../shared/transacaoCurta");
 const { enviarEmailNotificacao } = require("../shared/notificacaoEmail");
 
 module.exports = async function (context, req) {
@@ -37,28 +38,38 @@ module.exports = async function (context, req) {
   // Quem tem cargo de liderança vigente: o PIN provisório abre a sessão de titular dele, e a regra é a do nível do cargo com a confirmação recente (25 e 26/11).
   if (!(await nivelDoCargo.conferirPinDeLideranca(pool, sql, req, context, usuario, membroId))) return;
 
-
   const pin = pinMembro.gerarPinProvisorio({ nascimento: m.DataNascimento, matricula: membroId });
-  await pinMembro.gravarPin(pool, membroId, pin, { provisorioPor: usuario.membroId });
-  // v7.6 — PIN redefinido pela Secretaria: as sessões abertas da pessoa caem na hora (se alguém entrou com o PIN antigo, sai).
-  const derrubadas = await auth.revogarSessoesDoMembro(pool, sql, membroId);
-  await registrarAuditoria({ tabela: "MembroPins", registroId: membroId, acao: "PIN_PROVISORIO_GERADO", usuarioId: usuario.membroId, dadosDepois: { validadeDias: pinMembro.VALIDADE_PROVISORIO_DIAS, sessoesEncerradas: derrubadas } });
+  // O PIN novo, a queda das sessões abertas da pessoa (v7.6: se alguém entrou com o PIN antigo, sai) e a trilha de quem gerou numa transação só
+  // (shared/transacaoCurta.js): se a trilha não grava, o PIN não muda e nenhum PIN é entregue (revisão de fora, 26/11/2026). O e-mail fica para depois do commit.
+  const derrubadas = await emTransacao(pool, async ({ executor, transacao }) => {
+    await pinMembro.gravarPinNaTransacao(executor, membroId, pin, { provisorioPor: usuario.membroId });
+    const sessoes = await auth.revogarSessoesDoMembro(executor, sql, membroId);
+    await registrarAuditoriaNaTransacao(transacao, { tabela: "MembroPins", registroId: membroId, acao: "PIN_PROVISORIO_GERADO", usuarioId: usuario.membroId, dadosDepois: { validadeDias: pinMembro.VALIDADE_PROVISORIO_DIAS, sessoesEncerradas: sessoes } });
+    return sessoes;
+  });
 
-  let avisado = false;
+  // O aviso ao membro: enviarEmailNotificacao devolve false (sem lançar) quando o serviço não manda. "Avisado" só quando o envio deu certo; o aviso que não sai
+  // fica dito na resposta e na trilha (sem o PIN e sem o endereço).
+  let avisado = false, avisoEmailNaoSaiu = false;
   if (m.Email) {
     try {
-      await enviarEmailNotificacao({
+      avisado = (await enviarEmailNotificacao({
         email: m.Email,
         titulo: "A Secretaria gerou um PIN provisório para o seu acesso",
         mensagem: `Olá, ${m.Nome}. A Secretaria gerou um PIN provisório para você entrar no Meu Painel. Ele foi entregue a você pela Secretaria, vale por ${pinMembro.VALIDADE_PROVISORIO_DIAS} dias e você vai criar o seu próprio ao entrar. Se você não pediu isso, avise a Secretaria.`
-      });
-      avisado = true;
+      })) === true;
     } catch (e) { context.log.error("Falha ao avisar o membro do PIN provisório:", e.message); }
+    if (!avisado) {
+      avisoEmailNaoSaiu = true;
+      await registrarAuditoria({ tabela: "MembroPins", registroId: membroId, acao: "Aviso do PIN provisório não enviado", usuarioId: usuario.membroId });
+    }
   }
 
+  const mensagem = `PIN provisório de ${m.Nome}: entregue pessoalmente. Vale por ${pinMembro.VALIDADE_PROVISORIO_DIAS} dias, e o membro cria o próprio PIN ao entrar. Esta tela não mostra o PIN de novo.`
+    + (avisoEmailNaoSaiu ? " Atenção: o aviso por e-mail não saiu; avise a pessoa por outro meio." : "");
   context.res = {
     status: 200,
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-    body: { sucesso: true, pin, nome: m.Nome, validadeDias: pinMembro.VALIDADE_PROVISORIO_DIAS, avisadoPorEmail: avisado, mensagem: `PIN provisório de ${m.Nome}: entregue pessoalmente. Vale por ${pinMembro.VALIDADE_PROVISORIO_DIAS} dias, e o membro cria o próprio PIN ao entrar. Esta tela não mostra o PIN de novo.` }
+    body: { sucesso: true, pin, nome: m.Nome, validadeDias: pinMembro.VALIDADE_PROVISORIO_DIAS, avisadoPorEmail: avisado, avisoEmailNaoSaiu, mensagem }
   };
 };

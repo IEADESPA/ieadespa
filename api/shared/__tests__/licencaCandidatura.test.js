@@ -44,9 +44,12 @@ const sessao = (membroId, extra = {}) => auth.reassinarSessao({ membroId, via: "
   escopoCongregacoes: "TODAS", termosPendentes: [], ...extra });
 const local = (extra = {}) => sessao(77, { nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], ...extra });
 const area = () => sessao(78, { nivel: "AREA", escopoCongregacoes: ["Central", "Vila Nova"] });
-async function criar(token, membroId = 10) {
+// o pleito daqui a 30 dias: dentro dos 90 dias, a licença começa hoje (shared/licencaCandidatura.js::inicioDaLicenca)
+const diasDeHoje = (n) => { const d = new Date(`${require("../dataBrasilia").hojeBrasilia()}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const PLEITO = diasDeHoje(30);
+async function criar(token, membroId = 10, dataPleito = PLEITO) {
   const context = { bindingData: {}, log: { error() {}, info() {}, warn() {}, verbose() {} } };
-  await hLicencas(context, { method: "POST", query: {}, body: { membroId, dataPleito: "2026-10-04" }, headers: { "x-auth-token": token, "x-forwarded-for": "177.40.1.2:5000, 40.70.146.136:6000" } });
+  await hLicencas(context, { method: "POST", query: {}, body: { membroId, dataPleito }, headers: { "x-auth-token": token, "x-forwarded-for": "177.40.1.2:5000, 40.70.146.136:6000" } });
   return context.res;
 }
 const quando = (padrao, valor, afetadas) => mockRegras.push([padrao, valor, afetadas]);
@@ -70,6 +73,22 @@ beforeEach(() => {
   quando(/sp_getapplock/, [{ resultado: 0 }]);
   quando(/UPDATE MembroReferencia SET Status = 'LICENCA_CANDIDATURA'/, [], 1);
   quando(/INSERT INTO LicencasCandidatura/, [{ LicencaId: 5 }], 1);
+});
+
+// Revisão de fora, 26/11/2026 (L3): a licença tira o acesso; a trava do último administrador é refeita dentro da transação, depois da trava única.
+describe("a trava do último administrador dentro da transação", () => {
+  const travouUltimo = () => rodou(/sp_getapplock/).some((c) => c.inputs.recurso === "acesso_ultimo_admin");
+  const trocarSituacao = (f) => { mockRegras[mockRegras.findIndex(([p]) => String(p) === String(/AlvoAdministra/))][1] = f; };
+  test("corrida: fora da transação havia outro; dentro, depois da trava, não há mais: recusada e desfeita", async () => {
+    cargo = { EscopoTipo: "GLOBAL", EscopoId: null };
+    trocarSituacao(() => [{ TemCargoVigente: 1, AlvoAdministra: 1, Outros: travouUltimo() ? 0 : 1 }]);
+    const r = await criar(sessao(1));
+    expect(r.body).toMatchObject({ sucesso: false, mensagem: expect.stringMatching(/única que administra os acessos/) });
+    expect(escritas()).toHaveLength(0);
+    expect(vacancia.encerrarVinculos).not.toHaveBeenCalled();
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["desfeita"]);
+    expect(rodou(/sp_getapplock/).map((c) => [c.inputs.recurso, c.transacao])).toEqual([["escada_10", 1], ["acesso_ultimo_admin", 1]]);
+  });
 });
 
 describe("a licença numa transação só", () => {
@@ -271,5 +290,35 @@ describe("o retorno diz a situação real da pessoa", () => {
     const r = await decidir(false);
     expect(r.body.mensagem).toBe("✅ Registrado: a pessoa não retornou e fica INATIVO no rol.");
     expect(registrarAuditoriaNaTransacao.mock.calls[0][1].dadosDepois).toMatchObject({ situacaoNoRol: "INATIVO", situacaoMudou: true });
+  });
+});
+
+// Revisão de fora, 26/11/2026: a licença começa 90 dias antes do pleito (Art. 157 §2º), não no registro; o pleito que já passou é recusado.
+describe("o início da licença pelo pleito", () => {
+  test("pleito que já passou: recusado antes de tudo, nada gravado, ninguém perde vínculo", async () => {
+    const r = await criar(local(), 10, diasDeHoje(-1));
+    expect(r.body).toMatchObject({ sucesso: false });
+    expect(r.body.mensagem).toMatch(/já passou/);
+    expect(escritas()).toHaveLength(0);
+    expect(mockTransacoes).toHaveLength(0);
+    expect(vacancia.encerrarVinculos).not.toHaveBeenCalled();
+  });
+  test("antes dos 90 dias: recusado com o dia em que a licença começa; a pessoa continua nos cargos", async () => {
+    const r = await criar(local(), 10, diasDeHoje(91));
+    const inicio = diasDeHoje(1).split("-").reverse().join("/");
+    expect(r.body.sucesso).toBe(false);
+    expect(r.body.mensagem).toBe(`A licença por candidatura começa 90 dias antes do pleito, em ${inicio}: registre a partir desse dia. Até lá a pessoa continua nos cargos.`);
+    expect(escritas()).toHaveLength(0);
+    expect(vacancia.encerrarVinculos).not.toHaveBeenCalled();
+  });
+  test("dentro dos 90 dias (até o próprio dia do pleito): começa hoje, e é hoje o início gravado e dito", async () => {
+    for (const dias of [90, 30, 0]) {
+      mockConsultas = [];
+      const r = await criar(local(), 10, diasDeHoje(dias));
+      expect(r.status).toBe(201);
+      expect(rodou(/INSERT INTO LicencasCandidatura/)[0].inputs).toMatchObject({ dataPleito: diasDeHoje(dias), dataInicioLicenca: diasDeHoje(0) });
+      expect(r.body.dataInicioLicenca).toBe(diasDeHoje(0));
+      expect(r.body.mensagem).toContain(`a partir de hoje (${diasDeHoje(0).split("-").reverse().join("/")})`);
+    }
   });
 });

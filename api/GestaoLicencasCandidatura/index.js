@@ -1,6 +1,7 @@
 // GestaoLicencasCandidatura (v1.9 — Reg. Art. 157 §2º)
 // Licença Eclesiástica automática por candidatura política: obreiro candidato
-// entra em licença 90 dias antes do pleito e perde o púlpito (mesmo racional de
+// entra em licença 90 dias antes do pleito e perde o púlpito (o registro só vale dentro desses 90 dias e a licença começa nele; o pleito que já passou é
+// recusado: shared/licencaCandidatura.js::inicioDaLicenca, revisão de fora de 26/11/2026) (mesmo racional de
 // qualquer outro fluxo de saída — shared/vacancia.js); a Diretoria decide o
 // retorno pós-eleição, não é automático. Status próprio no catálogo StatusMembro
 // (LICENCA_CANDIDATURA), distinto do LICENÇA genérico (v1.6). Exige "pessoas".
@@ -19,13 +20,14 @@ const nivelDoCargo = require("../shared/nivelDoCargo");
 const { emTransacao } = require("../shared/transacaoCurta");
 const { obterTrava } = require("../shared/financeiroSeguro");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
+const travaPermissoes = require("../shared/travaPermissoes");
 const { ehGeral, pessoaAlcancavel, filtrarPorEscopo, MSG_GERAL } = require("../shared/escopoRotas");
 const { dataISOValida } = require("../shared/escopoFichas");
 
 // Mesma lista de GestaoPessoas (STATUS_TERMINAIS) — entrar em licença não faz
 // sentido pra quem já saiu de vez.
 const STATUS_TERMINAIS = ["DESLIGADO", "FALECIDO"];
-const DIAS_ANTECEDENCIA = 90;
+const { inicioDaLicenca, mensagemDoInicio } = require("../shared/licencaCandidatura");
 
 // Uma licença aberta por pessoa (decisão de 25/11/2026): a rota confere antes do nível do cargo e de novo dentro da transação, sob a trava da escada; o índice
 // único filtrado UX_LicencasCandidatura_Aberta (migração 301, o mesmo filtro desta consulta) recusa a que escapar, e o erro de chave repetida vira a mesma mensagem.
@@ -88,6 +90,13 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "dataPleito inválida — use AAAA-MM-DD." } };
       return;
     }
+    // 90 dias antes do pleito (shared/licencaCandidatura.js::inicioDaLicenca): o pleito que já passou e o registro antes da hora são recusados; dentro dos 90
+    // dias, a licença começa hoje. Só depende da data informada (vem antes da pessoa: não diz nada sobre ela).
+    const inicio = inicioDaLicenca(dataPleito, hojeBrasilia());
+    if (!inicio.ok) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: mensagemDoInicio(inicio, dataPleito) } };
+      return;
+    }
     const pessoa = await pessoaAlcancavel(pool, usuario, membroIdBruto);
     if (!pessoa) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
@@ -106,9 +115,7 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const dataInicio = new Date(dataPleito);
-    dataInicio.setDate(dataInicio.getDate() - DIAS_ANTECEDENCIA);
-    const dataInicioLicenca = dataInicio.toISOString().slice(0, 10);
+    const dataInicioLicenca = inicio.inicio;   // o dia em que a licença começa de verdade (hoje), não um dia que já passou
 
     // A licença tira a pessoa do rol ativo e encerra os mandatos: de quem tem cargo, só a secretaria do nível do cargo ou de cima, com a confirmação recente.
     if (!(await nivelDoCargo.conferirSaidaDeLideranca(pool, sql, req, context, usuario, membroId))) return;
@@ -120,6 +127,9 @@ module.exports = async function (context, req) {
       desfecho = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
         if (!(await obterTrava(rq, `escada_${membroId}`))) { await desistir(); return { situacao: "OCUPADA" }; }
         if ((await rq().input("id", sql.Int, membroId).query(SQL_LICENCA_ABERTA(" WITH (UPDLOCK, HOLDLOCK)"))).recordset.length > 0) { await desistir(); return { situacao: "JA_ABERTA" }; }
+        // a trava do último administrador conferida de novo aqui dentro, antes de gravar (shared/travaPermissoes.js)
+        const recusa = await travaPermissoes.conferirUltimoNaTransacao(rq, sql, membroId, hojeBrasilia());
+        if (recusa) { await desistir(); return { situacao: recusa }; }
         const status = await rq().input("id", sql.Int, membroId)
           .query(`UPDATE MembroReferencia SET Status = 'LICENCA_CANDIDATURA' WHERE MembroId = @id AND Status NOT IN ('DESLIGADO', 'FALECIDO')`);
         if (!((status.rowsAffected && status.rowsAffected[0]) || 0)) { await desistir(); return { situacao: "SAIU" }; }
@@ -155,6 +165,10 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração desta pessoa está em andamento. Tente de novo em instantes." } };
       return;
     }
+    if (desfecho.situacao === "ULTIMO") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: travaPermissoes.MENSAGEM_ULTIMO } };
+      return;
+    }
     if (desfecho.situacao === "SAIU") {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Esta pessoa já saiu do rol de membros — não é possível registrar licença por candidatura." } };
       return;
@@ -164,7 +178,8 @@ module.exports = async function (context, req) {
     context.res = {
       status: 201,
       headers: { "Content-Type": "application/json" },
-      body: { sucesso: true, mensagem: "✅ Licença por candidatura registrada — a pessoa perdeu Assentos/Liderança/Cargo até a Diretoria decidir o retorno.", licencaId }
+      body: { sucesso: true, mensagem: `✅ Licença por candidatura registrada, a partir de hoje (${dataInicioLicenca.split("-").reverse().join("/")}) — a pessoa perdeu Assentos/Liderança/Cargo até a Diretoria decidir o retorno.`,
+        licencaId, dataInicioLicenca }
     };
     return;
   }

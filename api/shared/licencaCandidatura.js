@@ -17,4 +17,26 @@ async function encerrarLicencaAberta(executor, sql, membroId, observacao, hoje) 
   return (r && r.rowsAffected && r.rowsAffected[0]) || 0;
 }
 
-module.exports = { encerrarLicencaAberta, MOTIVO_SAIDA_DO_ROL };
+// O início da licença (Art. 157 §2º: o obreiro entra em licença 90 dias antes do pleito). Revisão de fora, 26/11/2026: antes a licença valia no dia do registro,
+// qualquer que fosse o pleito. Agora: o pleito que já passou é recusado; antes dos 90 dias, recusado com o dia em que a licença começa (a pessoa continua nos
+// cargos); dentro dos 90 dias, a licença começa no dia do registro, e é esse o início gravado (o de verdade). `dataPleito` e `hoje`: AAAA-MM-DD (hoje de Brasília).
+const DIAS_ANTECEDENCIA = 90;
+function inicioDaLicenca(dataPleito, hoje) {
+  const d = new Date(`${dataPleito}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - DIAS_ANTECEDENCIA);
+  const peloPleito = d.toISOString().slice(0, 10);
+  if (dataPleito < hoje) return { ok: false, motivo: "PLEITO_PASSADO", peloPleito };
+  if (peloPleito > hoje) return { ok: false, motivo: "ANTES_DO_INICIO", peloPleito };
+  return { ok: true, inicio: hoje, peloPleito };
+}
+const dataBr = (iso) => String(iso).slice(0, 10).split("-").reverse().join("/");
+// a recusa de inicioDaLicenca em palavras (null quando a licença pode começar)
+function mensagemDoInicio(r, dataPleito) {
+  if (r.motivo === "ANTES_DO_INICIO") {
+    return `A licença por candidatura começa ${DIAS_ANTECEDENCIA} dias antes do pleito, em ${dataBr(r.peloPleito)}: registre a partir desse dia. Até lá a pessoa continua nos cargos.`;
+  }
+  if (r.motivo === "PLEITO_PASSADO") return `A data do pleito (${dataBr(dataPleito)}) já passou: confira a data.`;
+  return null;
+}
+
+module.exports = { encerrarLicencaAberta, MOTIVO_SAIDA_DO_ROL, DIAS_ANTECEDENCIA, inicioDaLicenca, mensagemDoInicio };

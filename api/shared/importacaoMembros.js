@@ -45,7 +45,8 @@ function separadorDe(primeiraLinha) {
 
 // Lê o CSV (RFC 4180): campos entre aspas podem ter o separador, quebra de linha e aspas dobradas (""). Aceita CRLF, LF e a marca BOM do começo.
 // Devolve { separador, linhas: [{ numero, celulas }], aspas } — numero é a linha do arquivo onde o registro COMEÇA (o cabeçalho é a 1). aspas (revisão de
-// 23/11, I1): o primeiro campo entre aspas que passou para a linha de baixo ({ linha onde a aspa abriu, fechou }), ou null. Uma aspa sem fechar engolia as
+// 23/11, I1): o primeiro campo entre aspas que passou para a linha de baixo ({ linha onde a aspa abriu, fechou }), a aspa que ficou aberta na última
+// linha sem a quebra no fim ({ linha, fechou: false, noFim: true }, revisão permanente de 27/11), ou null. Uma aspa sem fechar engolia as
 // linhas seguintes num campo só, e as pessoas sumiam da prévia sem aviso; quem recusa o arquivo é prepararArquivo.
 function lerCsv(texto) {
   let t = String(texto == null ? "" : texto);
@@ -73,6 +74,9 @@ function lerCsv(texto) {
     campo += ch; i++;
   }
   if (campo !== "" || celulas.length) fecharLinha();
+  // revisão permanente de 27/11 (I1): a aspa que abre na ÚLTIMA linha, sem a quebra de linha no fim, não atravessa linha nenhuma, mas também não fecha: o resto
+  // da linha (com o CPF) entrava calado num campo só (o nome, a mãe, a congregação). noFim: ela ficou aberta até o fim do arquivo, na mesma linha
+  if (aspas && !quebra) quebra = { linha: abriu, fechou: false, noFim: true };
   // fechou = a aspa que atravessou a linha fechou depois (não é a que ficou aberta até o fim do arquivo)
   if (quebra && !(aspas && abriu === quebra.linha)) quebra.fechou = true;
   return { separador, linhas, aspas: quebra };
@@ -344,6 +348,7 @@ function prepararArquivo(texto, { congregacoes, hojeISO, escolha }) {
   const { separador, linhas, aspas } = lerCsv(texto);
   if (!linhas.length) return { erro: "O arquivo está vazio." };
   // ninguém some calado (revisão de 23/11, I1): o campo entre aspas que atravessa a linha engoliria as pessoas de baixo; o arquivo inteiro volta, com a linha
+  if (aspas && aspas.noFim) return { erro: `A linha ${aspas.linha} do arquivo abre aspas (") e não fecha: o resto dessa linha entraria num campo só. Corrija essa linha na planilha e mande o arquivo de novo.` };
   if (aspas && !aspas.fechou) return { erro: `A linha ${aspas.linha} do arquivo abre aspas (") e não fecha: as pessoas das linhas de baixo sumiriam da prévia. Corrija essa linha na planilha e mande o arquivo de novo.` };
   if (aspas) return { erro: `A linha ${aspas.linha} do arquivo tem um campo entre aspas que passa para a linha de baixo: as pessoas dessas linhas sumiriam da prévia. Corrija essa linha na planilha e mande o arquivo de novo.` };
   const [cab, ...resto] = linhas;
@@ -516,6 +521,11 @@ function resumoDoResto(casado, { de, faltaram }) {
 }
 
 // ------------------------------------------------------------------ os números da prévia (sem dado pessoal)
+// O texto livre do arquivo que vai para o resumo guardado (o nome da congregação que não bateu) ou para a tela da ferramenta da planilha: sem o número comprido
+// (CPF, celular: 4 algarismos ou mais, com ponto, traço, barra, espaço ou parênteses no meio) e sem o e-mail (revisão permanente de 27/11, I1 e M4).
+const semDadoPessoal = (texto) => String(texto == null ? "" : texto).replace(/[^\s;,]+@[^\s;,]+/g, "[e-mail]")
+  .replace(/\(?\d[\d.\-\/() ]*\d\)?/g, (m) => (m.replace(/\D/g, "").length >= 4 ? "[número]" : m));
+
 // maiorMatriculaSistema: a maior matrícula que já existe no sistema. Devolve as contagens, os avisos gerais (a matrícula fora da sequência, as congregações não
 // encontradas, com quantas pessoas cada uma) e a matrícula que o próximo cadastro novo vai receber.
 function resumir(prep, { maiorMatriculaSistema = 0 } = {}) {
@@ -533,10 +543,23 @@ function resumir(prep, { maiorMatriculaSistema = 0 } = {}) {
       break;
     }
   }
+  // revisão permanente de 27/11 (M3): a maior matrícula do SISTEMA muito acima da maior do arquivo também muda o primeiro número novo (a homologação, com a
+  // massa de 700 mil): avisa, para a Geral conferir antes de confirmar
+  const maiorArquivo = comNumero.length ? comNumero[comNumero.length - 1].m : 0;
+  if (maiorMatriculaSistema - maiorArquivo > SALTO_MATRICULA) {
+    const sistema = maiorMatriculaSistema.toLocaleString("pt-BR"), primeira = (maiorMatriculaSistema + 1).toLocaleString("pt-BR");
+    avisosGerais.push({ codigo: "MATRICULA_DO_SISTEMA_ACIMA", texto: (maiorArquivo
+      ? `A maior matrícula que já existe no sistema (${sistema}) está muito acima da maior do arquivo (${maiorArquivo.toLocaleString("pt-BR")})`
+      : `A maior matrícula que já existe no sistema é a ${sistema}`)
+      + `: quem recebe número novo começa na ${primeira}. Confira no sistema pago e no sistema antes de importar.` });
+  }
   const naoAchadas = new Map();
   for (const l of ls) {
     if (!l.problemas.includes("CONGREGACAO_NAO_ENCONTRADA") && !l.problemas.includes("CONGREGACAO_INATIVA") && !l.problemas.includes("CONGREGACAO_AMBIGUA")) continue;
-    const nome = String(l.dados.igrejaArquivo || "").replace(PREFIXO_IGREJA, "").trim() || "(vazio)";
+    // revisão permanente de 27/11 (M4): a linha com colunas a mais fica fora desta lista — o ';' solto empurra as células, e a "congregação" dela seria um
+    // pedaço do nome da pessoa, guardado no resumo para sempre (a ferramenta da planilha já fazia assim). Ela continua de fora, com o motivo, na lista
+    if (l.problemas.includes("COLUNAS_A_MAIS")) continue;
+    const nome = semDadoPessoal(String(l.dados.igrejaArquivo || "").replace(PREFIXO_IGREJA, "").trim()) || "(vazio)";
     naoAchadas.set(nome, (naoAchadas.get(nome) || 0) + 1);
   }
   if (naoAchadas.size) {
@@ -549,7 +572,6 @@ function resumir(prep, { maiorMatriculaSistema = 0 } = {}) {
       ? "1 linha está sem congregação (no arquivo: GERAL ou vazio) e fica de fora: ponha a congregação na planilha e faça a prévia de novo, ou continue sem ela."
       : `${semCong.toLocaleString("pt-BR")} linhas estão sem congregação (no arquivo: GERAL ou vazio) e ficam de fora: ponha a congregação na planilha e faça a prévia de novo, ou continue sem elas.` });
   }
-  const maiorArquivo = comNumero.length ? comNumero[comNumero.length - 1].m : 0;
   const ehRepetida = (l) => l.repetidaLinha != null || l.repetidaMembro != null;
   return {
     total: ls.length,
@@ -615,6 +637,6 @@ function mapaDeCongregacoes(lista) {
   return m;
 }
 
-module.exports = { LIMITE_TEXTO, LIMITE_LINHAS, SALTO_MATRICULA, COLUNAS, CAMPOS, PROBLEMAS, AVISOS, chave, chaveNome, chaveNomeNascimento, casarResto, resumoDoResto, lerCsv, mapearColunas, lerData, lerSexo, lerEstadoCivil,
+module.exports = { LIMITE_TEXTO, LIMITE_LINHAS, SALTO_MATRICULA, COLUNAS, CAMPOS, PROBLEMAS, AVISOS, semDadoPessoal, chave, chaveNome, chaveNomeNascimento, casarResto, resumoDoResto, lerCsv, mapearColunas, lerData, lerSexo, lerEstadoCivil,
   lerFormaAdmissao, lerEscolaridade, lerCpf, lerCelular, lerMatricula, chaveDaIgreja, lerLinha, prepararArquivo, mesmaPessoa, classificar, resumir, linhaParaLista,
   csvDaLista, mapaDeCongregacoes, textoDe };

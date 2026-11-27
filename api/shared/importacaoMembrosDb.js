@@ -83,11 +83,19 @@ const idValido = (v) => {
   return Number.isInteger(n) && n > 0 && n < 2147483647 ? n : null;
 };
 
+// Revisão permanente de 27/11 (M2), a regra 7 do banco (api/CLAUDE.md): SET XACT_ABORT ON em cada lote de comandos da transação — o SET num lote com
+// parâmetros (sp_executesql) vale só para aquele lote, então vai em todos, como em shared/transacaoCurta.js. Com ele, um erro ou o tempo esgotado do driver no
+// meio desfaz a transação inteira no servidor, mesmo que a resposta não chegue. A trilha (registrarAuditoriaNaTransacao) faz o pedido dela, como lá.
 async function emTransacao(pool, fazer) {
   const t = new sql.Transaction(pool);
   await t.begin();
   try {
-    const rq = () => new sql.Request(t);
+    const rq = () => {
+      const pedido = new sql.Request(t);
+      const consultar = pedido.query.bind(pedido);
+      pedido.query = (texto) => consultar(`SET XACT_ABORT ON;\n${texto}`);
+      return pedido;
+    };
     const r = await rq().input("r", sql.NVarChar(255), TRAVA)
       .query("DECLARE @rc INT; EXEC @rc = sp_getapplock @Resource = @r, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 15000; SELECT @rc AS rc");
     if (Number(r.recordset[0].rc) < 0) { await t.rollback(); return { sucesso: false, status: 409, mensagem: MSG.OCUPADO }; }

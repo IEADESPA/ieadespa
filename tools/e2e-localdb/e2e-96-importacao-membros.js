@@ -18,6 +18,8 @@ const fator = () => ({ via: "CHAVE", em: Date.now() });
 const C = { VN: "Vila Nova E2E96", MS: "Monte Sião E2E96", FE: "Fechada E2E96" };
 const tok = {
   geral: () => L.sessao(9601, { via: "SENHA", fator: fator(), nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: PERM }),
+  // outra pessoa da Geral: a prévia tem o limite de 10 por minuto por pessoa, e as prévias do roteiro já usam o de 9601
+  geralOutra: () => L.sessao(9604, { via: "SENHA", fator: fator(), nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: PERM }),
   geralSemFator: () => L.sessao(9601, { via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: PERM }),
   local: () => L.sessao(9602, { via: "SENHA", fator: fator(), nivel: "CONGREGACAO", escopoCongregacoes: [C.VN], permissoes: PERM }),
   semPessoas: () => L.sessao(9603, { via: "SENHA", fator: fator(), nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["reunioes"] })
@@ -102,6 +104,14 @@ async function principal() {
   ok(semMat.body.colunas && JSON.stringify(semMat.body.colunas.lista) === JSON.stringify([{ indice: 0, coluna: "NOME", campo: "nome" }, { indice: 1, coluna: "IGREJA", campo: "igreja" }]) && !semMat.body.linhas,
     "o mapa volta junto (só os nomes do cabeçalho): a tela mostra e a Geral liga a coluna que falta", semMat.body);
   ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembros") === 0, "o arquivo que não serve não grava nada");
+  // revisão permanente de 27/11 (I1): a aspa aberta na última linha, sem a quebra de linha no fim, passava calada (o CPF ia para o nome da mãe da ficha)
+  const aspaFim = await R(tok.geralOutra(), { metodo: "POST", acao: "previa",
+    corpo: { texto: `${CAB}\r\n960190;Ana Aspas;IEADESPA - ${C.VN};FEMININO;01/01/1990;;;;"Mae Aspas;Pai Aspas;${CPF_B};` } });
+  ok(aspaFim.status === 400 && aspaFim.body.mensagem === "A linha 2 do arquivo abre aspas (\") e não fecha: o resto dessa linha entraria num campo só. Corrija essa linha na "
+    + "planilha e mande o arquivo de novo." && !JSON.stringify(aspaFim.body).includes(CPF_B), "a aspa aberta na última linha, sem a quebra no fim: 400 com a linha, sem o CPF",
+  aspaFim.body);
+  ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembros") === 0 && await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId = 960190") === 0,
+    "... e nada gravado (nem a importação, nem a ficha)");
 
   const p1 = await R(tok.geral(), { metodo: "POST", acao: "previa", corpo: { nomeArquivo: "membros<script>.csv", texto: ARQUIVO } });
   const s1 = p1.body.resumo || {};

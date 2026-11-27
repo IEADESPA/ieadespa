@@ -49,6 +49,22 @@ const pendencias = () => mockConsultas.filter((c) => /INSERT INTO FichasPendenci
 const marcacao = () => mockConsultas.filter((c) => /SET Estado = N'IMPORTADA'/.test(c.sql)).map((c) => c.inputs);
 beforeEach(() => { mockRegras = []; mockConsultas = []; mockTx = []; jest.clearAllMocks(); });
 
+// revisão permanente de 27/11 (M2): a regra 7 do banco (api/CLAUDE.md) — a transação da importação liga o SET XACT_ABORT ON em cada lote de comandos dela
+// (o SET num lote com parâmetros vale só para aquele lote, como em shared/transacaoCurta.js): um erro ou o tempo esgotado no meio desfaz tudo no servidor
+describe("M2: a transação da importação com o SET XACT_ABORT ON", () => {
+  test("cada comando da transação do lote começa com o SET XACT_ABORT ON", async () => {
+    cenario({ linhas: [linha()], gravar: () => ({ ocupada: false, donoCpf: null }) });
+    await db.importarLote(POOL, QUEM, 7);
+    const daTransacao = [/sp_getapplock/, /FROM ImportacoesMembros WITH \(UPDLOCK\)/, /FROM ImportacoesMembrosLinhas WITH \(UPDLOCK\)/, /DECLARE @ocupada/,
+      /UPDATE ImportacoesMembros SET UltimoLoteEm/];
+    for (const padrao of daTransacao) {
+      const feitos = mockConsultas.filter((c) => padrao.test(c.sql));
+      expect(feitos.length).toBeGreaterThan(0);
+      for (const c of feitos) expect(c.sql.startsWith("SET XACT_ABORT ON;\n")).toBe(true);
+    }
+  });
+});
+
 describe("o lote", () => {
   // G2 (decisão dele de 24/11/2026): o prazo da importação parada é de 7 dias contados do ÚLTIMO LOTE, e não da confirmação. Cada lote gravado marca a hora,
   // na mesma transação (o lote desfeito, como o 409 de ninguém entrou, não marca nada)

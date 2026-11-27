@@ -89,6 +89,10 @@ for a distância. O próprio ensaio mede a distância: ela é cerca de 10 s ÷ (
    o total, as de fora e as com a próxima matrícula iguais ao gabarito; as possíveis repetidas, pelo menos o do gabarito.
    Se sair alguma de fora a mais, veja o motivo na lista antes de chamar de defeito: pode ser um CPF ou uma matrícula que a
    massa grande da homologação já tinha.
+   - **O aviso da maior matrícula do sistema** (27/11): na homologação a massa grande vai até 799999, então a prévia avisa
+     que quem recebe número novo começa na 800.000. Ali é esperado (o gabarito conta quantas recebem número novo, não qual
+     número). Na produção, que tem só
+     as matrículas 1 e 2, esse aviso não aparece: se aparecer no dia, pare e pergunte antes de confirmar.
 5. **Confirme** (o 428). Os lotes rodam sozinhos: não feche a aba. Anote a hora do fim.
 6. **O resultado:** as importadas são o `entram` do gabarito; as de fora, o `problemas`.
 7. **Os tempos:** no F12, use "Exportar HAR" e rode `node tools/ensaio-importacao/ler-har.js ensaio.har`. Ele dá a prévia,

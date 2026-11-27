@@ -1,7 +1,8 @@
 // tools/ensaio-importacao/conferir-planilha.js — confere a PLANILHA DE VERDADE do sistema pago no próprio computador, sem banco e sem rede (missão C,
 // 26/11/2026). Lê o arquivo como a tela lê (UTF-8 ou, se não for, Windows-1252), passa pelas mesmas regras da prévia (shared/importacaoMembros.js) e mostra
 // só NÚMEROS e CÓDIGOS: quantas linhas, quantas ficam de fora e por quê, quantas entram com a próxima matrícula, os avisos de cada campo e as congregações
-// que não batem com a lista. Nenhum nome, CPF, celular ou e-mail aparece na tela nem vai para arquivo: a planilha real não sai do computador.
+// que não batem com a lista. Nenhum nome, CPF, celular ou e-mail aparece na tela nem vai para arquivo: a planilha real não sai do computador. O nome da
+// congregação que não bateu é texto do arquivo: sai sem o número comprido e sem o e-mail (regras.semDadoPessoal; revisão permanente de 27/11, I1).
 //
 // O que ela NÃO vê (precisa do banco): a matrícula que já é de uma ficha do sistema, o CPF e o nome e nascimento iguais aos de uma ficha que já existe.
 //
@@ -37,13 +38,28 @@ function conferir(texto, nomesCongregacoes, hojeISO) {
   const semPar = new Map();
   for (const l of prep.linhas) {
     if (!l.problemas.includes("CONGREGACAO_NAO_ENCONTRADA") || l.problemas.includes("COLUNAS_A_MAIS")) continue;
-    const k = String(l.dados.igrejaArquivo || "").trim();
+    const k = regras.semDadoPessoal(String(l.dados.igrejaArquivo || "").trim());
     semPar.set(k, (semPar.get(k) || 0) + 1);
   }
   return {
     total: resumo.total, novas: resumo.novas, problemas: resumo.problemas, numeroNovo: resumo.numeroNovo, possivelRepetida: resumo.possivelRepetida,
     colunas: resumo.colunas, avisosGerais: resumo.avisosGerais, porCodigo, linhasDoCodigo, congregacoesSemPar: [...semPar.entries()].sort((a, b) => b[1] - a[1])
   };
+}
+
+// as linhas da tela: só números, códigos e os nomes das congregações sem par (já sem o número comprido e o e-mail)
+function linhasDaTela({ arquivo, codificacao, bytes }, r) {
+  const linhas = [`arquivo: ${path.basename(arquivo)} (${codificacao}${bytes == null ? "" : `, ${bytes.toLocaleString("pt-BR")} bytes`})`];
+  if (r.erro) return [...linhas, `A PRÉVIA RECUSARIA O ARQUIVO: ${r.erro}`];
+  linhas.push(`pessoas: ${r.total} · entram: ${r.novas} · ficam de fora: ${r.problemas} · com a próxima matrícula: ${r.numeroNovo} · possíveis repetidas: ${r.possivelRepetida}`);
+  for (const a of r.avisosGerais || []) linhas.push(`aviso geral: ${typeof a === "string" ? a : JSON.stringify(a)}`);
+  linhas.push("por motivo (linhas do arquivo, até 15):");
+  for (const [c, n] of Object.entries(r.porCodigo).sort((a, b) => b[1] - a[1])) linhas.push(`  ${String(n).padStart(6)}  ${c} — ${regras.PROBLEMAS[c] || regras.AVISOS[c] || ""} [${r.linhasDoCodigo[c].join(", ")}]`);
+  if (r.congregacoesSemPar.length) {
+    linhas.push("congregações do arquivo que não estão na lista (corrigir o nome no sistema ou na planilha):");
+    for (const [nome, n] of r.congregacoesSemPar) linhas.push(`  ${String(n).padStart(6)}  ${nome}`);
+  }
+  return linhas;
 }
 
 if (require.main === module) {
@@ -53,16 +69,8 @@ if (require.main === module) {
   const nomes = fs.readFileSync(listaCongs, "utf8").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const hoje = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
   const r = conferir(texto, nomes, hoje);
-  console.log(`arquivo: ${path.basename(arquivo)} (${codificacao}, ${Buffer.byteLength(texto, "utf8").toLocaleString("pt-BR")} bytes)`);
-  if (r.erro) { console.log(`A PRÉVIA RECUSARIA O ARQUIVO: ${r.erro}`); process.exit(1); }
-  console.log(`pessoas: ${r.total} · entram: ${r.novas} · ficam de fora: ${r.problemas} · com a próxima matrícula: ${r.numeroNovo} · possíveis repetidas: ${r.possivelRepetida}`);
-  for (const a of r.avisosGerais || []) console.log(`aviso geral: ${typeof a === "string" ? a : JSON.stringify(a)}`);
-  console.log("por motivo (linhas do arquivo, até 15):");
-  for (const [c, n] of Object.entries(r.porCodigo).sort((a, b) => b[1] - a[1])) console.log(`  ${String(n).padStart(6)}  ${c} — ${regras.PROBLEMAS[c] || regras.AVISOS[c] || ""} [${r.linhasDoCodigo[c].join(", ")}]`);
-  if (r.congregacoesSemPar.length) {
-    console.log("congregações do arquivo que não estão na lista (corrigir o nome no sistema ou na planilha):");
-    for (const [nome, n] of r.congregacoesSemPar) console.log(`  ${String(n).padStart(6)}  ${nome}`);
-  }
+  for (const l of linhasDaTela({ arquivo, codificacao, bytes: Buffer.byteLength(texto, "utf8") }, r)) console.log(l);
+  if (r.erro) process.exit(1);
 }
 
-module.exports = { conferir, lerTexto };
+module.exports = { conferir, lerTexto, linhasDaTela };

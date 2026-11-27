@@ -75,6 +75,23 @@ describe("o arquivo e as colunas", () => {
     expect(p.linhas[4].dados.nome).toBe("Silva; Maria \"Mãe\"");
     expect(r.lerCsv("A;B\r\n1;\"x\"").aspas).toBeNull();
   });
+  // revisão permanente de 27/11 (I1): a aspa sem fechar na ÚLTIMA linha, sem a quebra de linha no fim, passava calada — o resto da linha (com o CPF) ia
+  // para o nome (e a lista dos de fora), para o nome da mãe (e a ficha) ou para o nome da congregação (e o resumo guardado)
+  test("I1: a aspa que abre e não fecha na última linha, sem quebra no fim, também recusa o arquivo, com a linha e sem dado da pessoa", () => {
+    const resto = `FEMININO;01/01/1990;CASADA;tres@example.org;(91) 90000-0003;Mae Tres;Pai Tres;${CPF1}`;
+    const casos = [`70003;"Maria Aspas;IEADESPA - Vila Nova;${resto}`, `70003;Maria Tres;IEADESPA - Vila Nova;FEMININO;01/01/1990;CASADA;;;"Mae Tres;Pai Tres;${CPF1}`,
+      `70003;Maria Tres;"IEADESPA - Vila Nova;${resto}`];
+    for (const ultima of casos) {
+      const p = preparar([...pessoas(2), ultima]);
+      expect(p.linhas).toBeUndefined();
+      expect(p.erro).toBe("A linha 4 do arquivo abre aspas (\") e não fecha: o resto dessa linha entraria num campo só. Corrija essa linha na planilha e mande o arquivo de novo.");
+      expect(JSON.stringify(p)).not.toMatch(new RegExp(`${CPF1}|Maria|Mae Tres|example|90000`));
+    }
+    expect(r.lerCsv("A;B\r\n1;\"Ana").aspas).toEqual({ linha: 2, fechou: false, noFim: true });
+    expect(r.lerCsv("A;B\r\n1;\"Ana\"").aspas).toBeNull();
+    // com a quebra no fim, continua a recusa de antes (a aspa atravessou a linha)
+    expect(r.lerCsv("A;B\r\n1;\"Ana\r\n").aspas).toEqual({ linha: 2, fechou: false });
+  });
 });
 
 describe("cada linha", () => {
@@ -286,6 +303,38 @@ describe("o resumo e a lista (sem dado pessoal)", () => {
     expect(s.quadros).toEqual({ comMatricula: 2, acertar: 1, repetidas: 1 });
     expect(s).toMatchObject({ total: 6, vazias: 2, novas: 4, jaExistem: 1, problemas: 2, possivelRepetida: 2, numeroNovo: 1, primeiraMatriculaNova: 103,
       congregacoesReconhecidas: 2, semCongregacao: 1 });
+  });
+  // revisão permanente de 27/11 (M3): o aviso olhava só as matrículas do arquivo entre si; a maior do SISTEMA mudava o primeiro número novo sem aviso
+  test("M3: a maior matrícula do sistema muito acima da maior do arquivo também avisa (quem recebe número novo começa depois dela)", () => {
+    const prep = preparar(["10;Ana;IEADESPA - Vila Nova", "11;Bia;IEADESPA - Vila Nova", ";Caio;IEADESPA - Vila Nova", ";Davi;IEADESPA - Vila Nova"]);
+    r.classificar(prep.linhas);
+    const s = r.resumir(prep, { maiorMatriculaSistema: 900124 });
+    expect(s.primeiraMatriculaNova).toBe(900125);
+    expect(s.avisosGerais).toEqual([{ codigo: "MATRICULA_DO_SISTEMA_ACIMA", texto: "A maior matrícula que já existe no sistema (900.124) está muito acima "
+      + "da maior do arquivo (11): quem recebe número novo começa na 900.125. Confira no sistema pago e no sistema antes de importar." }]);
+    // até 1.000 acima, não avisa; o sistema abaixo do arquivo (a produção, com as matrículas 1 e 2), também não
+    expect(r.resumir(prep, { maiorMatriculaSistema: 1011 }).avisosGerais).toEqual([]);
+    expect(r.resumir(prep, { maiorMatriculaSistema: 2 }).avisosGerais).toEqual([]);
+    // o arquivo sem matrícula nenhuma
+    const semNumero = preparar([";Caio;IEADESPA - Vila Nova"]);
+    r.classificar(semNumero.linhas);
+    expect(r.resumir(semNumero, { maiorMatriculaSistema: 799999 }).avisosGerais).toEqual([{ codigo: "MATRICULA_DO_SISTEMA_ACIMA",
+      texto: "A maior matrícula que já existe no sistema é a 799.999: quem recebe número novo começa na 800.000. Confira no sistema pago e no sistema antes de importar." }]);
+    expect(r.resumir(semNumero, { maiorMatriculaSistema: 1000 }).avisosGerais).toEqual([]);
+  });
+  // revisão permanente de 27/11 (M4): o ';' solto empurra as células, e a "congregação" da linha era um pedaço do nome da pessoa, guardado no resumo para
+  // sempre. A linha com colunas a mais fica fora da lista (como na ferramenta da planilha); o número comprido (CPF, celular) e o e-mail nunca vão para ela
+  test("M4: as congregações não achadas do resumo sem o pedaço do nome (';' solto) e sem CPF, celular ou e-mail", () => {
+    const prep = preparar([`70001;Bia;Dois de Souza Lima;IEADESPA - Vila Nova;FEMININO;01/01/1990;CASADA;;;Mae;Pai;${CPF1}`, "70002;Caio;IEADESPA - Lugar Nenhum",
+      "70003;Davi;\"IEADESPA - Vila 529.982.247-25 davi@example.org\"", "70004;Eva;IEADESPA - Área 2"]);
+    r.classificar(prep.linhas);
+    expect(prep.linhas[0].problemas).toEqual(expect.arrayContaining(["COLUNAS_A_MAIS", "CONGREGACAO_NAO_ENCONTRADA"]));
+    const s = r.resumir(prep);
+    expect(s.congregacoesNaoEncontradas).toEqual([{ nome: "Lugar Nenhum", pessoas: 1 }, { nome: "Vila [número] [e-mail]", pessoas: 1 }, { nome: "Área 2", pessoas: 1 }]);
+    expect(s.avisosGerais.map((a) => a.texto)).toContain("3 congregações do arquivo não foram achadas no sistema: essas pessoas ficam de fora até o nome bater "
+      + "(confira o nome no sistema ou no arquivo e faça a prévia de novo).");
+    expect(JSON.stringify(s)).not.toMatch(new RegExp(`Souza|Bia|${CPF1}|529|example`));
+    expect(r.semDadoPessoal("Vila (91) 90000-0003 e Km 15")).toBe("Vila [número] e Km 15");
   });
   test("a lista para conferir e o CSV: nunca o CPF nem o contato; a célula que começa com = + - @ é protegida (fórmula)", () => {
     const item = r.linhaParaLista({ linha: 7, matriculaArquivo: "0", nome: "=HYPERLINK(\"x\")", acao: "NOVA", matriculaFinal: 70100, problemas: [], avisos: ["MATRICULA_ZERO"] });

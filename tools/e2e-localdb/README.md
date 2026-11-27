@@ -266,7 +266,10 @@ Cada versão parte da base da anterior (`BASE=...`):
   a 189, a tabela `SaidasDoRol`, aplicada duas vezes). O `e2e-104-saidas-do-rol-tabela.js` prova o banco segurando sozinho as regras da tabela: uma
   saída aberta por pessoa (quem voltou sai de novo), o pedido próprio só da própria pessoa, o filho ligado à saída de quem pediu, o protocolo e o
   código curto únicos e só com os símbolos do papel, a carta viva em JSON e a apagada sem conteúdo nem destino, a etapa do apagamento com a data, a
-  impressão digital conferindo depois da ida e volta pelo banco, e nada na `CartasTransito` (o "processar" antigo nunca vê).
+  impressão digital conferindo depois da ida e volta pelo banco, e nada na `CartasTransito` (o "processar" antigo nunca vê). Também (27/11) a
+  situação e o tratamento da carta tirados da ficha e dos processos de verdade (as respostas dele de 26/11) e o rodapé (o Dirigente vigente e a
+  secretaria, nunca quem sai). O `e2e-105-volta-sem-cargo.js` (mesma base) prova a regra da rodada 36: a saída do rol encerra o cargo, o assento,
+  a função e o histórico, e quem volta não recebe nada disso de volta.
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

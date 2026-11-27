@@ -1,7 +1,9 @@
 <!-- "Quem deu · procura no cadastro de membros" (r24-lancamento): a procura na Igreja inteira, só o nome, o número e a congregação (a resposta 2
      de 26/11/2026). Escolhido do cadastro, fica o membro; digitado e não achado, fica o "nome digitado". Teclado: ↑ ↓ escolhe, Enter fica com o
      marcado, Esc fecha a lista. Enquanto a procura do que foi digitado não volta, a lista velha some e o Enter espera: com achados, a lista
-     abre para a pessoa escolher; sem achados, fica o nome digitado e a tela segue. -->
+     abre para a pessoa escolher; sem achados, fica o nome digitado e a tela segue.
+     - O desenho: na linha de lançar, o número logo depois do nome; no cartão do celular, o escolhido em duas linhas ("nº 700.087 · Dízimo ·
+       Espécie"). A caixa é um rótulo: tocar em qualquer ponto dela leva ao campo. -->
 <script lang="ts">
   import { untrack } from "svelte";
   import Icone from "../../../comum/Icone.svelte";
@@ -14,13 +16,17 @@
     grande?: boolean;
     /** a linha da planilha que não está ativa: o campo parece texto */
     plano?: boolean;
+    /** o cartão do celular: o escolhido em duas linhas, o nome e embaixo o número com o resumo */
+    duasLinhas?: boolean;
+    /** o que vai depois do número, no cartão do celular ("Dízimo · Espécie") */
+    resumo?: string;
     placeholder?: string;
     desligado?: boolean;
     onpessoa: (p: Pessoa) => void;
     /** Enter sem lista aberta: a tela segue (a próxima folha) */
     onenter?: () => void;
   }
-  let { pessoa, folha, grande = false, plano = false, placeholder = "", desligado = false, onpessoa, onenter }: Props = $props();
+  let { pessoa, folha, grande = false, plano = false, duasLinhas = false, resumo = "", placeholder = "", desligado = false, onpessoa, onenter }: Props = $props();
 
   // o texto do campo é da pessoa que digita; começa no que a linha já tem (a linha nova monta outro campo)
   let texto = $state(untrack(() => (pessoa && "nome" in pessoa ? pessoa.nome : pessoa && "digitado" in pessoa ? pessoa.digitado : "")));
@@ -96,14 +102,15 @@
 </script>
 
 <div class="quem" class:grande class:plano>
-  <span class="caixa" class:escolhido={!!escolhido}>
+  <label class="caixa" class:escolhido={!!escolhido} class:duas={duasLinhas && !!escolhido}>
     <Icone nome="pessoa" tam={grande ? 17 : 15} traco={2} />
     <input bind:this={campo} value={texto} oninput={(e) => digitou((e.currentTarget as HTMLInputElement).value)} onkeydown={teclas}
       onfocus={() => (aberta = achados.length > 0 && !escolhido)} onblur={() => setTimeout(() => (aberta = false), 150)}
       disabled={desligado} {placeholder} data-quem={folha} maxlength="120" autocomplete="off" spellcheck="false" aria-label={`Quem deu a folha ${folhaTxt(folha)}`}
       role="combobox" aria-expanded={aberta} aria-controls={idLista} aria-autocomplete="list" />
-    {#if escolhido}<span class="num">nº {folhaTxt(escolhido.membroId)}</span>{:else if texto.trim() && !aberta}<span class="digitado">nome digitado</span>{/if}
-  </span>
+    {#if escolhido}<span class="num">nº {folhaTxt(escolhido.membroId)}{duasLinhas && resumo ? ` · ${resumo}` : ""}</span>
+    {:else if texto.trim() && !aberta}<span class="digitado">nome digitado</span>{/if}
+  </label>
   {#if aberta && achados.length}
     <ul class="lista" id={idLista} role="listbox" aria-label="Achados no cadastro">
       {#each achados as m, i (m.membroId)}
@@ -120,12 +127,23 @@
 <style>
   .quem { position: relative; flex: 1; min-width: 0; display: flex; }
   .caixa { flex: 1; height: 30px; border: 2px solid var(--sv-campo-borda); border-radius: 7px; background: var(--sv-campo); display: flex; align-items: center; gap: 6px; padding: 0 8px; min-width: 0; color: var(--fin-forte); }
-  .grande .caixa { height: 42px; border-radius: 10px; padding: 0 12px; gap: 10px; }
+  .grande .caixa { height: 42px; border-radius: 10px; padding: 0 12px; gap: 10px; cursor: text; }
+  /* a linha de lançar: o campo do tamanho do nome escolhido, o número logo depois (o desenho) */
+  .grande .caixa.escolhido:not(.duas) input { flex: 0 1 auto; field-sizing: content; min-width: 4ch; }
+  /* o cartão do celular: o escolhido em duas linhas, no fundo verde-água, sem borda (o desenho) */
+  .caixa.duas { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; row-gap: 0; align-content: center; height: auto; min-height: 40px;
+    padding: 4px 12px; border-color: transparent; background: var(--sv-mod-fundo); }
+  .caixa.duas:focus-within { border-color: var(--fin-forte); }
+  .caixa.duas > :global(svg) { grid-row: 1 / 3; align-self: center; }
+  .caixa.duas input { font-size: 14px; font-weight: 700; }
+  .caixa.duas .num { grid-column: 2; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .caixa:focus-within { border-color: var(--fin-forte); }
-  .plano .caixa:not(:focus-within) { border-color: transparent; background: transparent; padding-left: 0; }
-  .plano .caixa:not(:focus-within) :global(svg) { display: none; }
+  /* na planilha (plano): fora da linha ativa, parece texto; na linha ativa, a caixa com o ícone e sem o número (o desenho r24) */
+  :global(.linha:not(:focus-within)) .plano .caixa { height: 26px; border-color: transparent; background: transparent; padding-left: 0; }
+  :global(.linha:not(:focus-within)) .plano .caixa :global(svg) { display: none; }
+  :global(.linha:focus-within) .plano .num { display: none; }
   input::placeholder { color: var(--sv-suave); font-weight: 400; }
-  input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--sv-titulo); }
+  input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; padding: 0; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--sv-titulo); }
   .grande input { font-size: 14.5px; }
   .num { font-size: 11.5px; font-weight: 400; color: var(--sv-suave); white-space: nowrap; flex: none; }
   .grande .num { font-size: 12px; }

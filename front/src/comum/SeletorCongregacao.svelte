@@ -42,7 +42,9 @@
 
   const tom = (c: CongregacaoDoSeletor): TomSituacao => c.situacao?.tom ?? "ok";
   const precisa = (c: CongregacaoDoSeletor): boolean => tom(c) !== "ok";
-  const porPrecisa = (a: CongregacaoDoSeletor, b: CongregacaoDoSeletor): number => ORDEM[tom(a)] - ORDEM[tom(b)] || a.nome.localeCompare(b.nome, "pt-BR");
+  /** a de agora primeiro (o desenho), depois as que precisam, depois pelo nome */
+  const porPrecisa = (a: CongregacaoDoSeletor, b: CongregacaoDoSeletor): number =>
+    Number(b.id === atual) - Number(a.id === atual) || ORDEM[tom(a)] - ORDEM[tom(b)] || a.nome.localeCompare(b.nome, "pt-BR");
   const areaDe = (c: CongregacaoDoSeletor): string => c.area ?? SEM_AREA;
 
   const atualC = $derived(congregacoes.find((c) => c.id === atual) ?? null);
@@ -151,7 +153,7 @@
   <button type="button" class="cong" class:ativa={c.id === atual} class:marcada onclick={() => escolher(c)} onmouseenter={() => (destaque = i)}>
     <span class="ic-igreja"><Icone nome="igreja" tam={16} traco={2} /></span>
     <span class="textos">
-      <span class="nome">{@render realce(c.nome, procurandoCongregacao ? termo : "")}{#if comArea}<span class="area"> · {areaDe(c)}</span>{/if}</span>
+      <span class="nome">{@render realce(c.nome, procurandoCongregacao ? termo : "")}{#if comArea}<span class="area">{" · "}{areaDe(c)}</span>{/if}</span>
       <span class="sit">{@render ponto(tom(c))}{c.situacao?.texto ?? "em dia"}</span>
     </span>
     {#if procurandoCongregacao && i === destaque}<kbd>Enter</kbd>{:else if c.id === atual}<span class="agora">agora</span>{/if}
@@ -278,12 +280,15 @@
   /* o véu e o painel por cima da tela, embaixo do botão */
   .veu { position: fixed; inset: 0; border: 0; padding: 0; background: rgba(6, 22, 41, 0.5); z-index: 50; cursor: default; }
   :global(html[data-tema="escuro"]) .veu { background: rgba(6, 22, 41, 0.62); }
+  /* o painel do desenho (r20): por cima da tela inteira, sempre à direita (28 px) e a 118 px do alto, não importa onde o botão esteja (fixo: os
+     contêineres da casca cortam o que passa da borda deles) */
   .painel {
-    position: absolute; right: 0; top: calc(100% + 10px); z-index: 51; width: 470px; max-width: calc(100vw - 40px); background: var(--sv-sup); border: 1px solid var(--sv-borda);
+    position: fixed; right: 28px; top: 118px; z-index: 51; max-height: calc(100vh - 136px); overflow-y: auto; width: 508px; max-width: calc(100vw - 40px); background: var(--sv-sup); border: 1px solid var(--sv-borda);
     border-radius: 16px; box-shadow: 0 24px 60px rgba(6, 22, 41, 0.4); padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; outline: none;
   }
-  .painel.largo { width: 720px; }
-  .painel.estreito { width: 440px; }
+  /* as larguras do desenho (720, 470 e 440 por dentro, mais o recheio de 18 e a borda): 758, 508 e 478 */
+  .painel.largo { width: 758px; }
+  .painel.estreito { width: 478px; }
   .folha-cel { display: flex; flex-direction: column; gap: 10px; }
 
   .topo { display: flex; align-items: center; gap: 10px; }
@@ -294,7 +299,7 @@
 
   .procura { height: 42px; border: 1px solid var(--sv-campo-borda); border-radius: 10px; background: var(--sv-campo); display: flex; align-items: center; gap: 8px; padding: 0 12px; color: var(--sv-suave); }
   .procura.digitado, .procura:focus-within { border: 2px solid var(--sv-mod); padding: 0 11px; }
-  .procura input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font: inherit; font-size: 14px; font-weight: 600; color: var(--sv-titulo); }
+  .procura input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; padding: 0; font: inherit; font-size: 14px; font-weight: 600; color: var(--sv-titulo); }
   .procura input::placeholder { font-weight: 400; color: var(--sv-suave); }
   .procura input::-webkit-search-cancel-button { display: none; }
 

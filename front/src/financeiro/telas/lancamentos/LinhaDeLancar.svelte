@@ -37,6 +37,12 @@
   const marca = $derived(r ? ehMarca(r.tipo) : false);
   const posterior = $derived(!!r && r.como === "nova" && r.referente === "MES_POSTERIOR");
   const outras = $derived((planilha.linhas ?? []).filter((l) => l.folha !== r?.folha));
+  /** no celular, com a folha que veio marcada no cartão: só as que vieram do mês anterior (as marcadas e as da tarja), e depois o recado "Depois,
+      as de dezembro" (o desenho) */
+  const marcadas = $derived(planilha.marcadasNoAnterior ?? []);
+  const outrasCel = $derived(r?.como === "preencher" ? outras.filter((l) => marcadas.includes(l.folha) || l.situacao === "anterior") : outras);
+  /** o resumo do escolhido no cartão do celular: "Dízimo · Espécie" */
+  const resumo = $derived(r ? [r.tipo && !ehMarca(r.tipo) ? NOME_TIPO[r.tipo as TipoLancamento] : "", r.forma ? NOME_FORMA[r.forma] : ""].filter(Boolean).join(" · ") : "");
   const primeira = $derived(planilha.linhas?.[0]?.folha ?? r?.folha ?? null);
 
   export function focar(): void { campoValor?.focus(); }
@@ -112,7 +118,7 @@
   {:else if r && posterior}
     <span class="sem" class:grande>sem nome e sem valor · entra em {nomeDoMes(mesSeguinte)}</span>
   {:else if r}
-    {#key r.folha}<QuemDeu pessoa={r.pessoa} folha={r.folha} {grande} desligado={!lancavel} onpessoa={(p) => onmudar({ pessoa: p })} onenter={onlancar} />{/key}
+    {#key r.folha}<QuemDeu pessoa={r.pessoa} folha={r.folha} {grande} duasLinhas={celular} {resumo} desligado={!lancavel} onpessoa={(p) => onmudar({ pessoa: p })} onenter={onlancar} />{/key}
   {/if}
 {/snippet}
 
@@ -136,9 +142,9 @@
       <button type="button" class="ouro largo" disabled={gravando} aria-busy={gravando} onclick={onlancar}><Icone nome="check" tam={17} traco={2.4} />{marca ? `Marcar a ${folhaTxt(r.folha)}` : `Lançar a ${folhaTxt(r.folha)}`}</button>
     </div>
   {/if}
-  {#if outras.length}
+  {#if outrasCel.length}
     <div class="lista-cel">
-      {#each outras as l (l.folha)}
+      {#each outrasCel as l (l.folha)}
         <div class="item-cel">
           <div class="txt">
             {#if l.situacao === "lancada"}
@@ -153,7 +159,7 @@
               <strong>{folhaTxt(l.folha)}</strong><span>{l.situacao === "preencher" ? "falta o nome e o valor" : "sem destino ainda"}</span>
             {/if}
           </div>
-          {#if l.situacao === "lancada"}<strong class="v">{reais(l.valor)}{#if l.voluntaria}<span class="vol"> + {reais(l.voluntaria)}</span>{/if}</strong>
+          {#if l.situacao === "lancada"}<strong class="v">{reais(l.valor)}{#if l.voluntaria}<span class="vol">{" + "}{reais(l.voluntaria)}</span>{/if}</strong>
           {:else if l.situacao === "anterior"}<Icone nome="cadeado" tam={15} traco={2} />{/if}
         </div>
       {/each}
@@ -173,9 +179,8 @@
       <div class="fila">
         <div class="grupo l150"><span class="rot">Folha (sozinha)</span><span class="sozinha"><strong>{folhaTxt(r.folha)}</strong></span></div>
         <div class="grupo l150"><span class="rot">1. Valor<span class="obrig">*</span></span>{@render campoValorSnip(false)}</div>
-        <div class="grupo"><span class="rot">2. Tipo</span>{@render botoesTipo()}</div>
-        <span class="esp"></span>
-        <div class="grupo"><span class="rot">3. Forma</span>{@render botoesForma()}</div>
+        <div class="grupo esc"><span class="rot">2. Tipo</span>{@render botoesTipo()}</div>
+        <div class="grupo esc"><span class="rot">3. Forma</span>{@render botoesForma()}</div>
       </div>
       <div class="fila">
         <div class="grupo quem"><span class="rot">{marca ? "4. Motivo" : "4. Quem deu"}<span class="obrig">*</span>{#if !marca}&nbsp;<span class="nota-rot">· procura no cadastro</span>{/if}</span>{@render quemOuMotivo(true)}</div>
@@ -189,7 +194,7 @@
           {#if r.como === "preencher" || marca}<span class="travado"><Icone nome="cadeado" tam={13} traco={2} />{marca ? "—" : nomeDoMes(planilha.mes)}</span>
           {:else}{@render pilulasReferente(34, true)}{/if}
         </div>
-        <button type="button" class="ouro" disabled={gravando} aria-busy={gravando} onclick={onlancar}><Icone nome="check" tam={17} traco={2.4} />{marca ? "Marcar (Enter)" : "Lançar (Enter)"}</button>
+        <button type="button" class="ouro" disabled={gravando} aria-busy={gravando} onclick={onlancar}><Icone nome="check" tam={18} traco={2.2} />{marca ? "Marcar (Enter)" : "Lançar (Enter)"}</button>
       </div>
       {#if erro}<p class="erro" role="alert">{erro}</p>{/if}
     </div>
@@ -197,6 +202,7 @@
   <section class="seq">
     <div class="topo-seq"><h2>{NomeDoMes(planilha.mes)}{primeira ? `, a partir da ${folhaTxt(primeira)}` : ""}</h2>{#if planilha.tira}<span class="nota">a sequência contínua do bloco {folhaTxt(planilha.tira.numero)}</span>{/if}</div>
     <div class="grade cab"><span>Folha</span><span>Quem deu</span><span>Tipo e forma</span><span>Referente a</span><span class="dir">Valor</span></div>
+    <div class="itens">
     {#each outras as l (l.folha)}
       <div class="grade item" class:ant={l.situacao === "anterior"} class:pos={l.situacao === "posterior" || l.situacao === "depois"}>
         <span class="n">{folhaTxt(l.folha)}</span>
@@ -204,7 +210,7 @@
           <span class="nome">{l.membro ?? l.nome ?? (l.tipo === "OFERTA_CULTO" ? "Oferta de culto (sem nome)" : "—")}</span>
           <span class="corta">{l.tipo ? (l.voluntaria ? "Dízimo + voluntária" : NOME_TIPO[l.tipo]) : "—"} · {l.forma ? NOME_FORMA[l.forma] : "—"}</span>
           <span class="tra">—</span>
-          <span class="dir v">{reais(l.valor)}{#if l.voluntaria}<span class="vol"> + {reais(l.voluntaria)}</span>{/if}</span>
+          <span class="dir v">{reais(l.valor)}{#if l.voluntaria}<span class="vol">{" + "}{reais(l.voluntaria)}</span>{/if}</span>
         {:else if l.situacao === "excecao"}
           <span><span class="chip">{NOME_MARCA[l.destino ?? ""] ?? "Marcada"}</span></span><span>—</span><span></span><span class="dir tra">—</span>
         {:else if l.situacao === "anterior" || l.situacao === "posterior" || l.situacao === "depois"}
@@ -216,6 +222,7 @@
         {/if}
       </div>
     {/each}
+    </div>
     {#if lancavel}<div class="rodape">Nas folhas novas, o 6º passo tem só {@render pilulasReferente(24, false)}</div>{/if}
   </section>
 {/if}
@@ -229,22 +236,22 @@
   :global(html[data-tema="escuro"]) .obrig { color: #FCA5A5; }
   .grupo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .botoes { display: flex; gap: 6px; flex-wrap: wrap; }
+  /* as escolhas do desenho (r18Escolha "junto"): 34 px, 10 px de cada lado, a letra 13; a tecla é só a letra, mais clara */
   .op {
-    height: 34px; padding: 0 12px 0 6px; border-radius: 17px; border: 1px solid var(--sv-borda); background: var(--sv-sup); display: inline-flex; align-items: center; gap: 6px;
-    font-size: 13.5px; font-weight: 600; color: var(--sv-titulo); white-space: nowrap;
+    height: 34px; padding: 0 10px; border-radius: 17px; border: 1px solid var(--sv-borda); background: var(--sv-sup); display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; font-weight: 600; color: var(--sv-texto); white-space: nowrap;
   }
-  .op.ativa { background: #0A2342; border-color: #0A2342; color: #FFFFFF; }
+  .op.ativa { background: #0A2342; border-color: #0A2342; color: #FFFFFF; font-weight: 700; }
   :global(html[data-tema="escuro"]) .op.ativa { background: #FFB800; border-color: #FFB800; color: #0A2342; }
   .op.marca { padding: 0 12px; }
   .op.marca.ativa { background: var(--sv-pend-fundo); border-color: var(--sv-pend); color: var(--sv-pend); }
-  .tecla { width: 20px; height: 20px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 800; background: var(--sv-linha); color: var(--sv-texto); }
-  .op.ativa .tecla { background: rgba(255, 255, 255, .18); color: inherit; }
+  .tecla { font-size: 11px; font-weight: 800; opacity: .75; }
   .nao-usada { border: 0; background: transparent; display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--sv-link); padding: 0 4px; }
-  .caixa-valor { height: 44px; border: 2px solid var(--sv-campo-borda); border-radius: 10px; background: var(--sv-campo); display: flex; align-items: center; gap: 6px; padding: 0 12px; }
+  .caixa-valor { height: 44px; border: 2px solid var(--sv-campo-borda); border-radius: 10px; background: var(--sv-campo); display: flex; align-items: center; gap: 5px; padding: 0 12px; }
   .caixa-valor:focus-within { border-color: var(--fin-forte); }
-  .caixa-valor.grande { height: 46px; }
+  .caixa-valor.grande { height: 42px; }
   .rs { font-size: 17px; font-weight: 700; color: var(--sv-titulo); }
-  .valor { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font: inherit; font-size: 17px; font-weight: 700; color: var(--sv-titulo); font-variant-numeric: tabular-nums; }
+  .valor { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; padding: 0; font: inherit; font-size: 17px; font-weight: 700; color: var(--sv-titulo); font-variant-numeric: tabular-nums; }
   .valor::placeholder { color: var(--sv-suave); font-weight: 500; }
   .valor.vol { font-size: 14px; font-weight: 600; }
   .caixa-valor:has(.vol) { height: 42px; border-width: 1px; }
@@ -255,8 +262,8 @@
   .chip { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 11px; background: var(--sv-pend-fundo); color: var(--sv-pend); white-space: nowrap; }
   .erro { font-size: 13px; font-weight: 600; color: var(--sv-atr); }
   .ouro {
-    height: 42px; padding: 0 18px; border: 0; border-radius: 10px; background: #FFB800; color: #0A2342; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    font-size: 14.5px; font-weight: 700; white-space: nowrap; flex: none;
+    height: 42px; padding: 0 16px; border: 0; border-radius: 10px; background: #FFB800; color: #0A2342; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    font-size: 14px; font-weight: 700; white-space: nowrap; flex: none;
   }
   .pil-ref { display: inline-flex; gap: 4px; }
   .pil-ref button, .pil { padding: 0 11px; border-radius: 17px; border: 1px solid var(--sv-borda); background: transparent; display: inline-flex; align-items: center; font-size: 12.5px; font-weight: 700; color: var(--sv-texto); white-space: nowrap; }
@@ -274,11 +281,12 @@
   /* o notebook: o cartão da folha de agora */
   .comp { background: var(--sv-sup); border: 1px solid var(--sv-borda); border-radius: 14px; padding: 12px 16px; display: flex; flex-direction: column; gap: 11px; }
   .fila { display: flex; gap: 14px; align-items: flex-end; }
+  .comp .grupo { gap: 4px; }
+  .comp .grupo.esc { gap: 8px; padding-bottom: 5px; }
   .l150 { width: 150px; flex: none; }
   .l160 { width: 160px; flex: none; }
   .quem { flex: 1; }
   .ref6 { flex: none; }
-  .esp { flex: 1; }
   .sozinha { height: 44px; border: 1px dashed var(--sv-campo-borda); border-radius: 10px; display: flex; flex-direction: column; justify-content: center; padding: 0 12px; }
   .sozinha strong { font-size: 15px; color: var(--sv-titulo); font-variant-numeric: tabular-nums; }
   .travado { height: 42px; border: 1px dashed var(--sv-campo-borda); border-radius: 10px; display: flex; align-items: center; gap: 6px; padding: 0 14px; font-size: 13px; color: var(--sv-suave); white-space: nowrap; }
@@ -291,7 +299,8 @@
   .nota { font-size: 12.5px; color: var(--sv-suave); }
   .grade { display: grid; grid-template-columns: 64px minmax(0, 1.5fr) minmax(0, 1fr) 190px 120px; gap: 12px; align-items: center; }
   .grade.cab { font-size: 12px; font-weight: 700; color: var(--sv-suave); }
-  .grade.item { min-height: 25px; border-top: 1px solid var(--sv-linha); font-size: 13px; color: var(--sv-texto); }
+  .itens { display: flex; flex-direction: column; }
+  .grade.item { min-height: 26px; border-top: 1px solid var(--sv-linha); font-size: 13px; color: var(--sv-texto); }
   .grade.item.ant { background: #FAF7FF; }
   .grade.item.pos { background: #F5F8FF; }
   :global(html[data-tema="escuro"]) .grade.item.ant { background: #1E1638; }
@@ -306,13 +315,13 @@
   .rodape { display: flex; align-items: center; gap: 10px; padding-top: 4px; font-size: 12.5px; color: var(--sv-texto); }
 
   /* o celular */
-  .cartao { background: #FFFBEC; border: 1.5px solid #F2C94C; border-radius: 14px; padding: 10px 13px; display: flex; flex-direction: column; gap: 9px; }
+  .cartao { background: #FFFBEC; border: 1.5px solid #F2C94C; border-radius: 14px; padding: 10px 13px; display: flex; flex-direction: column; gap: 7px; }
   :global(html[data-tema="escuro"]) .cartao { background: #2A220C; border-color: #8A6A14; }
   .cab-cartao { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--sv-suave); }
   .cab-cartao strong { font-size: 15px; color: var(--sv-titulo); }
   .cartao .grupo { gap: 4px; }
   .cartao .op { height: 34px; padding: 0 12px; }
-  .ouro.largo { width: 100%; height: 44px; }
+  .ouro.largo { width: 100%; height: 42px; }
   .lista-cel { background: var(--sv-sup); border: 1px solid var(--sv-borda); border-radius: 14px; padding: 0 12px; }
   .item-cel { display: flex; align-items: center; gap: 10px; min-height: 46px; border-top: 1px solid var(--sv-linha); color: var(--sv-suave); }
   .item-cel:first-child { border-top: 0; }

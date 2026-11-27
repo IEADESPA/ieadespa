@@ -71,8 +71,29 @@ module.exports = async function provarLancamentos(f) {
   ok(await focar(page, 70161), "local: o \"Quem deu\" da 70.161 recebe o foco");
   await folhaPeloTeclado(page, { quem: "Carl", escolhe: true, tipo: "d", forma: "e", valor: "250,00" });
   let l161 = await linha(page, 70161);
-  ok(l161 && l161.quem === "Carlos Eduardo Souza" && l161.tipo === "DIZIMO" && l161.forma === "ESPECIE" && l161.valor === "250,00" && l161.texto.includes("nº 700.087"),
+  ok(l161 && l161.quem === "Carlos Eduardo Souza" && l161.tipo === "DIZIMO" && l161.forma === "ESPECIE" && l161.valor === "250,00",
     "local: a 70.161 pelo teclado (Carlos do cadastro, Dízimo, Espécie, 250,00)", l161);
+  // o desenho (r24, as medidas): a linha lançada com 28 px (27 + o fio), a ativa com 41, a próxima com 30; na ativa, "Quem deu" é a caixa com o
+  // ícone e sem o número; a próxima sem o traço na voluntária; o subtítulo inteiro em 13,5; a planilha cabe na tela com os totais
+  const med = await page.evaluate(() => {
+    const alt = (s) => { const e = document.querySelector(`#financeiroRaiz ${s}`); return e ? Math.round(e.getBoundingClientRect().height) : null; };
+    const ativa = document.querySelector('#financeiroRaiz [data-folha="70161"]');
+    const caixa = ativa && ativa.querySelector(".caixa");
+    const svg = caixa && caixa.querySelector("svg");
+    const num = ativa && ativa.querySelector(".num");
+    const vol = document.querySelector('#financeiroRaiz [data-folha="70171"] input.vol');
+    const tot = document.querySelector("#financeiroRaiz .totais");
+    const sub = document.querySelector("#financeiroRaiz .cab-pag .textos p");
+    return { lancada: alt('[data-folha="70165"]'), ativa: alt('[data-folha="70161"]'), proxima: alt('[data-folha="70171"]'),
+      borda: caixa ? getComputedStyle(caixa).borderTopColor : null, icone: !!svg && getComputedStyle(svg).display !== "none", numero: !!num && num.offsetParent !== null,
+      traco: vol ? vol.placeholder : null, fim: tot ? Math.round(tot.getBoundingClientRect().bottom) : null, altura: innerHeight,
+      subInteiro: sub ? sub.scrollWidth <= sub.clientWidth : null, subLetra: sub ? getComputedStyle(sub).fontSize : null };
+  });
+  ok(med.lancada === 28 && med.ativa === 41 && med.proxima === 30, "local: as alturas do desenho (a lançada 28, a ativa 41, a próxima 30)", med);
+  ok(med.borda && med.borda !== "rgba(0, 0, 0, 0)" && med.icone && !med.numero, "local: na linha ativa, \"Quem deu\" é a caixa com o ícone, sem o número (o desenho)", med);
+  ok(med.traco === "", "local: a próxima folha sem o traço na voluntária", med.traco);
+  ok(med.fim !== null && med.fim <= med.altura, "local: a planilha cabe na tela com os totais (sem rolagem, o desenho)", med);
+  ok(med.subInteiro === true && med.subLetra === "13.5px", "local: o subtítulo inteiro, na letra do desenho (13,5)", med);
   tot = await totais(page);
   ok(JSON.stringify(tot) === JSON.stringify(["Dízimos R$ 1.454,00 com a 70.161 e a 70.162", "Oferta de culto R$ 486,50 só quando há", "Oferta voluntária R$ 80,00 1 junto do dízimo, 1 sozinha",
     "Dezembro até aqui R$ 2.020,50 Pix 1.040,00 · espécie 980,50", "Pré-repasse de dezembro R$ 2.020,50 com R$ 530,00 adiantados"]), "local: os totais do desenho com a 70.161 digitada", tot);
@@ -81,6 +102,7 @@ module.exports = async function provarLancamentos(f) {
   await tecla(page, "Enter");
   let fo = await foco(page);
   ok(fo && fo.quem === "70171", "local: Enter vai para a 70.171 (a próxima folha)", fo);
+  ok(((await linha(page, 70161)) || { texto: "" }).texto.includes("nº 700.087"), "local: fora da linha ativa, o número do membro volta ao lado do nome");
   await escrever(page, "Mar");
   let achados = await esperarLista(page);
   ok(achados.length === 4 && achados[0].startsWith("Maria Oliveira") && achados[3].startsWith("Lídia Martins"), "local: \"Mar\" acha 4 no cadastro (a Igreja inteira; primeiro quem começa por \"Mar\")", achados);
@@ -197,6 +219,26 @@ module.exports = async function provarLancamentos(f) {
   await escrever(page, "Carlos");
   await esperarLista(page);
   await tecla(page, "Enter");
+  // o desenho (as medidas): Tipo e Forma numa linha só; "R$ 250,00" junto; o número logo depois do nome; a sequência com 26 px por folha (25 + o
+  // fio) e sem folga entre elas; "320,00 + 30,00"; a página cabe na tela
+  const ml = await page.evaluate(() => {
+    const q = (s) => [...document.querySelectorAll(`#financeiroRaiz ${s}`)];
+    const tops = q(".comp .op").map((b) => Math.round(b.getBoundingClientRect().top));
+    const rs = q(".comp .caixa-valor .rs")[0], v = q(".comp input.valor:not(.vol)")[0];
+    const caixa = q(".comp .quem .caixa")[0], num = q(".comp .quem .num")[0];
+    const itens = q(".seq .grade.item").slice(0, 2).map((e) => e.getBoundingClientRect().top);
+    const notas = q(".nota-tot, .avisos-nota, [data-aviso=nota]");
+    const ult = [...document.querySelectorAll("#financeiroRaiz .lancamentos > *")].pop();
+    return { tops: [...new Set(tops)], junto: rs && v ? Math.round(v.getBoundingClientRect().left - rs.getBoundingClientRect().right + parseFloat(getComputedStyle(v).paddingLeft)) : null,
+      numDepois: caixa && num ? Math.round(num.getBoundingClientRect().left - caixa.getBoundingClientRect().left) : null,
+      passo: itens.length === 2 ? Math.round(itens[1] - itens[0]) : null, fim: ult ? Math.round(ult.getBoundingClientRect().bottom) : null, altura: innerHeight, n: notas.length };
+  });
+  ok(ml.tops.length === 1, "linha: Tipo e Forma numa linha só (o desenho)", ml.tops);
+  ok(ml.junto !== null && ml.junto <= 8, "linha: \"R$ 250,00\" junto, como o desenho", ml.junto);
+  ok(ml.numDepois !== null && ml.numDepois <= 260, "linha: o número do membro logo depois do nome", ml.numDepois);
+  ok(ml.passo === 26, "linha: a sequência com 26 px por folha, sem folga entre elas", ml.passo);
+  ok(ml.fim !== null && ml.fim <= ml.altura, "linha: a página cabe na tela (sem rolagem, o desenho)", ml);
+  ok((await textoTela(page)).includes("320,00 + 30,00"), "linha: a voluntária junto com o espaço (\"320,00 + 30,00\")");
   const s3 = pedidos(api, `${P}/salvar`, "POST").length;
   await tecla(page, "Enter");
   const sl = await esperarPedido(api, `${P}/salvar`, "POST", s3);
@@ -217,14 +259,31 @@ module.exports = async function provarLancamentos(f) {
   await calmo(page);
   t = await textoTela(page);
   ok(t.includes("procura nas áreas e nas 9 congregações") && t.includes("Área 2"), "geral: o seletor da r20 abre", t.slice(0, 400));
+  // o painel do desenho: por cima da tela inteira, à direita (28 px) e a 118 px do alto, mesmo com o botão longe da borda; nada cortado
+  const pn = await page.evaluate(() => {
+    const p = document.querySelector("#financeiroRaiz .painel");
+    if (!p) return null;
+    const r = p.getBoundingClientRect();
+    const dentro = (x, y) => { const e = document.elementFromPoint(x, y); return !!e && p.contains(e); };
+    return { esq: Math.round(r.left), dir: Math.round(innerWidth - r.right), topo: Math.round(r.top), cantoEsq: dentro(r.left + 12, r.top + 12), cantoDir: dentro(r.right - 12, r.bottom - 12) };
+  });
+  ok(pn && pn.dir === 28 && pn.topo === 118 && pn.esq >= 280 && pn.cantoEsq && pn.cantoDir, "geral: o painel do seletor à direita e a 118 px do alto, inteiro na tela (o desenho)", pn);
   const g1 = pedidos(api, P).length;
   await page.keyboard.type("Vila");
+  await calmo(page);
+  ok((await textoTela(page)).includes("Vila Nova · Área 2"), "geral: a procura mostra a área de cada uma, com o espaço (\"Vila Nova · Área 2\")");
   await tecla(page, "Enter");
   const gp = await esperarPedido(api, P, "GET", g1);
   ok(gp && gp.busca.congregacaoId === "2", "geral: procurar \"Vila\" e Enter abre a planilha de Vila Nova", gp && gp.busca);
   await calmo(page);
   t = await textoTela(page);
   ok(t.includes("quarta, 02/12/2026 · Vila Nova · fica registrado que a Geral lançou") && t.includes("Lançando por Vila Nova"), "geral: lançando por Vila Nova", t.slice(0, 200));
+  await page.evaluate(() => document.querySelector("#financeiroRaiz button.troca").click());
+  await calmo(page);
+  const primeira = await page.evaluate(() => { const c = document.querySelector("#financeiroRaiz .painel button.cong"); return c ? c.innerText.replace(/\s+/g, " ").trim() : null; });
+  ok(primeira && primeira.startsWith("Vila Nova") && primeira.includes("agora"), "geral: no seletor, a congregação de agora vem primeiro (o desenho)", primeira);
+  await tecla(page, "Escape");
+  await calmo(page);
   await fechar(s, "lançamentos, a Tesouraria Geral");
 
   // ================= a área acompanha =================
@@ -258,5 +317,27 @@ module.exports = async function provarLancamentos(f) {
   ok(t.includes("70.162 · Lídia Martins") && t.includes("veio sozinha · nada a digitar · somou em novembro") && t.includes("Depois, as de dezembro. Na próxima folha nova, Referente a:"), "celular: a lista e o recado do fim", t.slice(0, 700));
   const titulo = await page.evaluate(() => (document.getElementById("tituloModulo") || {}).textContent || "");
   ok(titulo === "Lançar", "celular: \"Lançar\" na barra do alto (o desenho)", titulo);
+  // o desenho: com a folha que veio marcada no cartão, a lista mostra só as que vieram de novembro (a 70.162, a 70.163 e a 70.164) e depois o
+  // recado "Depois, as de dezembro"; o "Quem deu" escolhido em duas linhas, com o número, o tipo e a forma
+  const itensCel = await page.evaluate(() => [...document.querySelectorAll("#financeiroRaiz .lista-cel .item-cel")].map((e) => e.innerText.replace(/\s+/g, " ").trim()));
+  ok(itensCel.length === 3 && itensCel[0].startsWith("70.162") && itensCel[2].startsWith("70.164"), "celular: a lista só com as que vieram de novembro (o desenho)", itensCel);
+  await clicar(page, "Dízimo");
+  await clicar(page, "Espécie");
+  await page.evaluate(() => document.querySelector('#financeiroRaiz [data-quem="70161"]').focus());
+  await escrever(page, "Carl");
+  await esperarLista(page);
+  await tecla(page, "Enter");
+  await page.evaluate(() => { const v = document.querySelector("#financeiroRaiz .cartao input.valor"); if (v) v.focus(); });
+  await calmo(page);
+  const quemCel = await page.evaluate(() => { const c = document.querySelector("#financeiroRaiz .cartao .quem"); return c ? c.innerText.replace(/\s+/g, " ").trim() : null; });
+  ok(quemCel === "Carlos Eduardo Souza nº 700.087 · Dízimo · Espécie" || (quemCel || "").endsWith("nº 700.087 · Dízimo · Espécie"), "celular: quem deu em duas linhas, com o número, o tipo e a forma (o desenho)", quemCel);
   await fechar(s, "lançamentos, o celular");
+
+  // ================= a área no celular =================
+  s = await abrir("area", "celular");
+  ({ page, api } = s);
+  await irLancamentos(s, `${P}/area`);
+  t = await textoTela(page);
+  ok(t.includes("Vendo As 7 da Área 2") && t.includes("Em dia: 5 de 7"), "área, celular: \"As 7 da Área 2\" no botão (o desenho do celular) e as em dia", t.slice(0, 300));
+  await fechar(s, "lançamentos, a área no celular");
 };

@@ -111,7 +111,7 @@
 
   <span role="cell">
     {#if semValor || (r.tipo !== null && r.tipo !== "DIZIMO")}<span class="tra">—</span>{:else}
-      <input class="vol" value={r.voluntaria} inputmode="decimal" autocomplete="off" disabled={desligado} placeholder="—" aria-label={`Oferta voluntária junto, folha ${folhaTxt(r.folha)}`}
+      <input class="vol" value={r.voluntaria} inputmode="decimal" autocomplete="off" disabled={desligado} placeholder={proxima ? "" : "—"} aria-label={`Oferta voluntária junto, folha ${folhaTxt(r.folha)}`}
         oninput={(e) => { const el = e.currentTarget as HTMLInputElement; const v = soValor(el.value); el.value = v; onmudar({ voluntaria: v }); }} />
     {/if}
   </span>
@@ -130,14 +130,15 @@
 
 <style>
   .linha {
-    position: relative; display: grid; grid-template-columns: var(--cols-lanc); gap: 10px; padding: 0 14px; min-height: 30px; align-items: center;
+    position: relative; display: grid; grid-template-columns: var(--cols-lanc); gap: 10px; padding: 0 14px; min-height: 28px; align-items: center;
     border-top: 1px solid var(--sv-linha); font-size: 13.5px; color: var(--sv-texto); outline: none;
   }
   /* a linha em que a pessoa está (a ativa do desenho): amarela, com o traço dourado */
-  .linha:focus-within { min-height: 40px; background: #FFFBEC; box-shadow: inset 3px 0 0 #FFB800; }
+  /* as alturas do desenho (r24): a linha com 27 px e o fio (28), a ativa com 40 e o fio (41), a próxima folha com 29 e o fio (30) */
+  .linha:focus-within { min-height: 41px; background: #FFFBEC; box-shadow: inset 3px 0 0 #FFB800; }
   :global(html[data-tema="escuro"]) .linha:focus-within { background: #2A220C; }
   .linha.erro { background: var(--sv-atr-fundo); box-shadow: inset 3px 0 0 var(--sv-atr); }
-  .linha.vazia:not(:focus-within) { color: var(--sv-suave); font-size: 13px; }
+  .linha.vazia:not(:focus-within) { color: var(--sv-suave); font-size: 13px; min-height: 30px; }
   .folha { display: flex; flex-direction: column; line-height: 1.15; color: var(--sv-suave); font-variant-numeric: tabular-nums; }
   .linha:focus-within .folha, .preencher .folha { color: var(--sv-titulo); }
   .folha strong { color: var(--sv-titulo); }
@@ -153,7 +154,8 @@
   /* fora da linha ativa, os campos parecem texto; na ativa, o valor e o motivo ganham a caixa */
   .sel { appearance: none; border: 0; background: transparent; padding: 0; width: 100%; cursor: pointer; font-size: 13.5px; color: var(--sv-texto); text-overflow: ellipsis; }
   .sel:focus-visible { outline: 2px solid var(--fin-forte); outline-offset: 2px; border-radius: 4px; }
-  .valor, .vol, .motivo { width: 100%; height: 30px; border: 2px solid transparent; border-radius: 7px; background: transparent; padding: 0 8px; outline: none; }
+  .valor, .vol, .motivo { width: 100%; height: 26px; border: 2px solid transparent; border-radius: 7px; background: transparent; padding: 0 8px; outline: none; }
+  .linha:focus-within .valor, .linha:focus-within .vol, .linha:focus-within .motivo { height: 30px; }
   .valor { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
   .vol { font-variant-numeric: tabular-nums; color: #166534; font-weight: 700; }
   :global(html[data-tema="escuro"]) .vol { color: #86EFAC; }

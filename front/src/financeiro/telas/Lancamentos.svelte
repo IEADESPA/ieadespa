@@ -276,7 +276,7 @@
 
 {#snippet seletor()}
   <SeletorCongregacao {nivel} rotulo={nivel === "area" ? "Vendo" : "Lançando por"} {congregacoes} {atual} {celular} bind:aberto={seletorAberto}
-    semEscolha={nivel === "area" ? `As ${congregacoes.length} da área` : "Escolha a congregação"} onescolher={escolherCongregacao} />
+    semEscolha={nivel === "area" ? `As ${congregacoes.length} da ${celular && congregacoes[0]?.area ? congregacoes[0].area : "área"}` : "Escolha a congregação"} onescolher={escolherCongregacao} />
 {/snippet}
 
 {#snippet trocaComRascunho()}
@@ -373,10 +373,10 @@
 <style>
   button { font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
   .lancamentos { display: flex; flex-direction: column; gap: 12px; }
-  .cab-pag { display: flex; align-items: center; gap: 16px; }
-  .textos { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+  .cab-pag { display: flex; align-items: center; gap: 14px; }
+  .textos { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
   h1 { font-size: 22px; font-weight: 700; color: var(--sv-titulo); line-height: 1.25; }
-  .textos p { font-size: 14.5px; color: var(--sv-suave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .textos p { font-size: 13.5px; color: var(--sv-suave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .acoes { display: flex; gap: 10px; align-items: center; flex: none; }
   /* "Planilha | Linha de lançar" (o segModo do desenho) */
   .seg { display: flex; padding: 3px; gap: 3px; border-radius: 10px; background: #E8ECF2; border: 1px solid var(--sv-borda); }
@@ -384,7 +384,8 @@
   .seg button { height: 32px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; font-size: 13.5px; font-weight: 700; color: var(--sv-texto); white-space: nowrap; }
   .seg button.ativo { background: #0A2342; color: #FFFFFF; }
   :global(html[data-tema="escuro"]) .seg button.ativo { background: #FFB800; color: #0A2342; }
-  .ouro { height: 42px; padding: 0 18px; border: 0; border-radius: 10px; background: #FFB800; color: #0A2342; font-size: 14.5px; font-weight: 700; white-space: nowrap; }
+  /* o botão dourado do desenho (m8Ouro): 40 px, 16 px de cada lado, a letra 14 */
+  .ouro { height: 40px; padding: 0 16px; border: 0; border-radius: 10px; background: #FFB800; color: #0A2342; font-size: 14px; font-weight: 700; white-space: nowrap; }
   .ouro:disabled { opacity: .6; cursor: default; }
   .recusa, .aviso-troca { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; font-size: 13.5px; line-height: 1.4; }
   .recusa { background: var(--sv-atr-fundo); color: var(--sv-atr); font-weight: 600; }

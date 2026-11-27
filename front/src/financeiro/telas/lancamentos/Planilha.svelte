@@ -119,7 +119,8 @@
   }
   .cab { display: grid; grid-template-columns: var(--cols-lanc); gap: 10px; padding: 0 14px; min-height: 32px; align-items: center; font-size: 12.5px; font-weight: 700; color: var(--sv-suave); background: var(--sv-fundo); line-height: 1.2; }
   .dir { text-align: right; justify-content: flex-end; }
-  .comeco { display: flex; align-items: center; gap: 9px; padding: 0 14px; min-height: 30px; border-top: 1px solid var(--sv-linha); background: #FFF4D1; font-size: 12.5px; color: var(--sv-texto); }
+  /* as alturas do desenho (r24): cada linha com 27 px e o fio de cima (28), a faixa do começo com 30 e o fio (31) */
+  .comeco { display: flex; align-items: center; gap: 9px; padding: 0 14px; min-height: 31px; border-top: 1px solid var(--sv-linha); background: #FFF4D1; font-size: 12.5px; color: var(--sv-texto); }
   .comeco > :global(svg) { color: #8A5A00; flex: none; }
   .comeco > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .comeco strong { color: var(--sv-titulo); }
@@ -129,7 +130,7 @@
   :global(html[data-tema="escuro"]) .obrig { color: #FCA5A5; }
 
   .linha {
-    display: grid; grid-template-columns: var(--cols-lanc); gap: 10px; padding: 0 14px; min-height: 30px; align-items: center; border: 0;
+    display: grid; grid-template-columns: var(--cols-lanc); gap: 10px; padding: 0 14px; min-height: 28px; align-items: center; border: 0;
     border-top: 1px solid var(--sv-linha); font: inherit; font-size: 13.5px; color: var(--sv-texto); text-align: left; width: 100%; background: transparent;
   }
   button.linha { cursor: pointer; }

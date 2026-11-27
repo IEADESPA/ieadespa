@@ -112,6 +112,22 @@ describe("o tratamento na carta (r31-carta e a resposta dele de 26/11: todo adul
   });
 });
 
+describe("o rodapé da carta (r31: sem linha de assinatura, os nomes do pastor e da secretária impressos; resposta de 26/11)", () => {
+  test("o Dirigente de Congregação vigente como pastor da congregação (Pr. quando a função é Pastor) e a secretária com o rótulo do sexo", () => {
+    expect(s.assinaturasDaCarta({ pastor: { nome: "Abel Nogueira", sexo: "M", cargoMinisterial: "PASTOR" }, secretaria: { nome: "Débora Lima", sexo: "F" } }))
+      .toEqual({ pastor: { nome: "Pr. Abel Nogueira", rotulo: "pastor da congregação" }, secretaria: { nome: "Débora Lima", rotulo: "secretária" } });
+    expect(s.assinaturasDaCarta({ pastor: { nome: "Davi Teixeira", sexo: "M", cargoMinisterial: "PRESBITERO" }, secretaria: { nome: "Elias Prado", sexo: "M" } }))
+      .toEqual({ pastor: { nome: "Davi Teixeira", rotulo: "pastor da congregação" }, secretaria: { nome: "Elias Prado", rotulo: "secretário" } });
+    expect(s.assinaturasDaCarta({ pastor: null, secretaria: { nome: "Rute Sem Sexo", sexo: null } }).secretaria).toEqual({ nome: "Rute Sem Sexo", rotulo: "secretário(a)" });
+  });
+  test("sem ninguém no cargo, só o cargo (nada inventado)", () => {
+    const vazio = { pastor: { nome: null, rotulo: "pastor da congregação" }, secretaria: { nome: null, rotulo: "secretaria" } };
+    expect(s.assinaturasDaCarta({ pastor: null, secretaria: null })).toEqual(vazio);
+    expect(s.assinaturasDaCarta()).toEqual(vazio);
+    expect(s.assinaturasDaCarta({ pastor: { nome: "  ", sexo: "M" }, secretaria: { nome: "", sexo: "F" } })).toEqual(vazio);
+  });
+});
+
 describe("a carta curta (ajuste dele à r31 e o D9): a última função e o último cargo", () => {
   const c = (nome, grau, inicio, fim = null) => ({ nome, grau, inicio, fim, ativo: fim === null });
   const nomes = (l) => l.map((x) => x.nome);
@@ -268,7 +284,7 @@ describe("a fotografia da carta (o conteúdo guardado: o histórico inteiro para
     disciplina: null, chegadaCongregacao: "Vila Nova", ...trocas.raiz
   });
   const opcoes = { dia: "2026-11-25", destino: "Marabá - PA", protocolo: "CARTA-2026-0318", codigo: "K7P4M2",
-    pedido: { como: "PROPRIO" }, junto: { filhos: [{ nome: "Lucas Moreira", matricula: 30640 }] }, assinaturas: { pastor: "Abel Nogueira", secretaria: "Débora Lima" } };
+    pedido: { como: "PROPRIO" }, junto: { filhos: [{ nome: "Lucas Moreira", matricula: 30640 }] }, assinaturas: { pastor: { nome: "Abel Nogueira", sexo: "M", cargoMinisterial: "PASTOR" }, secretaria: { nome: "Débora Lima", sexo: "F" } } };
 
   test("a carta do Carlos: os dados de hoje, o histórico inteiro e a seleção curta", () => {
     const c = s.montarConteudoDaCarta(fontes(), opcoes);
@@ -288,7 +304,7 @@ describe("a fotografia da carta (o conteúdo guardado: o histórico inteiro para
     expect(c.curto.funcao).toEqual({ nome: "Diácono", data: "2017-12-10" });
     expect(c.curto.cargos.map((x) => x.nome)).toEqual(["Tesoureiro (Vila Nova)"]);
     expect(c.junto).toEqual(opcoes.junto);
-    expect(c.assinaturas).toEqual(opcoes.assinaturas);
+    expect(c.assinaturas).toEqual({ pastor: { nome: "Pr. Abel Nogueira", rotulo: "pastor da congregação" }, secretaria: { nome: "Débora Lima", rotulo: "secretária" } });
   });
   test("a fotografia não guarda o que não é da carta (nascimento, e-mail, congregação por número)", () => {
     const texto = JSON.stringify(s.montarConteudoDaCarta(fontes(), opcoes));

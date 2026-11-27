@@ -95,4 +95,37 @@ async function lerFontesDaCarta(executor, sql, membroId, dia) {
   };
 }
 
-module.exports = { lerFontesDaCarta };
+// O rodapé da carta (resposta de 26/11): UM lugar só para quem assina, a trocar pela diretoria da Estrutura quando ela existir.
+//  - o pastor: o Dirigente de Congregação vigente da congregação da pessoa (o mesmo critério de GestaoCongregacoes: o papel, o escopo e o mandato; o mais
+//    recente quando há dois);
+//  - a secretária: quem pediu no balcão (pedidoPorSecretariaId); no pedido da própria pessoa, a secretaria local vigente mais antiga — o cargo de nível da
+//    congregação com a permissão "pessoas" na congregação inteira (shared/transferencias.js::secretariaLocalDe), que não é o Dirigente;
+//  - nunca quem está saindo (a leitura vem antes da vacância, e a pessoa ainda está no cargo); só quem está ATIVO; vigente no dia da saída (`dia`, Brasília).
+// Sem ninguém: null (a carta imprime só o cargo: shared/saidaMembro.js::assinaturasDaCarta). `executor`: a transação da saída (ou o pool).
+async function lerAssinaturasDaCarta(executor, sql, { congregacaoId, membroId, pedidoPorSecretariaId = null, dia }) {
+  const r = await executor.request()
+    .input("cong", sql.Int, congregacaoId == null ? null : Number(congregacaoId)).input("id", sql.Int, Number(membroId))
+    .input("por", sql.Int, pedidoPorSecretariaId == null ? null : Number(pedidoPorSecretariaId)).input("dia", sql.Date, dia)
+    .query(`SELECT TOP 1 m.Nome, m.Sexo, m.CargoMinisterial
+            FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId AND p.Nome = N'Dirigente de Congregação'
+            JOIN MembroReferencia m ON m.MembroId = l.MembroId
+            WHERE l.EscopoTipo = N'CONGREGACAO' AND l.EscopoId = @cong AND (l.AtivoAte IS NULL OR l.AtivoAte >= @dia) AND l.MembroId <> @id AND m.Status = N'ATIVO'
+            ORDER BY l.LiderancaId DESC;
+            IF @por IS NOT NULL
+              SELECT m.Nome, m.Sexo FROM MembroReferencia m WHERE m.MembroId = @por AND m.MembroId <> @id
+            ELSE
+              SELECT TOP 1 m.Nome, m.Sexo
+              FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId AND p.Nome <> N'Dirigente de Congregação' AND p.Nivel = N'CONGREGACAO'
+                AND (',' + REPLACE(ISNULL(p.Permissoes, ''), ' ', '') + ',') LIKE '%,pessoas,%'
+              JOIN MembroReferencia m ON m.MembroId = l.MembroId
+              WHERE l.EscopoTipo = N'CONGREGACAO' AND l.EscopoId = @cong AND (l.AtivoAte IS NULL OR l.AtivoAte >= @dia) AND l.MembroId <> @id AND m.Status = N'ATIVO'
+              ORDER BY l.CriadoEm, l.LiderancaId`);
+  const rs = r.recordsets || [];
+  const pastor = (rs[0] || [])[0], secretaria = (rs[1] || [])[0];
+  return {
+    pastor: pastor ? { nome: pastor.Nome, sexo: pastor.Sexo || null, cargoMinisterial: pastor.CargoMinisterial || null } : null,
+    secretaria: secretaria ? { nome: secretaria.Nome, sexo: secretaria.Sexo || null } : null
+  };
+}
+
+module.exports = { lerFontesDaCarta, lerAssinaturasDaCarta };

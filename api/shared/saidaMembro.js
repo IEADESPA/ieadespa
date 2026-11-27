@@ -112,6 +112,22 @@ function tratamentoDaCarta({ sexo, menor }) {
   return sexo === "M" ? "o irmão" : sexo === "F" ? "a irmã" : "o(a) irmão(ã)";
 }
 
+// ---------- o rodapé ----------
+// Sem linha de assinatura (r29 e r31): os nomes do pastor e da secretária impressos, como no desenho aprovado ("Pr. Abel Nogueira · pastor da congregação",
+// "Débora Lima · secretária"). Quem são (resposta de 26/11) é lido em UM lugar só, shared/saidaRolDb.js::lerAssinaturasDaCarta, o ponto a trocar quando a
+// diretoria da Estrutura existir. Sem ninguém no cargo, só o cargo. O "Pr." vem da função de Pastor na ficha (decisão da construção, 27/11, "para conferir").
+const ROTULO_PASTOR = "pastor da congregação";
+/** `lidas`: { pastor: { nome, sexo, cargoMinisterial } | null, secretaria: { nome, sexo } | null } → { pastor: { nome, rotulo }, secretaria: { nome, rotulo } } */
+function assinaturasDaCarta({ pastor = null, secretaria = null } = {}) {
+  const nomeDe = (p) => (p && typeof p.nome === "string" && p.nome.trim() ? p.nome.trim() : null);
+  const nomePastor = nomeDe(pastor), nomeSecretaria = nomeDe(secretaria);
+  return {
+    pastor: { nome: nomePastor && pastor.cargoMinisterial === "PASTOR" ? `Pr. ${nomePastor}` : nomePastor, rotulo: ROTULO_PASTOR },
+    secretaria: { nome: nomeSecretaria,
+      rotulo: !nomeSecretaria ? "secretaria" : secretaria.sexo === "F" ? "secretária" : secretaria.sexo === "M" ? "secretário" : "secretário(a)" }
+  };
+}
+
 // ---------- a carta curta ----------
 // do mais recente ao mais antigo pelo campo; o empate se desfaz pelo nome (a carta sai sempre igual)
 const maisRecentePor = (campo) => (x, y) => String(y[campo] || "").localeCompare(String(x[campo] || "")) || String(x.nome).localeCompare(String(y.nome), "pt-BR");
@@ -214,7 +230,7 @@ function montarConteudoDaCarta(fontes, { dia, destino, protocolo, codigo, pedido
       saida: { dia }
     },
     curto: { funcao: funcaoDaCartaCurta(consagracoes), cargos: cargosDaCartaCurta(cargos) },
-    junto: junto || null, pedido: pedido || null, assinaturas: assinaturas || null
+    junto: junto || null, pedido: pedido || null, assinaturas: assinaturasDaCarta(assinaturas || undefined)
   };
 }
 
@@ -235,7 +251,7 @@ function etapaDevida(diaSaida, hoje) {
 
 module.exports = {
   CIDADE_PADRAO, FRASE_ARROLAMENTO, DIAS_DA_CARTA, ALFABETO_CODIGO, TAMANHO_CODIGO, MENSAGENS_PENDENTES,
-  destinoDaCarta, situacaoDaCarta, tratamentoDaCarta, cargosDaCartaCurta, funcaoDaCartaCurta, montarConteudoDaCarta, idadeNoDia,
+  destinoDaCarta, situacaoDaCarta, tratamentoDaCarta, assinaturasDaCarta, cargosDaCartaCurta, funcaoDaCartaCurta, montarConteudoDaCarta, idadeNoDia,
   gerarCodigoCurto, normalizarCodigoCurto, codigoCurtoValido, formatarCodigoCurto,
   gerarSal, impressaoDigital, seloDoQr, conferirSelo, canonico,
   ultimoDiaDaCarta, cartaVencida, etapaDevida, dataBr

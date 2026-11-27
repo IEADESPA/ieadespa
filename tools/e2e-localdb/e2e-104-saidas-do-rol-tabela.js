@@ -11,7 +11,7 @@ const L = require("./lib");
 const { ok, fim, q, escalar, obterPool } = L;
 const saida = require(L.path.join(L.API, "shared/saidaMembro.js"));
 
-const CARLOS = 991041, LUCAS = 991042, MARIA = 991043, DEBORA = 991044;
+const CARLOS = 991041, LUCAS = 991042, MARIA = 991043, DEBORA = 991044, RUTE = 991045;
 const INDICES = ["UX_SaidasDoRol_Protocolo", "UX_SaidasDoRol_CodigoCurto", "UX_SaidasDoRol_Aberta", "IX_SaidasDoRol_Membro", "IX_SaidasDoRol_Congregacao",
   "IX_SaidasDoRol_PedidasSecretaria", "IX_SaidasDoRol_JuntoCom", "IX_SaidasDoRol_CartaViva", "IX_SaidasDoRol_Etapa"];
 
@@ -45,12 +45,13 @@ async function erroDe(fn) {
 
 async function principal() {
   const [c1] = await q("SELECT TOP 1 CongregacaoId FROM Congregacoes ORDER BY CongregacaoId");
-  await q(`DELETE FROM SaidasDoRol WHERE MembroId IN (${CARLOS}, ${LUCAS}, ${MARIA}, ${DEBORA}) AND JuntoComSaidaId IS NOT NULL;
-           DELETE FROM SaidasDoRol WHERE MembroId IN (${CARLOS}, ${LUCAS}, ${MARIA}, ${DEBORA});
-           DELETE FROM MembroReferencia WHERE MembroId IN (${CARLOS}, ${LUCAS}, ${MARIA}, ${DEBORA})`);
+  await q(`DELETE FROM SaidasDoRol WHERE MembroId IN (${CARLOS}, ${LUCAS}, ${MARIA}, ${DEBORA}, ${RUTE}) AND JuntoComSaidaId IS NOT NULL;
+           DELETE FROM SaidasDoRol WHERE MembroId IN (${CARLOS}, ${LUCAS}, ${MARIA}, ${DEBORA}, ${RUTE});
+           DELETE FROM MembroReferencia WHERE MembroId IN (${CARLOS}, ${LUCAS}, ${MARIA}, ${DEBORA}, ${RUTE})`);
   await q(`INSERT INTO MembroReferencia (MembroId, Nome, Status, SituacaoMembro, CongregacaoId) VALUES
     (${CARLOS}, N'Carlos Saída E2E104', N'ATIVO', N'EM_COMUNHAO', @c), (${LUCAS}, N'Lucas Filho E2E104', N'ATIVO', N'CONGREGADO', @c),
-    (${MARIA}, N'Maria Balcão E2E104', N'ATIVO', N'EM_COMUNHAO', @c), (${DEBORA}, N'Débora Secretária E2E104', N'ATIVO', N'EM_COMUNHAO', @c)`, { c: c1.CongregacaoId });
+    (${MARIA}, N'Maria Balcão E2E104', N'ATIVO', N'EM_COMUNHAO', @c), (${DEBORA}, N'Débora Secretária E2E104', N'ATIVO', N'EM_COMUNHAO', @c),
+    (${RUTE}, N'Rute Secretária Nova E2E104', N'ATIVO', N'EM_COMUNHAO', @c)`, { c: c1.CongregacaoId });
 
   // 1. a tabela e os índices
   ok((await escalar("SELECT COUNT(*) FROM sys.tables WHERE name = N'SaidasDoRol'")) === 1, "a tabela SaidasDoRol existe");
@@ -164,6 +165,37 @@ async function principal() {
     "a adulta em arrolamento: a irmã, com a frase do cadastro em atualização", arrol.situacao);
   await q(`UPDATE MembroReferencia SET SituacaoMembro = N'SITUACAO_INVENTADA_E2E' WHERE MembroId = ${DEBORA}`);
   await caso("pendente:SITUACAO_DESCONHECIDA", "a situação que a carta não conhece: recusa");
+
+  // 10d. o rodapé (resposta de 26/11), num lugar só: o Dirigente de Congregação vigente (a Maria, desde o 10b) e a secretaria local vigente mais antiga
+  // (o cargo da congregação com "pessoas", que não é o Dirigente); quem pediu no balcão; nunca quem está saindo; sem ninguém, só o cargo
+  const db = require(L.path.join(L.API, "shared/saidaRolDb.js"));
+  const papelSec = await escalar(`INSERT INTO Papeis (Nome, Nivel, Permissoes) OUTPUT INSERTED.PapelId VALUES (N'Secretaria Local E2E104', N'CONGREGACAO', N'reunioes, pessoas')`);
+  await q(`UPDATE MembroReferencia SET Sexo = N'F' WHERE MembroId = ${RUTE};
+           INSERT INTO Lideranca (MembroId, Tipo, Escopo, PapelId, EscopoTipo, EscopoId, AtivoAte, CriadoEm) VALUES
+             (${DEBORA}, N'Secretaria', N'congregação', @p, N'CONGREGACAO', @c, NULL, '2020-01-01'),
+             (${RUTE}, N'Secretaria', N'congregação', @p, N'CONGREGACAO', @c, NULL, '2024-01-01')`, { p: papelSec, c: c1.CongregacaoId });
+  const rodape = async (membroId, extra = {}) => {
+    const a = saida.assinaturasDaCarta(await db.lerAssinaturasDaCarta(await obterPool(), L.sql, { congregacaoId: c1.CongregacaoId, membroId, dia: "2026-11-25", ...extra }));
+    return `${a.pastor.nome || "-"} · ${a.pastor.rotulo} | ${a.secretaria.nome || "-"} · ${a.secretaria.rotulo}`;
+  };
+  const rod = async (esperado, rotulo, membroId, extra) => { const t = await rodape(membroId, extra); ok(t === esperado, rotulo, t); };
+  await rod("Maria Balcão E2E104 · pastor da congregação | Débora Secretária E2E104 · secretária", "o Carlos pede: o Dirigente vigente e a secretaria mais antiga", CARLOS);
+  await rod("Maria Balcão E2E104 · pastor da congregação | Rute Secretária Nova E2E104 · secretária", "a Débora sai: ela não assina a própria carta (a seguinte)", DEBORA);
+  await rod("Maria Balcão E2E104 · pastor da congregação | Rute Secretária Nova E2E104 · secretária", "pedida no balcão pela Rute: quem pediu", CARLOS,
+    { pedidoPorSecretariaId: RUTE });
+  const semMaria = await rodape(MARIA);
+  ok(!semMaria.startsWith("Maria") && !semMaria.startsWith("-") && semMaria.endsWith("| Débora Secretária E2E104 · secretária"),
+    "a Maria (o Dirigente mais recente) sai: assina o outro Dirigente vigente da congregação, nunca ela", semMaria);
+  await q(`UPDATE MembroReferencia SET CargoMinisterial = N'PASTOR' WHERE MembroId = ${MARIA}`);
+  await rod("Pr. Maria Balcão E2E104 · pastor da congregação | Débora Secretária E2E104 · secretária", "o Dirigente com a função de Pastor: Pr.", CARLOS);
+  await q(`UPDATE Lideranca SET AtivoAte = '2026-11-24' WHERE MembroId = ${DEBORA}`);
+  await rod("Pr. Maria Balcão E2E104 · pastor da congregação | Rute Secretária Nova E2E104 · secretária", "o cargo que acabou antes do dia da saída não assina", CARLOS);
+  await q(`UPDATE Lideranca SET AtivoAte = '2026-11-24' WHERE MembroId = ${RUTE};
+           UPDATE Papeis SET Permissoes = ISNULL(Permissoes, N'') + N',pessoas' WHERE PapelId = @p AND (',' + ISNULL(Permissoes, '') + ',') NOT LIKE '%,pessoas,%'`, { p: papel });
+  await rod("Pr. Maria Balcão E2E104 · pastor da congregação | - · secretaria", "sem secretaria vigente: só o cargo (o Dirigente não vira secretária)", CARLOS);
+  await q(`UPDATE l SET AtivoAte = '2026-11-24' FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId AND p.Nome = N'Dirigente de Congregação'
+           WHERE l.EscopoTipo = N'CONGREGACAO' AND l.EscopoId = @c AND l.MembroId <> ${MARIA}`, { c: c1.CongregacaoId });
+  await rod("- · pastor da congregação | - · secretaria", "a Maria sai e não há outro Dirigente vigente: só os cargos", MARIA);
 
   // 10. a CartasTransito (o "processar" antigo) não vê nada disto (D2)
   ok((await escalar(`SELECT COUNT(*) FROM CartasTransito WHERE MembroId IN (${CARLOS}, ${LUCAS}, ${MARIA})`)) === 0, "nada vai para a CartasTransito (o processar antigo nunca vê)");

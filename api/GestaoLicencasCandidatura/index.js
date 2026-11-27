@@ -20,6 +20,7 @@ const nivelDoCargo = require("../shared/nivelDoCargo");
 const { emTransacao } = require("../shared/transacaoCurta");
 const { obterTrava } = require("../shared/financeiroSeguro");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
+const travaPermissoes = require("../shared/travaPermissoes");
 const { ehGeral, pessoaAlcancavel, filtrarPorEscopo, MSG_GERAL } = require("../shared/escopoRotas");
 const { dataISOValida } = require("../shared/escopoFichas");
 
@@ -126,6 +127,9 @@ module.exports = async function (context, req) {
       desfecho = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
         if (!(await obterTrava(rq, `escada_${membroId}`))) { await desistir(); return { situacao: "OCUPADA" }; }
         if ((await rq().input("id", sql.Int, membroId).query(SQL_LICENCA_ABERTA(" WITH (UPDLOCK, HOLDLOCK)"))).recordset.length > 0) { await desistir(); return { situacao: "JA_ABERTA" }; }
+        // a trava do último administrador conferida de novo aqui dentro, antes de gravar (shared/travaPermissoes.js)
+        const recusa = await travaPermissoes.conferirUltimoNaTransacao(rq, sql, membroId, hojeBrasilia());
+        if (recusa) { await desistir(); return { situacao: recusa }; }
         const status = await rq().input("id", sql.Int, membroId)
           .query(`UPDATE MembroReferencia SET Status = 'LICENCA_CANDIDATURA' WHERE MembroId = @id AND Status NOT IN ('DESLIGADO', 'FALECIDO')`);
         if (!((status.rowsAffected && status.rowsAffected[0]) || 0)) { await desistir(); return { situacao: "SAIU" }; }
@@ -159,6 +163,10 @@ module.exports = async function (context, req) {
     }
     if (desfecho.situacao === "OCUPADA") {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração desta pessoa está em andamento. Tente de novo em instantes." } };
+      return;
+    }
+    if (desfecho.situacao === "ULTIMO") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: travaPermissoes.MENSAGEM_ULTIMO } };
       return;
     }
     if (desfecho.situacao === "SAIU") {

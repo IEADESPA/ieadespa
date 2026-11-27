@@ -6,7 +6,9 @@
 //      (a carta é cancelada e a ficha fica como está), e quem foi readmitido no meio do processamento não é minimizado;
 //   3. a licença por candidatura começa 90 dias antes do pleito: o pleito que já passou e o registro antes da hora são recusados; dentro dos 90 dias começa hoje;
 //   4. o PIN provisório: o PIN, a queda das sessões e a trilha juntos (a primeira vez e a troca), e "avisado por e-mail" só quando o e-mail saiu (aqui não há
-//      serviço de e-mail: a resposta diz que o aviso não saiu e a trilha registra).
+//      serviço de e-mail: a resposta diz que o aviso não saiu e a trilha registra);
+//   5. a trava do último administrador dentro da transação: duas suspensões de acesso ao mesmo tempo, cada uma num processo com a sua conexão, contra as
+//      duas últimas pessoas que administram os acessos: só uma passa.
 process.env.AUTH_SECRET = "segredo-do-roteiro-da-revisao-3-" + "x".repeat(24);
 const L = require("./lib");
 const { ok, fim, q, escalar, obterPool } = L;
@@ -16,7 +18,7 @@ const BASE_ID = 1530000;
 const ID = {
   geral: BASE_ID + 1, secLocal: BASE_ID + 2, comum: BASE_ID + 3, excluido: BASE_ID + 4, emCargo: BASE_ID + 5, proponente: BASE_ID + 6,
   cartaFalecida: BASE_ID + 10, cartaExcluida: BASE_ID + 11, cartaReadmitido: BASE_ID + 12, cartaJaDesligada: BASE_ID + 13, cartaNormal: BASE_ID + 14,
-  pinComEmail: BASE_ID + 20, pinSemEmail: BASE_ID + 21
+  pinComEmail: BASE_ID + 20, pinSemEmail: BASE_ID + 21, adminA: BASE_ID + 30, adminB: BASE_ID + 31
 };
 const NOME_SEDE = "Sede Revisao E2E153";
 const NOME_OUTRA = "Outra Revisao E2E153";
@@ -209,6 +211,45 @@ async function principal() {
   const trilhaSem = await trilhaPin(ID.pinSemEmail);
   ok(semEmail.status === 200 && semEmail.body.avisadoPorEmail === false && semEmail.body.avisoEmailNaoSaiu === false && !/não saiu/.test(fala(semEmail))
     && trilhaSem.length === 1 && trilhaSem[0].Acao === "PIN_PROVISORIO_GERADO", "quem não tem e-mail: nada de aviso nem de 'não saiu'; só a linha da geração", `${resumo(semEmail)} ${JSON.stringify(trilhaSem)}`);
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 5. a trava do último administrador dentro da transação: duas suspensões ao mesmo tempo ==");
+  // A ponte do LocalDB é UMA conexão: a corrida de verdade precisa de um processo por pedido (worker.js), como no e2e-6.
+  const { spawn } = require("child_process");
+  const disparar = async (chamadas) => {
+    const t0 = Date.now() + 6000 + chamadas.length * 600;   // folga para os processos subirem a ponte e conectarem
+    return Promise.all(chamadas.map((spec) => new Promise((resolve) => {
+      const p = spawn(process.execPath, ["-r", L.path.join(__dirname, "shim-mssql.js"), L.path.join(__dirname, "worker.js"), JSON.stringify({ ...spec, t0 })], { env: process.env });
+      let saida = ""; p.stdout.on("data", (d) => { saida += d; });
+      p.on("exit", () => { const m = saida.split("\n").find((l) => l.startsWith("@@RESULTADO@@")); resolve(m ? JSON.parse(m.slice(13)) : { status: -1, erro: "sem resultado" }); });
+    })));
+  };
+  const travaPermissoes = require(L.path.join(L.API, "shared/travaPermissoes.js"));
+  const situacaoDe = async (id) => travaPermissoes.situacaoDoCargo(await obterPool(), L.sql, id, hojeBrasilia());
+  const pAdmin = (await q("INSERT INTO Papeis (Nome, Nivel, Permissoes) VALUES (N'Geral E2E153', 'GLOBAL', N'pessoas,permissoes'); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id"))[0].id;
+  const senhaHash = L.auth.hashSenha("senha-de-mentira-E2E153");
+  for (const id of [ID.adminA, ID.adminB]) {
+    await q("INSERT INTO Lideranca (MembroId, PapelId, EscopoTipo, EscopoId, SenhaHash, AtivoAte) VALUES (@m, @p, 'GLOBAL', NULL, @h, NULL)", { m: id, p: pAdmin, h: senhaHash });
+  }
+  // só neste trecho, os outros que administram deixam de contar (o fim volta como estava no fim do trecho): A e B ficam sendo os dois últimos
+  const retirados = await q(`UPDATE l SET AtivoAte = '2000-01-01'
+      OUTPUT INSERTED.LiderancaId AS id, CONVERT(varchar(10), DELETED.AtivoAte, 120) AS ate
+      FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId
+      WHERE l.MembroId NOT IN (@a, @b) AND (l.AtivoAte IS NULL OR l.AtivoAte >= @hoje) AND (',' + REPLACE(p.Permissoes, ' ', '') + ',') LIKE '%,permissoes,%'`,
+  { a: ID.adminA, b: ID.adminB, hoje: hojeBrasilia() });
+  const antesA = await situacaoDe(ID.adminA);
+  ok(antesA.alvoAdministra && antesA.outros === 1, "antes: A e B são as duas últimas pessoas que administram os acessos", JSON.stringify(antesA));
+  const suspender = (membroId) => ({ handler: "medidas", metodo: "POST", token: { tipo: "GERAL", membroId: ID.geral, permissoes: ["pessoas"] },
+    corpo: { membroId, motivo: "Conferência do caixa (corrida E2E153)", suspenderAcessoSistema: true } });
+  const corrida = await disparar([suspender(ID.adminA), suspender(ID.adminB)]);
+  const passaram = corrida.filter((r) => r.status === 201);
+  const recusadas = corrida.filter((r) => r.status === 200 && r.body && r.body.sucesso === false && /única com a permissão "permissoes"/.test(String(r.mensagem || "")));
+  ok(passaram.length === 1 && recusadas.length === 1, "duas suspensões ao mesmo tempo contra os dois últimos: uma passa, a outra é recusada", JSON.stringify(corrida));
+  const medidas = await escalar("SELECT COUNT(*) FROM MedidasCautelares WHERE MembroId IN (@a, @b)", { a: ID.adminA, b: ID.adminB });
+  const depoisA = await situacaoDe(ID.adminA), depoisB = await situacaoDe(ID.adminB);
+  ok(medidas === 1 && (depoisA.alvoAdministra ? 1 : 0) + (depoisB.alvoAdministra ? 1 : 0) === 1,
+    "uma medida só no banco, e uma pessoa continua administrando os acessos", `${medidas} ${JSON.stringify([depoisA, depoisB])}`);
+  for (const r of retirados) await q("UPDATE Lideranca SET AtivoAte = @ate WHERE LiderancaId = @id", { id: r.id, ate: r.ate || null });
 }
 
 principal().then(() => fim("e2e-153 (acesso, revisão de fora)")).catch((e) => { console.error(e); ok(false, "o roteiro quebrou: " + (e && e.message)); fim("e2e-153 (acesso, revisão de fora)"); });

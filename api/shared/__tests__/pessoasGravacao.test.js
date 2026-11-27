@@ -245,6 +245,46 @@ describe("tirar do rol ativo quem tem cargo de liderança", () => {
   }
   const consultouSituacao = () => mockConsultas.some((c) => /AlvoAdministra/.test(c.texto));
 
+  // Revisão de fora, 26/11/2026 (L3): dois pedidos ao mesmo tempo contra os dois últimos que administram os acessos. A leitura de antes da transação ainda vê
+  // o outro; a de dentro, depois da trava única, já vê a outra saída confirmada: este pedido é recusado e nada fica gravado.
+  describe("a trava do último administrador também dentro da transação", () => {
+    const travouUltimo = () => mockConsultas.some((c) => /sp_getapplock/.test(c.texto || "") && c.entradas && c.entradas.recurso === "acesso_ultimo_admin");
+    const corrida = [/AlvoAdministra/, () => ({ recordset: [{ TemCargoVigente: 1, AlvoAdministra: 1, Outros: travouUltimo() ? 0 : 1 }] })];
+    const recursos = () => mockConsultas.filter((c) => /sp_getapplock/.test(c.texto || "")).map((c) => c.entradas.recurso);
+
+    test("desligar: recusado e desfeito; a trava única vem depois da trava da escada", async () => {
+      regrasDoDesligar(corrida);
+      const r = await chamar("DELETE", { token: sessao(77), membroIdRota: "5" });
+      expect(r.body).toMatchObject({ sucesso: false, mensagem: expect.stringMatching(/única que administra os acessos/) });
+      expect(gravacoes()).toHaveLength(0);
+      expect(mockConsultas.map((c) => c.texto)).toContain("ROLLBACK");
+      expect(mockConsultas.map((c) => c.texto)).not.toContain("COMMIT");
+      expect(recursos()).toEqual(["escada_5", "acesso_ultimo_admin"]);
+    });
+
+    test("a ficha com INATIVO: recusada e desfeita", async () => {
+      mockRegras.unshift(corrida);
+      const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "INATIVO" }) });
+      expect(r.body).toMatchObject({ sucesso: false, mensagem: expect.stringMatching(/única que administra os acessos/) });
+      expect(gravacoes()).toHaveLength(0);
+      expect(mockConsultas.map((c) => c.texto)).toContain("ROLLBACK");
+    });
+
+    test("havendo outro que administra também depois da trava, o desligamento vale", async () => {
+      regrasDoDesligar(situacao(1, 1, 1));
+      const r = await chamar("DELETE", { token: sessao(77), membroIdRota: "5" });
+      expect(r.body.sucesso).toBe(true);
+      expect(recursos()).toEqual(["escada_5", "acesso_ultimo_admin"]);
+    });
+
+    test("quem não administra os acessos não entra na fila da trava única", async () => {
+      regrasDoDesligar(situacao(1, 0, 1));
+      const r = await chamar("DELETE", { token: sessao(77), membroIdRota: "5" });
+      expect(r.body.sucesso).toBe(true);
+      expect(recursos()).toEqual(["escada_5"]);
+    });
+  });
+
   // Regra do responsável (25/11/2026): a secretaria do nível do cargo, ou de cima, muda a situação no rol (cargo local: local, área e Geral; de área: área e
   // Geral; geral: só a Geral), sempre com a confirmação reforçada.
   describe("o nível do cargo decide qual secretaria muda a situação no rol", () => {

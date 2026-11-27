@@ -5,7 +5,9 @@ const { chamar, GERAL, LIDER, PIN, API, path, obterPool } = L;
 const spec = JSON.parse(process.argv[2]);
 const handlers = { setores: "GestaoSetoresTecnicos/index.js", vistorias: "GestaoVistoriasAntecedentes/index.js", menores: "GestaoMinisterioMenores/index.js", escalas: "GestaoEscalas/index.js", habilitacao: "GestaoHabilitacaoVoluntarios/index.js", protecao: "GestaoProtecaoMenores/index.js", ajuda: "ProtecaoAjuda/index.js", verificador: "ProtecaoVerificador/index.js", checkin: "GestaoCheckinInfantil/index.js", consentimento: "GestaoConsentimentoMenor/index.js", agendador: "NotificacoesAgendador/index.js", cuidado: "GestaoCuidadoPastoral/index.js",
   // Trava 7-C (decisões de 23/10/2026): o fornecedor ligado à matrícula e a saída com os avisos do voluntário (e2e-46)
-  fornecedores: "GestaoFornecedores/index.js", saidas: "GestaoSaidas/index.js" };
+  fornecedores: "GestaoFornecedores/index.js", saidas: "GestaoSaidas/index.js",
+  // a trava do último administrador dentro da transação (e2e-153, revisão de fora de 26/11/2026)
+  medidas: "GestaoMedidasCautelares/index.js" };
 (async () => {
   const pool = await obterPool();                      // a ponte já está de pé e conectada
   const espera = () => spec.t0 - Date.now();

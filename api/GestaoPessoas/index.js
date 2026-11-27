@@ -28,6 +28,7 @@ const POR_PAGINA_MAX = 100;
 const escadaDb = require("../shared/escadaDb");
 const afm = require("../shared/afm");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
+const travaPermissoes = require("../shared/travaPermissoes");
 const { dataIsoValida, obterTrava } = require("../shared/financeiroSeguro");
 const { emTransacao } = require("../shared/transacaoCurta");
 const nivelDoCargo = require("../shared/nivelDoCargo");
@@ -594,6 +595,11 @@ module.exports = async function (context, req) {
         await desistir();
         return "LICENCA_ABERTA";
       }
+      // quem sai do rol ativo perde o acesso: a trava do último administrador conferida de novo aqui dentro, antes de gravar (shared/travaPermissoes.js)
+      if (saindoDoRolAtivo) {
+        const recusa = await travaPermissoes.conferirUltimoNaTransacao(rq, sql, membroId, hojeISO);
+        if (recusa) { await desistir(); return recusa; }
+      }
       await territorioDb.travarBairroDaFicha(rq, prepEnd);   // com um bairro da lista, a linha única é refeita com o bairro travado (revisão de 06/11/2026)
       const gravacao = await gravarPessoa(preencher(rq()), prepEnd);
       if (!gravacao.gravou) { await desistir(); return "FICHA_MUDOU"; }
@@ -619,6 +625,10 @@ module.exports = async function (context, req) {
     });
     if (desfecho === "OCUPADA") {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração desta pessoa está em andamento. Tente de novo em instantes." } };
+      return;
+    }
+    if (desfecho === "ULTIMO") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: travaPermissoes.MENSAGEM_ULTIMO } };
       return;
     }
     if (desfecho === "LICENCA_ABERTA") {
@@ -690,6 +700,8 @@ module.exports = async function (context, req) {
     const desfecho = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
       if (!(await obterTrava(rq, `escada_${membroDesligar}`))) { await desistir(); return "OCUPADA"; }
       const hojeDeslig = hojeBrasilia();
+      const recusa = await travaPermissoes.conferirUltimoNaTransacao(rq, sql, membroDesligar, hojeDeslig);   // de novo aqui dentro, antes de gravar
+      if (recusa) { await desistir(); return recusa; }
       const upd = await rq().input("id", sql.Int, membroDesligar).input("hoje", sql.Date, hojeDeslig)
         .query(`UPDATE MembroReferencia SET Status = 'DESLIGADO', SituacaoMembro = 'SEM_COMUNHAO', DataSaida = ISNULL(DataSaida, @hoje)
                 OUTPUT INSERTED.MembroId, DELETED.Status AS StatusAnterior
@@ -705,6 +717,10 @@ module.exports = async function (context, req) {
     });
     if (desfecho === "OCUPADA") {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração desta pessoa está em andamento. Tente de novo em instantes." } };
+      return;
+    }
+    if (desfecho === "ULTIMO") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: travaPermissoes.MENSAGEM_ULTIMO } };
       return;
     }
     if (desfecho === "JA_SAIU") {

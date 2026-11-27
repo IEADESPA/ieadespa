@@ -75,6 +75,22 @@ beforeEach(() => {
   quando(/INSERT INTO LicencasCandidatura/, [{ LicencaId: 5 }], 1);
 });
 
+// Revisão de fora, 26/11/2026 (L3): a licença tira o acesso; a trava do último administrador é refeita dentro da transação, depois da trava única.
+describe("a trava do último administrador dentro da transação", () => {
+  const travouUltimo = () => rodou(/sp_getapplock/).some((c) => c.inputs.recurso === "acesso_ultimo_admin");
+  const trocarSituacao = (f) => { mockRegras[mockRegras.findIndex(([p]) => String(p) === String(/AlvoAdministra/))][1] = f; };
+  test("corrida: fora da transação havia outro; dentro, depois da trava, não há mais: recusada e desfeita", async () => {
+    cargo = { EscopoTipo: "GLOBAL", EscopoId: null };
+    trocarSituacao(() => [{ TemCargoVigente: 1, AlvoAdministra: 1, Outros: travouUltimo() ? 0 : 1 }]);
+    const r = await criar(sessao(1));
+    expect(r.body).toMatchObject({ sucesso: false, mensagem: expect.stringMatching(/única que administra os acessos/) });
+    expect(escritas()).toHaveLength(0);
+    expect(vacancia.encerrarVinculos).not.toHaveBeenCalled();
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["desfeita"]);
+    expect(rodou(/sp_getapplock/).map((c) => [c.inputs.recurso, c.transacao])).toEqual([["escada_10", 1], ["acesso_ultimo_admin", 1]]);
+  });
+});
+
 describe("a licença numa transação só", () => {
   test("a licença, o status, a vacância e a trilha na mesma transação, confirmada; o status só muda de quem não saiu do rol", async () => {
     const r = await criar(local());

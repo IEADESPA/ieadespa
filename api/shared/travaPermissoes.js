@@ -30,6 +30,21 @@ async function situacaoDoCargo(executor, sql, membroId, hoje) {
 
 const ficariaSemAdministrador = (s) => !!s && s.alvoAdministra && s.outros === 0;
 
+// A trava do último administrador DENTRO da transação de quem tira o acesso (revisão de fora, 26/11/2026, L3). A conferência de antes da transação, sozinha,
+// deixava dois pedidos ao mesmo tempo, contra os dois últimos que administram, passarem juntos (cada um lia "outros = 1"), e a trava da escada é por pessoa:
+// não os põe em fila. Aqui, quando o alvo administra, uma trava única (sp_getapplock) põe em fila todas as saídas de quem administra, e a contagem é refeita
+// depois dela: a segunda vê a primeira já confirmada. Vem antes de qualquer gravação (depois dela o alvo já não conta) e sempre depois da trava escada_<matrícula>
+// (a ordem fixa das travas evita o impasse). `rq`: o pedido dentro da transação (shared/transacaoCurta.js); `hoje`: o dia de Brasília.
+// Devolve "OCUPADA" (a trava não veio dentro da espera), "ULTIMO" (ficaria sem ninguém) ou null (pode seguir).
+const TRAVA_ULTIMO = "acesso_ultimo_admin";
+async function conferirUltimoNaTransacao(rq, sql, membroId, hoje) {
+  const { obterTrava } = require("./financeiroSeguro");
+  const executor = { request: rq };
+  if (!(await situacaoDoCargo(executor, sql, membroId, hoje)).alvoAdministra) return null;
+  if (!(await obterTrava(rq, TRAVA_ULTIMO))) return "OCUPADA";
+  return ficariaSemAdministrador(await situacaoDoCargo(executor, sql, membroId, hoje)) ? "ULTIMO" : null;
+}
+
 const MENSAGEM_ULTIMO = "Não é possível: esta pessoa é a única que administra os acessos (permissão \"permissoes\") e ninguém mais conseguiria conceder ou devolver acesso depois. Conceda a permissão a outra pessoa antes.";
 
 // A saída que o próprio membro pede (a Carta de Mudança confirmada por ele) não se barra pela trava: o membro sai sozinho, seja qual for o cargo (regra do
@@ -64,4 +79,4 @@ async function avisarGeralSaidaDoUltimo(pool, { cartaId, membroId }) {
   return falhas ? { avisados, falhas } : { avisados };
 }
 
-module.exports = { situacaoDoCargo, ficariaSemAdministrador, MENSAGEM_ULTIMO, avisarGeralSaidaDoUltimo, REGRA_AVISO_ULTIMO };
+module.exports = { situacaoDoCargo, ficariaSemAdministrador, conferirUltimoNaTransacao, MENSAGEM_ULTIMO, avisarGeralSaidaDoUltimo, REGRA_AVISO_ULTIMO };
